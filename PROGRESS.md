@@ -748,3 +748,38 @@ Mehr erfahren → `modestcoders.eu`.
 - **„Abmelden" ist jetzt zweistufig**: erst fragen (rot, ❌, „Entfernen"), dann löschen.
   Auslöser war der Nutzer, der es ausprobierte und dabei seinen Key verlor — das Verhalten
   war korrekt, aber zu scharf.
+
+## 19. Vorschauen (2026-10-15)
+
+### Was läuft
+- **Markdown** — `marked` + **DOMPurify**, Umschalter Vorschau/Quelle. Markdown erlaubt
+  rohes HTML; ohne Säuberung könnte eine Notizdatei Skript in unserem Webview ausführen,
+  das Tauri-Befehle aufrufen darf.
+- **Bilder** — über `read_file_base64` als Data-URL.
+- **PDF** — `pdfjs-dist` 6.4, Seite für Seite auf Canvas, Worker gebündelt
+  (`pdf.worker.min.mjs`, 1,26 MB). v6 will `render({ canvas, viewport })` statt
+  `canvasContext`.
+- Weiche: `previewKindFor()` in `src/lib/preview.ts`.
+
+### Zwei Fehler, die wir gefunden haben
+1. **Das Asset-Protokoll ist blockiert.** WebKit lehnt `asset://localhost/...` von der
+   Dev-Server-Origin ab: „protocols and ports must match". Bilder über `convertFileSrc`
+   liefen deshalb ins Leere. **Das gilt auch für die geplante HTML-Vorschau** — der
+   Base64-Weg ist die verlässliche Variante. Asset-Protokoll und das Cargo-Feature
+   `protocol-asset` sind wieder entfernt.
+2. **Der Text-Loader lief für jede Datei.** `read_text_file` scheitert an Binärdaten
+   (kein UTF-8) und setzte `error` — über einer Vorschau, die gerade lud. Ergebnis:
+   „Datei konnte nicht gelesen werden" bei Bildern und PDFs. Jetzt entscheidet
+   `previewKindFor`, ob überhaupt Text gelesen wird.
+
+### Verifikation
+- `cargo test` → `base64_matches_known_vectors` (RFC 4648) **und**
+  `base64_matches_the_system_on_a_real_file` (182 618 Bytes, identisch zum System-`base64`).
+- `pnpm build` grün; PDF-Worker und Worker-Chunks liegen im Build.
+
+### Offen
+- PDF-Schriftwarnung (`TimesNewRomanPS-BoldMT`) ist kosmetisch: pdf.js kann Standardfonts
+  aus `standard_fonts/` laden, wenn wir sie nach `public/` legen und `standardFontDataUrl`
+  setzen.
+- Office: `docx` (mammoth), `xlsx` (SheetJS), `txt`/`rtf` simpel.
+- **Bilder und PDF sind noch nicht von Hand durchgeklickt** — der Fix kam nach dem Fund.

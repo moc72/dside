@@ -44,6 +44,7 @@ watch(
     markdownMode.value = "preview";
     imageSrc.value = "";
     if (!path || currentKind !== "image") return;
+    error.value = null;
     try {
       const data = await invoke<string>("read_file_base64", { path });
       imageSrc.value = `data:${mimeFor(path)};base64,${data}`;
@@ -69,6 +70,14 @@ async function load(path: string) {
   loading.value = true;
   error.value = null;
   try {
+    // Binary previews bring their own loader. Trying to read a PNG as UTF-8 text fails,
+    // and that failure used to surface as "could not read the file" over a preview that
+    // was loading fine.
+    const preview = previewKindFor(path);
+    if (preview === "image" || preview === "pdf") {
+      content.value = "";
+      return;
+    }
     content.value = await readFile(path);
   } catch (cause) {
     error.value = String(cause);

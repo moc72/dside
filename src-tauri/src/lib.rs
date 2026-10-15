@@ -676,4 +676,27 @@ mod tests {
         assert_eq!(base64_encode(b"fooba"), "Zm9vYmE=");
         assert_eq!(base64_encode(b"foobar"), "Zm9vYmFy");
     }
+
+    /// Compares against the system encoder on a real binary file. Opt-in, because it needs
+    /// a path from the user's disk: `DS_IDE_TEST_IMAGE=/path/to.png cargo test -- --ignored`.
+    #[test]
+    #[ignore = "needs DS_IDE_TEST_IMAGE"]
+    fn base64_matches_the_system_on_a_real_file() {
+        let Ok(path) = std::env::var("DS_IDE_TEST_IMAGE") else {
+            return;
+        };
+        let bytes = std::fs::read(&path).expect("read test image");
+        let ours = base64_encode(&bytes);
+
+        let reference = std::process::Command::new("base64")
+            .arg("-w")
+            .arg("0")
+            .arg(&path)
+            .output()
+            .expect("run system base64");
+        let expected = String::from_utf8(reference.stdout).expect("system base64 is utf-8");
+
+        assert_eq!(ours, expected.trim(), "encoder differs on {path}");
+        println!("{} bytes encoded identically", bytes.len());
+    }
 }
