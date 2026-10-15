@@ -114,6 +114,8 @@ pub struct EngineEvent {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool: Option<ToolEvent>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub action: Option<ActionEvent>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stop_reason: Option<String>,
@@ -131,12 +133,24 @@ impl EngineEvent {
             kind: kind.to_string(),
             text: None,
             tool: None,
+            action: None,
             status: None,
             stop_reason: None,
             usage: None,
             error: None,
         }
     }
+}
+
+/// Something the turn is blocked on. Mirrors the Mavis `ACTION_REQUIRED` contract.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionEvent {
+    pub id: String,
+    /// "question" for now; "permission" is the planned next one.
+    pub kind: String,
+    pub question: String,
+    pub options: Vec<String>,
 }
 
 #[derive(Clone, Serialize)]

@@ -131,6 +131,11 @@ export const de = {
     session: "Sitzung",
     message: "Nachricht",
   },
+  question: {
+    title: "Rückfrage",
+    placeholder: "Antwort eingeben…",
+    send: "Antworten",
+  },
   engine: {
     needsKey:
       "Kein API-Key hinterlegt — trage ihn unter Einstellungen → Nutzung & Modell ein.",

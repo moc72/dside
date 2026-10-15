@@ -53,6 +53,9 @@ export const secretBackend = ref<"keyring" | "file" | "none">("none");
 /** Bumped whenever the partner rewrites its plan, so the Progress panel can reload. */
 export const todosRevision = ref(0);
 
+/** Set while a turn is blocked on the user (`ask_user`). Cleared by answering. */
+export const pendingAction = ref<EngineEvent["action"] | null>(null);
+
 type SecretStatus = { present: boolean; backend: string };
 
 /** The API key used to live in localStorage. Move it to the keyring once, then forget it. */
@@ -150,10 +153,15 @@ function handleEvent(event: EngineEvent): void {
     case "error":
       lastError.value = event.error ?? "unknown engine error";
       failAssistantMessage(lastError.value);
+      pendingAction.value = null;
       running.value = false;
+      break;
+    case "action_required":
+      pendingAction.value = event.action ?? null;
       break;
     case "turn_end":
       endAssistantMessage(event.stopReason);
+      pendingAction.value = null;
       running.value = false;
       break;
     default:
@@ -254,6 +262,12 @@ export async function sendPrompt(text: string): Promise<void> {
 
 export async function abortTurn(): Promise<void> {
   await invoke("engine_abort", { sessionId: activeSessionId.value });
+}
+
+/** Answer a pending question so the blocked turn can continue. */
+export async function answerAction(actionId: string, answer: string): Promise<void> {
+  pendingAction.value = null;
+  await invoke("engine_answer", { actionId, answer });
 }
 
 export async function resetConversation(): Promise<void> {

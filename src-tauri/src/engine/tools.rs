@@ -203,6 +203,53 @@ pub fn definitions() -> Vec<Value> {
                 }
             }
         }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "web_fetch",
+                "description": "Fetch a URL over HTTP(S) and return its readable text (HTML tags stripped). Use it to read documentation or a page the user linked.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "url": { "type": "string", "description": "Absolute http(s) URL." }
+                    },
+                    "required": ["url"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "code_review",
+                "description": "Collect the current git diff (optionally staged, optionally a path) and return it for review: stat plus patch.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "staged": { "type": "boolean", "description": "Review staged changes instead of the working tree." },
+                        "path": { "type": "string", "description": "Limit the diff to this path." }
+                    }
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "ask_user",
+                "description": "Ask the user a question and wait for the answer. Use it when a decision materially changes the outcome and you cannot infer it. Provide short options when the answer is a choice.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "question": { "type": "string", "description": "The question, one sentence." },
+                        "options": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "Optional suggested answers."
+                        }
+                    },
+                    "required": ["question"]
+                }
+            }
+        }),
     ]
 }
 
@@ -251,6 +298,8 @@ pub async fn execute(
         "grep" => grep(args, ctx),
         "todowrite" => todowrite(args, todos),
         "skill" => skill_tool(args, ctx),
+        "web_fetch" => web_fetch(args).await,
+        "code_review" => code_review(args, ctx).await,
         "bash" => bash(args, ctx).await,
         other => ToolOutcome::err(format!("unknown tool: {other}")),
     }
@@ -505,6 +554,140 @@ fn skill_tool(args: &Value, ctx: &ToolContext) -> ToolOutcome {
     }
 }
 
+async fn web_fetch(args: &Value) -> ToolOutcome {
+    let Some(url) = arg(args, "url") else {
+        return ToolOutcome::err("web_fetch: missing 'url'");
+    };
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        return ToolOutcome::err("web_fetch: only http(s) URLs are supported");
+    }
+
+    let client = match reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .user_agent("DS.IDE/0.1")
+        .build()
+    {
+        Ok(client) => client,
+        Err(error) => return ToolOutcome::err(format!("web_fetch: {error}")),
+    };
+
+    let response = match client.get(url).send().await {
+        Ok(response) => response,
+        Err(error) => return ToolOutcome::err(format!("web_fetch: {error}")),
+    };
+    let status = response.status();
+    let body = match response.text().await {
+        Ok(body) => body,
+        Err(error) => return ToolOutcome::err(format!("web_fetch: {error}")),
+    };
+
+    let text = html_to_text(&body);
+    if text.trim().is_empty() {
+        return ToolOutcome::ok(format!("HTTP {status} — no readable text"));
+    }
+    ToolOutcome::ok(truncate(format!("HTTP {status}\n\n{text}"), MAX_OUTPUT_CHARS))
+}
+
+/// Deliberately crude: drop script/style blocks, strip tags, decode the common entities.
+/// A real DOM parser would be nicer, but this stays dependency-free and predictable.
+fn html_to_text(html: &str) -> String {
+    let mut out = String::with_capacity(html.len() / 2);
+    let mut rest = html;
+    let mut skip_until: Option<&str> = None;
+
+    loop {
+        let lower = rest.to_lowercase();
+        if let Some(tag) = skip_until {
+            match lower.find(tag) {
+                Some(index) => {
+                    rest = &rest[index + tag.len()..];
+                    skip_until = None;
+                    continue;
+                }
+                None => break,
+            }
+        }
+
+        match lower.find('<') {
+            Some(index) => {
+                out.push_str(&rest[..index]);
+                let tail = &rest[index..];
+                let Some(close) = tail.find('>') else { break };
+                let tag = tail[..=close].to_lowercase();
+                if tag.starts_with("<script") {
+                    skip_until = Some("</script>");
+                } else if tag.starts_with("<style") {
+                    skip_until = Some("</style>");
+                } else {
+                    out.push(' ');
+                }
+                rest = &tail[close + 1..];
+            }
+            None => {
+                out.push_str(rest);
+                break;
+            }
+        }
+    }
+
+    out.replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+async fn run_git(mut command: Command, ctx: &ToolContext) -> Result<String, String> {
+    let output = command
+        .current_dir(&ctx.workspace)
+        .stdin(Stdio::null())
+        .output()
+        .await
+        .map_err(|error| error.to_string())?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+async fn code_review(args: &Value, ctx: &ToolContext) -> ToolOutcome {
+    let staged = args.get("staged").and_then(Value::as_bool).unwrap_or(false);
+    let path = arg(args, "path").map(|value| resolve(&ctx.workspace, value));
+
+    let mut stat = Command::new("git");
+    stat.arg("diff").arg("--stat");
+    let mut patch = Command::new("git");
+    patch.arg("diff");
+    if staged {
+        stat.arg("--cached");
+        patch.arg("--cached");
+    }
+    if let Some(target) = &path {
+        stat.arg(target);
+        patch.arg(target);
+    }
+
+    let stat_text = match run_git(stat, ctx).await {
+        Ok(text) => text,
+        Err(error) => return ToolOutcome::err(format!("code_review: {error}")),
+    };
+    let patch_text = match run_git(patch, ctx).await {
+        Ok(text) => text,
+        Err(error) => return ToolOutcome::err(format!("code_review: {error}")),
+    };
+
+    if patch_text.trim().is_empty() {
+        return ToolOutcome::ok("(no changes to review in that scope)");
+    }
+
+    let body = format!("Summary:\n{stat_text}\nPatch:\n{patch_text}");
+    ToolOutcome::ok(truncate(body, MAX_OUTPUT_CHARS))
+}
+
 async fn bash(args: &Value, ctx: &ToolContext) -> ToolOutcome {
     let Some(command) = arg(args, "command") else {
         return ToolOutcome::err("bash: missing 'command'");
@@ -566,5 +749,68 @@ async fn bash(args: &Value, ctx: &ToolContext) -> ToolOutcome {
     ToolOutcome {
         content,
         is_error,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn html_to_text_drops_scripts_styles_and_tags() {
+        let html = "<html><head><style>p{color:red}</style></head><body>\
+                    <h1>Hallo</h1><script>var x = 1;</script><p>A&amp;B</p></body></html>";
+        let text = html_to_text(html);
+        assert!(text.contains("Hallo"), "kept heading text");
+        assert!(text.contains("A&B"), "decoded entity: {text}");
+        assert!(!text.contains("var x"), "dropped script body");
+        assert!(!text.contains("color"), "dropped style body");
+        assert!(!text.contains('<'), "dropped tags");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires network"]
+    async fn live_web_fetch_reads_example_com() {
+        let ctx = ToolContext {
+            workspace: PathBuf::from("/tmp"),
+            full_authorization: true,
+            skills_root: PathBuf::from("/tmp"),
+        };
+        let mut todos = Vec::new();
+        let outcome = execute(
+            "web_fetch",
+            &serde_json::json!({ "url": "https://example.com" }),
+            &ctx,
+            &mut todos,
+        )
+        .await;
+
+        assert!(!outcome.is_error, "web_fetch failed: {}", outcome.content);
+        assert!(
+            outcome.content.to_lowercase().contains("example domain"),
+            "unexpected body: {}",
+            outcome.content
+        );
+        println!("bytes: {}", outcome.content.len());
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a git working tree"]
+    async fn live_code_review_runs_git() {
+        let workspace = std::env::current_dir().unwrap();
+        let ctx = ToolContext {
+            workspace,
+            full_authorization: true,
+            skills_root: PathBuf::from("/tmp"),
+        };
+        let mut todos = Vec::new();
+        let outcome = execute("code_review", &serde_json::json!({}), &ctx, &mut todos).await;
+
+        assert!(
+            !outcome.is_error,
+            "code_review failed: {}",
+            outcome.content
+        );
+        println!("{}", outcome.content.lines().next().unwrap_or("(empty)"));
     }
 }

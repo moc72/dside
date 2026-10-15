@@ -9,10 +9,11 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager, State};
+use tokio::sync::oneshot;
 
 use crate::db::Db;
 use crate::secret::SecretStore;
-use types::{ChatMessage, EngineConfig, EngineEvent, ToolEvent, UsageEvent};
+use types::{ActionEvent, ChatMessage, EngineConfig, EngineEvent, ToolEvent, UsageEvent};
 
 const EVENT_CHANNEL: &str = "engine://event";
 
@@ -31,6 +32,9 @@ pub struct SessionState {
 pub struct EngineState {
     sessions: Mutex<HashMap<String, SessionState>>,
     config: Mutex<Option<EngineConfig>>,
+    /// Questions a running turn is blocked on. The turn awaits the receiver; the
+    /// `engine_answer` command feeds it.
+    pending: Mutex<HashMap<String, oneshot::Sender<String>>>,
 }
 
 fn emit(app: &AppHandle, event: EngineEvent) {
@@ -79,6 +83,24 @@ pub fn engine_abort(app: AppHandle, session_id: String) -> Result<(), String> {
 #[tauri::command]
 pub fn engine_send(app: AppHandle, session_id: String, prompt: String) -> Result<(), String> {
     send_prompt(&app, &session_id, &prompt)
+}
+
+/// Resolves a pending `ACTION_REQUIRED` — the turn that asked continues with this answer.
+#[tauri::command]
+pub fn engine_answer(app: AppHandle, action_id: String, answer: String) -> Result<(), String> {
+    let state = app.state::<EngineState>();
+    let sender = state
+        .pending
+        .lock()
+        .map_err(|error| error.to_string())?
+        .remove(&action_id);
+    match sender {
+        Some(sender) => {
+            let _ = sender.send(answer);
+            Ok(())
+        }
+        None => Err("engine: no pending question with that id".to_string()),
+    }
 }
 
 /// Starts one turn. Shared by the `engine_send` command and the scheduler, so a timed run
@@ -217,6 +239,59 @@ fn memory_tool(app: &AppHandle, args: &Value) -> tools::ToolOutcome {
             }
             Err(error) => tools::ToolOutcome::err(format!("memory: {error}")),
         },
+    }
+}
+
+/// Blocks the turn until the user answers. This is the real `ACTION_REQUIRED` round-trip:
+/// emit the question, park a sender, await the receiver.
+async fn ask_user(
+    app: &AppHandle,
+    session_id: &str,
+    args: &Value,
+    seq: &mut u64,
+) -> tools::ToolOutcome {
+    let question = args
+        .get("question")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if question.is_empty() {
+        return tools::ToolOutcome::err("ask_user: 'question' is required");
+    }
+    let options: Vec<String> = args
+        .get("options")
+        .and_then(Value::as_array)
+        .map(|list| {
+            list.iter()
+                .filter_map(|value| value.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let action_id = format!("q{}", crate::db::unix_now());
+    let (sender, receiver) = oneshot::channel::<String>();
+    {
+        let state = app.state::<EngineState>();
+        if let Ok(mut pending) = state.pending.lock() {
+            pending.insert(action_id.clone(), sender);
+        }
+    }
+
+    *seq += 1;
+    let mut event = EngineEvent::new(session_id, *seq, "action_required");
+    event.action = Some(ActionEvent {
+        id: action_id.clone(),
+        kind: "question".to_string(),
+        question,
+        options,
+    });
+    emit(app, event);
+
+    match tokio::time::timeout(std::time::Duration::from_secs(300), receiver).await {
+        Ok(Ok(answer)) => tools::ToolOutcome::ok(answer),
+        Ok(Err(_)) => tools::ToolOutcome::err("ask_user: the question was dropped"),
+        Err(_) => tools::ToolOutcome::err("ask_user: no answer within 5 minutes"),
     }
 }
 
@@ -383,6 +458,8 @@ async fn run_turn(
             let started = std::time::Instant::now();
             let tool_outcome = if call.function.name == "memory" {
                 memory_tool(app, &arguments)
+            } else if call.function.name == "ask_user" {
+                ask_user(app, session_id, &arguments, &mut seq).await
             } else {
                 tools::execute(&call.function.name, &arguments, &ctx, &mut todos).await
             };

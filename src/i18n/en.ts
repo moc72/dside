@@ -133,6 +133,11 @@ export const en: Messages = {
     session: "Session",
     message: "Message",
   },
+  question: {
+    title: "Question",
+    placeholder: "Type an answer…",
+    send: "Answer",
+  },
   engine: {
     needsKey: "No API key set — add it in Settings → Usage & model.",
     abort: "Abort",

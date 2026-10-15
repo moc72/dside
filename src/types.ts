@@ -62,6 +62,12 @@ export interface EngineEvent {
   };
   status?: string;
   stopReason?: string;
+  action?: {
+    id: string;
+    kind: string;
+    question: string;
+    options: string[];
+  };
   usage?: {
     promptTokens: number;
     completionTokens: number;

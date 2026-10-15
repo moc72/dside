@@ -458,8 +458,27 @@ Nach **jedem** Punkt: `pnpm build`, `cargo test`, PROGRESS.md aktualisieren.
 6. **„Doktor": Kuration** (§12 Stufe 5) — Memories zusammenfassen, Widersprüche und
    Veraltetes markieren. MiniMax' `mavis-doctor` ist dafür die Vorlage, aber nicht
    veröffentlicht → Eigenbau.
-7. **Weitere Tools** aus dem MiniMax-Set: `web_fetch`, `ask_user`, `task*` (Subagenten),
-   `skill`, `code_review`.
+7. ✓ **Weitere Tools** — teilweise erledigt: `web_fetch`, `code_review`, `ask_user`.
+   - **`web_fetch`** — holt eine http(s)-URL (30 s Timeout), `html_to_text` entfernt
+     Script-/Style-Blöcke, Tags und dekodiert die gängigen Entities, Ausgabe gekappt.
+     Bewusst ohne DOM-Parser: dependency-frei und vorhersagbar.
+   - **`code_review`** — sammelt `git diff --stat` + `git diff` (optional `--cached`,
+     optional Pfad) im Workspace und gibt beides zurück. Ehrlich: es *holt* den Diff,
+     die Bewertung macht das Modell.
+   - **`ask_user`** — **echter** `ACTION_REQUIRED`-Round-Trip statt Attrappe: der Turn
+     emittiert ein Event mit Frage und optionalen Optionen, parkt einen `oneshot::Sender`
+     in `EngineState.pending` und **wartet** (Timeout 5 min). Das neue Kommando
+     `engine_answer(actionId, answer)` löst ihn auf; im Chat erscheint über dem Composer
+     eine Rückfrage-Karte mit Optionsknöpfen und freiem Feld.
+   - **`task*` (Subagenten) bewusst NICHT** gebaut: braucht verschachtelte Agenten-Sitzungen,
+     eigenes Budget und Streaming-Semantik. Das ist ein eigenes Vorhaben, kein Anhängsel —
+     steht weiter unten als offener Punkt.
+   - Evidenz: `cargo test` → `html_to_text_drops_scripts_styles_and_tags` ok, und mit
+     `--ignored`: `live_web_fetch_reads_example_com` ok (184 Bytes Text) sowie
+     `live_code_review_runs_git` ok (git-Diff im Arbeitsbaum); `pnpm build` grün;
+     App startet, Module HTTP 200.
+   - **Nicht verifiziert:** ein echter `ask_user`-Durchlauf braucht eine Antwort im UI —
+     der Pfad ist gebaut und kompiliert, aber noch nicht von Hand durchgeklickt.
 8. ✓ **„Suche" verdrahtet, Rest ehrlich gekennzeichnet** — erledigt.
    - Rust: `Db::search` + `snippet_around` (Kontext-Ausschnitt um den Treffer) und Kommando
      `search` — durchsucht Sitzungstitel und Nachrichteninhalte (`LIKE`, Limit 40).
