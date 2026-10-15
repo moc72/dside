@@ -7,12 +7,21 @@ import ProgressTab from "./ProgressTab.vue";
 import ViewFileTab from "./ViewFileTab.vue";
 import BrowserTab from "./BrowserTab.vue";
 import MemoryTab from "./MemoryTab.vue";
+import SkillsTab from "./SkillsTab.vue";
 
-const labels: Record<WorkAreaTabKind, "workArea.tabProgress" | "workArea.tabFile" | "workArea.tabBrowser" | "workArea.tabMemory"> = {
+const labels: Record<
+  WorkAreaTabKind,
+  | "workArea.tabProgress"
+  | "workArea.tabFile"
+  | "workArea.tabBrowser"
+  | "workArea.tabMemory"
+  | "workArea.tabSkills"
+> = {
   progress: "workArea.tabProgress",
   file: "workArea.tabFile",
   browser: "workArea.tabBrowser",
   memory: "workArea.tabMemory",
+  skills: "workArea.tabSkills",
 };
 </script>
 
@@ -46,6 +55,7 @@ const labels: Record<WorkAreaTabKind, "workArea.tabProgress" | "workArea.tabFile
       <ViewFileTab v-else-if="activeTab?.kind === 'file'" :path="activeTab.filePath ?? null" />
       <BrowserTab v-else-if="activeTab?.kind === 'browser'" />
       <MemoryTab v-else-if="activeTab?.kind === 'memory'" />
+      <SkillsTab v-else-if="activeTab?.kind === 'skills'" />
       <p v-else class="empty">{{ t("workArea.empty") }}</p>
     </div>
   </aside>

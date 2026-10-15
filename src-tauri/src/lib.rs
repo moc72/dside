@@ -8,6 +8,7 @@ use tauri::Manager;
 mod db;
 mod engine;
 mod secret;
+mod skills;
 
 // ---------------------------------------------------------------------------
 // Editor detection
@@ -527,6 +528,8 @@ pub fn run() {
             db::memories_list,
             db::memory_delete,
             db::search,
+            skills::skills_list,
+            skills::skills_root_path,
             secret::secret_status,
             secret::secret_set,
             secret::secret_clear,

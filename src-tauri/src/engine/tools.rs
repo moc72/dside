@@ -9,6 +9,7 @@ use tokio::process::Command;
 pub struct ToolContext {
     pub workspace: PathBuf,
     pub full_authorization: bool,
+    pub skills_root: PathBuf,
 }
 
 pub struct ToolOutcome {
@@ -187,6 +188,21 @@ pub fn definitions() -> Vec<Value> {
                 }
             }
         }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "skill",
+                "description": "Available skills: reusable instructions for a class of task (e.g. landing pages, PDFs). Call with action 'list' to see what is installed, or with 'name' to load a skill and follow it.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": { "type": "string", "enum": ["list", "load"] },
+                        "name": { "type": "string", "description": "Skill name, required for 'load'." }
+                    },
+                    "required": ["action"]
+                }
+            }
+        }),
     ]
 }
 
@@ -234,6 +250,7 @@ pub async fn execute(
         "glob" => glob_tool(args, ctx),
         "grep" => grep(args, ctx),
         "todowrite" => todowrite(args, todos),
+        "skill" => skill_tool(args, ctx),
         "bash" => bash(args, ctx).await,
         other => ToolOutcome::err(format!("unknown tool: {other}")),
     }
@@ -456,6 +473,36 @@ fn todowrite(args: &Value, todos: &mut Vec<Value>) -> ToolOutcome {
     let count = list.len();
     *todos = list;
     ToolOutcome::ok(format!("{count} todo(s) stored"))
+}
+
+fn skill_tool(args: &Value, ctx: &ToolContext) -> ToolOutcome {
+    let action = args.get("action").and_then(Value::as_str).unwrap_or("list");
+    if action != "load" {
+        let skills = crate::skills::list();
+        if skills.is_empty() {
+            return ToolOutcome::ok(format!(
+                "(no skills installed — drop SKILL.md files into {})",
+                ctx.skills_root.display()
+            ));
+        }
+        let body = skills
+            .iter()
+            .map(|skill| format!("- {} — {}", skill.name, skill.description))
+            .collect::<Vec<_>>()
+            .join("\n");
+        return ToolOutcome::ok(body);
+    }
+
+    let Some(name) = arg(args, "name") else {
+        return ToolOutcome::err("skill: 'name' is required for load");
+    };
+    match crate::skills::find(name) {
+        Some(path) => match std::fs::read_to_string(&path) {
+            Ok(content) => ToolOutcome::ok(truncate(content, MAX_OUTPUT_CHARS)),
+            Err(error) => ToolOutcome::err(format!("skill: {error}")),
+        },
+        None => ToolOutcome::err(format!("skill: '{name}' not found")),
+    }
 }
 
 async fn bash(args: &Value, ctx: &ToolContext) -> ToolOutcome {

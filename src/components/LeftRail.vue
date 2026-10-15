@@ -5,6 +5,7 @@ import { t } from "../i18n";
 import type { SessionGroup } from "../types";
 import { activeSessionId, sessions } from "../stores/sessions";
 import { openSearch, openSettings, railCollapsed } from "../stores/ui";
+import { openTab } from "../stores/workArea";
 import { createSession, openSession } from "../composables/useEngine";
 
 const accountOpen = ref(false);
@@ -12,7 +13,7 @@ const accountOpen = ref(false);
 const primaryItems = [
   { icon: "plus", key: "nav.newTask", soon: false },
   { icon: "search", key: "nav.search", soon: false },
-  { icon: "grid", key: "nav.skills", soon: true },
+  { icon: "grid", key: "nav.skills", soon: false },
   { icon: "clock", key: "nav.scheduled", soon: true },
   { icon: "globe", key: "nav.site", soon: true },
 ] as const;
@@ -37,6 +38,10 @@ function onPrimary(key: string) {
   }
   if (key === "nav.search") {
     openSearch();
+    return;
+  }
+  if (key === "nav.skills") {
+    openTab("skills");
   }
 }
 

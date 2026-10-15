@@ -212,6 +212,7 @@ async fn run_turn(
     let ctx = tools::ToolContext {
         workspace: PathBuf::from(&workspace),
         full_authorization: config.full_authorization,
+        skills_root: crate::skills::skills_root(),
     };
     let definitions = tools::definitions();
     let mut todos: Vec<Value> = Vec::new();

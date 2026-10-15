@@ -520,7 +520,23 @@ Claude Code, Cursor, Codex und OpenCode. Für DS.IDE: eigenes Verzeichnis
 13. **Eigener Scheduler** — Tabelle `schedules` (cron/at, prompt, enabled, last_run) + ein
     Rust-Hintergrundtask (tokio, minütlich), der fällige Läufe startet; UI mit
     „keep awake"-Schalter. Ehrliche Grenze: läuft nur, solange DS.IDE läuft (kein Daemon).
-14. **Skills lokal** — `~/.ds-ide/skills/**/SKILL.md` einlesen, `skill`-Tool + `/`-Command.
+14. ✓ **Skills lokal** — erledigt.
+    - `src-tauri/src/skills.rs`: scannt `~/.ds-ide/skills/**/SKILL.md` (Tiefe 3), liest
+      YAML-Frontmatter (`name`, `description`) tolerant — ohne `name` fällt es auf den
+      Verzeichnisnamen zurück, unlesbare Dateien werden übersprungen statt die Liste zu
+      sprengen. Kommandos `skills_list`, `skills_root_path` (legt den Ordner an).
+    - Tool **`skill`**: `action: list | load`, `name`. `load` liefert die vollständige
+      SKILL.md als Tool-Ergebnis, damit der Partner sie befolgen kann. Liegt in `tools.rs`
+      (nur Dateisystem); der Pfad kommt über `ToolContext.skills_root`.
+    - UI: neuer Work-Area-Tab **„Skills"** (`SkillsTab.vue`) mit Name, Beschreibung, Pfad,
+      „Ordner öffnen" (`revealItemInDir`) und Neu laden. „Skills" in der linken Leiste
+      öffnet den Tab — das „bald"-Abzeichen ist dort weg.
+    - Beispiel-Skill angelegt: `~/.ds-ide/skills/release-notes/SKILL.md` — damit der Tab
+      nicht leer startet und das Format sichtbar ist.
+    - Evidenz: `cargo test` → Frontmatter-Test **und** `list_local_skills_smoke`
+      (bewusst `#[ignore]`, weil vom Home abhängig) findet real
+      `release-notes — Turn a git log into short, human release notes.`;
+      `pnpm build` grün, App startet, Modul HTTP 200.
 15. ✓ **Dialog-Buttons platzsparend** — API-Key-Zeile: Textbuttons durch **✅ / ❌**
     ersetzt (Tooltips „Speichern"/„Entfernen"), Eingabefeld flexibel statt fix 320px
     (lief vorher rechts aus dem Panel).
