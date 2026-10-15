@@ -14,7 +14,9 @@
     "@tauri-apps/plugin-opener": "^2",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
+    "dompurify": "^3.4.17",
     "he-tree-vue": "^3.1.2",
+    "marked": "^18.1.1",
     "monaco-editor": "^0.57.0",
     "monaco-editor-vue3": "^1.0.5",
     "vue": "^3.5.13"

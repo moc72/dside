@@ -74,6 +74,12 @@
   --radius-sm: 4px;
   --font: "Ubuntu", "Segoe UI", Inter, Avenir, Helvetica, Arial, sans-serif;
   --mono: Menlo, "DejaVu Sans Mono", Consolas, monospace;
+
+  /* Watermark behind the conversation. 1% is arithmetically invisible — this is the one
+     value to turn if the mark should be stronger or softer. */
+  --watermark: url("/deepseek-mark-white.png");
+  --watermark-opacity: 0.06;
+  --watermark-size: 340px;
 }
 
 [data-theme="light"] {
@@ -99,6 +105,8 @@
   --accent-strong: #0a66c2;
   --accent-contrast: #ffffff;
   --danger: #c62828;
+
+  --watermark: url("/deepseek-mark-blue.png");
 }
 
 * {

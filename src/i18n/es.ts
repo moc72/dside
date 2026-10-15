@@ -120,6 +120,8 @@ export const es: Messages = {
     showTree: "Mostrar árbol",
     loading: "Cargando…",
     error: "No se pudo leer el archivo.",
+    preview: "Vista previa",
+    source: "Código",
     workspace: "Directorio de trabajo",
   },
   browser: {

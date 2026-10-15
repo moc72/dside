@@ -121,6 +121,8 @@ export const en: Messages = {
     showTree: "Show file tree",
     loading: "Loading…",
     error: "Could not read the file.",
+    preview: "Preview",
+    source: "Source",
     workspace: "Workspace",
   },
   browser: {

@@ -121,6 +121,8 @@ export const zhHans: Messages = {
     showTree: "显示文件树",
     loading: "加载…",
     error: "无法读取文件。",
+    preview: "预览",
+    source: "源文本",
     workspace: "工作目录",
   },
   browser: {

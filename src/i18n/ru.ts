@@ -121,6 +121,8 @@ export const ru: Messages = {
     showTree: "Показать дерево",
     loading: "Загрузка…",
     error: "Файл не может быть прочитан.",
+    preview: "Предпросмотр",
+    source: "Исходник",
     workspace: "Рабочая директория",
   },
   browser: {

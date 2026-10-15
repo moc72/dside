@@ -141,13 +141,13 @@ onBeforeUnmount(() => {
   position: relative;
 }
 
-/* Watermark behind the conversation: present, never in the way of reading. */
+/* Watermark behind the conversation. The DeepSeek mark, white on dark and blue on light. */
 .agent::before {
   content: "";
   position: absolute;
   inset: 0;
-  background: url("/whale-mark.png") center 28% / 320px auto no-repeat;
-  opacity: 0.06;
+  background: var(--watermark) center 30% / var(--watermark-size) auto no-repeat;
+  opacity: var(--watermark-opacity);
   pointer-events: none;
 }
 

@@ -119,6 +119,8 @@ export const de = {
     showTree: "Dateibaum einblenden",
     loading: "Lade…",
     error: "Datei konnte nicht gelesen werden.",
+    preview: "Vorschau",
+    source: "Quelle",
     workspace: "Arbeitsverzeichnis",
   },
   browser: {

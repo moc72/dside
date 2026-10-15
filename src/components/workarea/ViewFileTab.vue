@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import Icon from "../Icon.vue";
 import FileTree from "../FileTree.vue";
 import MonacoEditor from "../MonacoEditor.vue";
 import { t } from "../../i18n";
 import type { FileNode } from "../../types";
 import { languageFromPath } from "../../lib/language";
+import { previewKindFor, renderMarkdown } from "../../lib/preview";
 import {
   initWorkspace,
   readFile,
@@ -26,6 +28,20 @@ const treeVisible = ref(true);
 const selectedPath = computed(() => props.path ?? null);
 const language = computed(() => (props.path ? languageFromPath(props.path) : "plaintext"));
 const editorTheme = computed(() => (resolvedTheme.value === "light" ? "vs" : "vs-dark"));
+
+const kind = computed(() => (props.path ? previewKindFor(props.path) : "text"));
+const markdownMode = ref<"preview" | "source">("preview");
+const assetUrl = computed(() => (props.path ? convertFileSrc(props.path) : ""));
+const rendered = computed(() =>
+  kind.value === "markdown" ? renderMarkdown(content.value) : "",
+);
+
+watch(
+  () => props.path,
+  () => {
+    markdownMode.value = "preview";
+  },
+);
 
 const viewerOptions = {
   readOnly: true,
@@ -71,14 +87,47 @@ function toggle(node: FileNode) {
 <template>
   <div class="viewfile" :class="{ 'no-tree': !treeVisible }">
     <div class="viewer">
-      <MonacoEditor
-        v-if="selectedPath && !error"
-        :path="selectedPath"
-        :model-value="content"
-        :language="language"
-        :theme="editorTheme"
-        :options="viewerOptions"
-      />
+      <template v-if="selectedPath && !error">
+        <div v-if="kind !== 'text'" class="viewer-bar">
+          <template v-if="kind === 'markdown'">
+            <button
+              class="mode"
+              :class="{ active: markdownMode === 'preview' }"
+              type="button"
+              @click="markdownMode = 'preview'"
+            >
+              {{ t("viewFile.preview") }}
+            </button>
+            <button
+              class="mode"
+              :class="{ active: markdownMode === 'source' }"
+              type="button"
+              @click="markdownMode = 'source'"
+            >
+              {{ t("viewFile.source") }}
+            </button>
+          </template>
+          <span class="path">{{ selectedPath }}</span>
+        </div>
+
+        <img v-if="kind === 'image'" class="image" :src="assetUrl" :alt="selectedPath ?? ''" />
+
+        <div
+          v-else-if="kind === 'markdown' && markdownMode === 'preview'"
+          class="markdown"
+          v-html="rendered"
+        ></div>
+
+        <MonacoEditor
+          v-else
+          :path="selectedPath"
+          :model-value="content"
+          :language="language"
+          :theme="editorTheme"
+          :options="viewerOptions"
+        />
+      </template>
+
       <div v-else class="placeholder">
         <Icon name="doc" :size="28" />
         <p>
@@ -138,6 +187,148 @@ function toggle(node: FileNode) {
   min-height: 0;
   position: relative;
   background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.viewer > .monaco-editor {
+  flex: 1;
+  min-height: 0;
+}
+
+.viewer-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+
+.mode {
+  height: 22px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.mode.active {
+  border-color: var(--border-strong);
+  background: var(--bg-active);
+  color: var(--text-strong);
+}
+
+.path {
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.image {
+  flex: 1;
+  min-height: 0;
+  object-fit: contain;
+  padding: 16px;
+  background: var(--bg);
+}
+
+.markdown {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px 28px;
+  color: var(--text);
+  font-size: 13.5px;
+  line-height: 1.65;
+}
+
+.markdown :deep(h1),
+.markdown :deep(h2),
+.markdown :deep(h3) {
+  margin: 1.4em 0 0.5em;
+  color: var(--text-strong);
+  line-height: 1.3;
+}
+
+.markdown :deep(h1) {
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border);
+  font-size: 1.6em;
+}
+
+.markdown :deep(h2) {
+  font-size: 1.3em;
+}
+
+.markdown :deep(h3) {
+  font-size: 1.1em;
+}
+
+.markdown :deep(p) {
+  margin: 0.7em 0;
+}
+
+.markdown :deep(a) {
+  color: var(--accent);
+}
+
+.markdown :deep(code) {
+  padding: 0.15em 0.35em;
+  border-radius: 3px;
+  background: var(--bg-elevated);
+  font-family: var(--mono);
+  font-size: 0.92em;
+}
+
+.markdown :deep(pre) {
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  overflow-x: auto;
+}
+
+.markdown :deep(pre code) {
+  padding: 0;
+  background: none;
+}
+
+.markdown :deep(blockquote) {
+  margin: 0.8em 0;
+  padding: 0.2em 1em;
+  border-left: 3px solid var(--border-strong);
+  color: var(--text-muted);
+}
+
+.markdown :deep(ul),
+.markdown :deep(ol) {
+  padding-left: 1.5em;
+}
+
+.markdown :deep(table) {
+  margin: 1em 0;
+  border-collapse: collapse;
+}
+
+.markdown :deep(th),
+.markdown :deep(td) {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+}
+
+.markdown :deep(img) {
+  max-width: 100%;
+}
+
+.markdown :deep(hr) {
+  margin: 1.5em 0;
+  border: none;
+  border-top: 1px solid var(--border);
 }
 
 .placeholder {

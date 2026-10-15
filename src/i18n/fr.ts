@@ -120,6 +120,8 @@ export const fr: Messages = {
     showTree: "Afficher l'arborescence",
     loading: "Chargement…",
     error: "Impossible de lire le fichier.",
+    preview: "Aperçu",
+    source: "Source",
     workspace: "Répertoire de travail",
   },
   browser: {
