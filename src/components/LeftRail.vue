@@ -14,7 +14,7 @@ const primaryItems = [
   { icon: "plus", key: "nav.newTask", soon: false },
   { icon: "search", key: "nav.search", soon: false },
   { icon: "grid", key: "nav.skills", soon: false },
-  { icon: "clock", key: "nav.scheduled", soon: true },
+  { icon: "clock", key: "nav.scheduled", soon: false },
   { icon: "globe", key: "nav.site", soon: true },
 ] as const;
 
@@ -42,6 +42,10 @@ function onPrimary(key: string) {
   }
   if (key === "nav.skills") {
     openTab("skills");
+    return;
+  }
+  if (key === "nav.scheduled") {
+    openTab("schedules");
   }
 }
 

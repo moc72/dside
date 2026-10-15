@@ -8,6 +8,7 @@ import ViewFileTab from "./ViewFileTab.vue";
 import BrowserTab from "./BrowserTab.vue";
 import MemoryTab from "./MemoryTab.vue";
 import SkillsTab from "./SkillsTab.vue";
+import SchedulesTab from "./SchedulesTab.vue";
 
 const labels: Record<
   WorkAreaTabKind,
@@ -16,12 +17,14 @@ const labels: Record<
   | "workArea.tabBrowser"
   | "workArea.tabMemory"
   | "workArea.tabSkills"
+  | "workArea.tabSchedules"
 > = {
   progress: "workArea.tabProgress",
   file: "workArea.tabFile",
   browser: "workArea.tabBrowser",
   memory: "workArea.tabMemory",
   skills: "workArea.tabSkills",
+  schedules: "workArea.tabSchedules",
 };
 </script>
 
@@ -56,6 +59,7 @@ const labels: Record<
       <BrowserTab v-else-if="activeTab?.kind === 'browser'" />
       <MemoryTab v-else-if="activeTab?.kind === 'memory'" />
       <SkillsTab v-else-if="activeTab?.kind === 'skills'" />
+      <SchedulesTab v-else-if="activeTab?.kind === 'schedules'" />
       <p v-else class="empty">{{ t("workArea.empty") }}</p>
     </div>
   </aside>

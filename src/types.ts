@@ -77,7 +77,7 @@ export interface Deliverable {
   done?: boolean;
 }
 
-export type WorkAreaTabKind = "progress" | "file" | "browser" | "memory" | "skills";
+export type WorkAreaTabKind = "progress" | "file" | "browser" | "memory" | "skills" | "schedules";
 
 export interface WorkAreaTab {
   id: string;

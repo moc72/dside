@@ -77,11 +77,13 @@ pub fn engine_abort(app: AppHandle, session_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn engine_send(
-    app: AppHandle,
-    session_id: String,
-    prompt: String,
-) -> Result<(), String> {
+pub fn engine_send(app: AppHandle, session_id: String, prompt: String) -> Result<(), String> {
+    send_prompt(&app, &session_id, &prompt)
+}
+
+/// Starts one turn. Shared by the `engine_send` command and the scheduler, so a timed run
+/// goes through exactly the same path (persistence, tools, events) as a typed one.
+pub fn send_prompt(app: &AppHandle, session_id: &str, prompt: &str) -> Result<(), String> {
     let mut config = {
         let state = app.state::<EngineState>();
         let slot = state.config.lock().map_err(|error| error.to_string())?;
@@ -101,25 +103,25 @@ pub fn engine_send(
     // Persist the user turn first: the conversation must survive a crash or restart.
     let messages = match app.try_state::<Db>() {
         Some(db) => {
-            db.ensure_session(&session_id, "", "project", &config.workspace)?;
-            db.insert_message(&session_id, "user", Some(&prompt), None, None)?;
-            db.touch_session(&session_id)?;
-            db.load_llm_messages(&session_id)?
+            db.ensure_session(session_id, "", "project", &config.workspace)?;
+            db.insert_message(session_id, "user", Some(prompt), None, None)?;
+            db.touch_session(session_id)?;
+            db.load_llm_messages(session_id)?
         }
-        None => vec![ChatMessage::user(prompt)],
+        None => vec![ChatMessage::user(prompt.to_string())],
     };
 
     let cancel = Arc::new(AtomicBool::new(false));
     let seq = {
         let state = app.state::<EngineState>();
         let mut sessions = state.sessions.lock().map_err(|error| error.to_string())?;
-        let session = sessions.entry(session_id.clone()).or_default();
+        let session = sessions.entry(session_id.to_string()).or_default();
         session.cancel = Some(cancel.clone());
         session.seq
     };
 
     let app_handle = app.clone();
-    let sid = session_id.clone();
+    let sid = session_id.to_string();
 
     tauri::async_runtime::spawn(async move {
         let (seq, outcome) = run_turn(&app_handle, &config, &sid, messages, seq, cancel).await;
@@ -145,6 +147,28 @@ pub fn engine_send(
     });
 
     Ok(())
+}
+
+/// Called from a background loop: start every schedule that is due.
+pub fn run_due_schedules(app: &AppHandle) {
+    let Some(db) = app.try_state::<Db>() else {
+        return;
+    };
+    let now = crate::db::unix_now();
+    let due = match db.due_schedules(now) {
+        Ok(rows) => rows,
+        Err(error) => {
+            eprintln!("scheduler: could not load schedules: {error}");
+            return;
+        }
+    };
+
+    for schedule in due {
+        let _ = db.mark_schedule_run(schedule.id, now + schedule.interval_seconds);
+        if let Err(error) = send_prompt(app, &schedule.session_id, &schedule.prompt) {
+            eprintln!("scheduler: schedule {} failed: {error}", schedule.id);
+        }
+    }
 }
 
 /// Long-term memory lives in the database, so it is handled here rather than in

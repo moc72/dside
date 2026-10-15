@@ -505,6 +505,17 @@ pub fn run() {
             let database = db::Db::open(&directory.join("ds-ide.sqlite3"))?;
             app.manage(database);
             app.manage(secret::SecretStore::new(directory.join("secrets.json")));
+
+            // Interval scheduler: check for due runs every 30 seconds. It only lives as
+            // long as the app does — there is no OS daemon.
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                    engine::run_due_schedules(&handle);
+                }
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -528,6 +539,10 @@ pub fn run() {
             db::memories_list,
             db::memory_delete,
             db::search,
+            db::schedules_list,
+            db::schedule_create,
+            db::schedule_delete,
+            db::schedule_toggle,
             skills::skills_list,
             skills::skills_root_path,
             secret::secret_status,

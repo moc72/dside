@@ -68,8 +68,41 @@ CREATE TABLE IF NOT EXISTS settings (
   key    TEXT PRIMARY KEY,
   value  TEXT NOT NULL
 );
+
+-- Interval scheduler. Deliberately not full cron: an interval is what the UI offers,
+-- and pretending otherwise would be dishonest.
+CREATE TABLE IF NOT EXISTS schedules (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id       TEXT NOT NULL,
+  prompt           TEXT NOT NULL,
+  interval_seconds INTEGER NOT NULL,
+  enabled          INTEGER NOT NULL DEFAULT 1,
+  last_run_at      INTEGER,
+  next_run_at      INTEGER NOT NULL,
+  created_at       INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_schedules_due ON schedules(enabled, next_run_at);
 PRAGMA user_version = 1;
 ";
+
+pub fn unix_now() -> i64 {
+    now()
+}
+
+fn row_to_schedule(row: &rusqlite::Row<'_>) -> rusqlite::Result<ScheduleRow> {
+    Ok(ScheduleRow {
+        id: row.get(0)?,
+        session_id: row.get(1)?,
+        prompt: row.get(2)?,
+        interval_seconds: row.get(3)?,
+        enabled: row.get::<_, i32>(4)? != 0,
+        last_run_at: row.get(5)?,
+        next_run_at: row.get(6)?,
+    })
+}
+
+const SCHEDULE_COLUMNS: &str =
+    "id, session_id, prompt, interval_seconds, enabled, last_run_at, next_run_at";
 
 fn now() -> i64 {
     SystemTime::now()
@@ -140,6 +173,18 @@ pub struct TodoRow {
     pub content: String,
     pub status: Option<String>,
     pub priority: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScheduleRow {
+    pub id: i64,
+    pub session_id: String,
+    pub prompt: String,
+    pub interval_seconds: i64,
+    pub enabled: bool,
+    pub last_run_at: Option<i64>,
+    pub next_run_at: i64,
 }
 
 #[derive(Serialize)]
@@ -485,6 +530,85 @@ impl Db {
     }
 
     // -----------------------------------------------------------------------
+    // Interval scheduler
+    // -----------------------------------------------------------------------
+
+    pub fn list_schedules(&self) -> Result<Vec<ScheduleRow>, String> {
+        let conn = self.lock()?;
+        let mut statement = conn
+            .prepare(&format!(
+                "SELECT {SCHEDULE_COLUMNS} FROM schedules ORDER BY next_run_at"
+            ))
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map([], row_to_schedule)
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn create_schedule(
+        &self,
+        session_id: &str,
+        prompt: &str,
+        interval_seconds: i64,
+    ) -> Result<i64, String> {
+        let stamp = now();
+        let interval = interval_seconds.max(60);
+        let conn = self.lock()?;
+        conn.execute(
+            "INSERT INTO schedules
+               (session_id, prompt, interval_seconds, enabled, next_run_at, created_at)
+             VALUES (?1, ?2, ?3, 1, ?4, ?5)",
+            params![session_id, prompt, interval, stamp + interval, stamp],
+        )
+        .map_err(|error| error.to_string())?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    pub fn delete_schedule(&self, id: i64) -> Result<(), String> {
+        let conn = self.lock()?;
+        conn.execute("DELETE FROM schedules WHERE id = ?1", params![id])
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    pub fn set_schedule_enabled(&self, id: i64, enabled: bool) -> Result<(), String> {
+        let conn = self.lock()?;
+        conn.execute(
+            "UPDATE schedules SET enabled = ?2 WHERE id = ?1",
+            params![id, enabled as i32],
+        )
+        .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    pub fn due_schedules(&self, at: i64) -> Result<Vec<ScheduleRow>, String> {
+        let conn = self.lock()?;
+        let mut statement = conn
+            .prepare(&format!(
+                "SELECT {SCHEDULE_COLUMNS} FROM schedules
+                 WHERE enabled = 1 AND next_run_at <= ?1 ORDER BY next_run_at"
+            ))
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map([at], row_to_schedule)
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn mark_schedule_run(&self, id: i64, next_run_at: i64) -> Result<(), String> {
+        let conn = self.lock()?;
+        conn.execute(
+            "UPDATE schedules SET last_run_at = ?2, next_run_at = ?3 WHERE id = ?1",
+            params![id, now(), next_run_at],
+        )
+        .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
     // Search
     // -----------------------------------------------------------------------
 
@@ -711,6 +835,31 @@ pub fn search(
     db.search(&query, limit.unwrap_or(40))
 }
 
+#[tauri::command]
+pub fn schedules_list(db: tauri::State<'_, Db>) -> Result<Vec<ScheduleRow>, String> {
+    db.list_schedules()
+}
+
+#[tauri::command]
+pub fn schedule_create(
+    db: tauri::State<'_, Db>,
+    session_id: String,
+    prompt: String,
+    interval_seconds: i64,
+) -> Result<i64, String> {
+    db.create_schedule(&session_id, &prompt, interval_seconds)
+}
+
+#[tauri::command]
+pub fn schedule_delete(db: tauri::State<'_, Db>, id: i64) -> Result<(), String> {
+    db.delete_schedule(id)
+}
+
+#[tauri::command]
+pub fn schedule_toggle(db: tauri::State<'_, Db>, id: i64, enabled: bool) -> Result<(), String> {
+    db.set_schedule_enabled(id, enabled)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -829,6 +978,43 @@ mod tests {
         );
 
         assert!(db.search("   ", 20).unwrap().is_empty(), "blank query");
+
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn schedules_cycle() {
+        let directory =
+            std::env::temp_dir().join(format!("ds-ide-sched-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let db = Db::open(&directory.join("c.sqlite3")).unwrap();
+
+        db.ensure_session("s1", "Test", "project", "/tmp").unwrap();
+        let id = db.create_schedule("s1", "Status?", 60).unwrap();
+
+        let first = db.list_schedules().unwrap();
+        assert_eq!(first.len(), 1);
+        assert_eq!(first[0].interval_seconds, 60);
+
+        // Not yet due …
+        assert!(db
+            .due_schedules(first[0].next_run_at - 1)
+            .unwrap()
+            .is_empty());
+        // … but due later.
+        let due = db.due_schedules(unix_now() + 3600).unwrap();
+        assert_eq!(due.len(), 1);
+        assert_eq!(due[0].prompt, "Status?");
+
+        db.mark_schedule_run(id, unix_now() + 99_999).unwrap();
+        assert!(db.due_schedules(unix_now() + 3600).unwrap().is_empty());
+
+        db.set_schedule_enabled(id, false).unwrap();
+        assert!(!db.list_schedules().unwrap()[0].enabled);
+
+        db.delete_schedule(id).unwrap();
+        assert!(db.list_schedules().unwrap().is_empty());
 
         let _ = std::fs::remove_dir_all(&directory);
     }

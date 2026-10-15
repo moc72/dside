@@ -517,9 +517,27 @@ Claude Code, Cursor, Codex und OpenCode. Für DS.IDE: eigenes Verzeichnis
     „Seite" (14) — die letzten drei bewusst als geplante Ziele, nicht als Attrappen.
     Evidenz: `pnpm build` grün (vue-tsc prüft die i18n-Kataloge gegen die Form-Referenz,
     also sind beide Sprachen konsistent).
-13. **Eigener Scheduler** — Tabelle `schedules` (cron/at, prompt, enabled, last_run) + ein
-    Rust-Hintergrundtask (tokio, minütlich), der fällige Läufe startet; UI mit
-    „keep awake"-Schalter. Ehrliche Grenze: läuft nur, solange DS.IDE läuft (kein Daemon).
+13. ✓ **Eigener Scheduler** — erledigt (bewusst **Intervall**, nicht Cron).
+    - Tabelle `schedules` (session_id, prompt, interval_seconds, enabled, last_run_at,
+      next_run_at). Das Schema läuft bei jedem Öffnen — die Tabelle landete also **ohne
+      Migration** in der bestehenden DB.
+    - `db.rs`: `list_schedules`, `create_schedule` (Minimum 60 s), `delete_schedule`,
+      `set_schedule_enabled`, `due_schedules(at)`, `mark_schedule_run`; Kommandos
+      `schedules_list`, `schedule_create`, `schedule_delete`, `schedule_toggle`.
+    - Engine: `engine_send` wurde zu **`send_prompt(app, session_id, prompt)`** extrahiert,
+      der Befehl ist nur noch eine Hülle. Dadurch läuft ein geplanter Auftrag durch **genau
+      denselben Pfad** wie ein getippter (Persistenz, Tools, Events).
+    - Hintergrundtask im `setup` von `lib.rs`: alle 30 s `run_due_schedules()`, das fällige
+      Einträge startet und `next_run_at` fortschreibt.
+    - UI: Tab **„Geplant"** (`SchedulesTab.vue`) — Auftrag + Intervall in Minuten anlegen,
+      ein-/ausschalten, löschen, nächster und letzter Lauf. „Geplant" in der Leiste öffnet
+      den Tab, das „bald"-Abzeichen ist weg.
+    - **Ehrliche Grenzen:** Intervall statt Cron-Ausdrücken, und der Task lebt **nur, solange
+      DS.IDE läuft** — kein Daemon, kein Aufwecken aus dem Ruhezustand. „keep awake" habe ich
+      deshalb bewusst **nicht** gebaut, statt es als Schalter ohne Wirkung anzubieten.
+    - Evidenz: `cargo test` → `db::tests::schedules_cycle` ok (nicht fällig → fällig →
+      fortgeschrieben → deaktiviert → gelöscht); `pnpm build` grün; nach `pnpm tauri dev`
+      existiert `schedules` in der bestehenden DB (0 Zeilen), Modul HTTP 200.
 14. ✓ **Skills lokal** — erledigt.
     - `src-tauri/src/skills.rs`: scannt `~/.ds-ide/skills/**/SKILL.md` (Tiefe 3), liest
       YAML-Frontmatter (`name`, `description`) tolerant — ohne `name` fällt es auf den
