@@ -26,6 +26,14 @@ export const en: Messages = {
     pin: "Pin",
     unpin: "Unpin",
     rename: "Rename",
+    archive: "Archive",
+  },
+  archived: {
+    title: "Archived tasks",
+    hint: "Archived sessions are kept in full — they are only hidden from the sidebar.",
+    empty: "Nothing archived.",
+    untitled: "Untitled",
+    restore: "Restore",
   },
   account: {
     uid: "UID",

@@ -531,6 +531,8 @@ pub fn run() {
             engine::engine_abort,
             engine::engine_reset,
             db::sessions_list,
+            db::sessions_archived,
+            db::session_archive,
             db::session_create,
             db::session_history,
             db::session_delete,

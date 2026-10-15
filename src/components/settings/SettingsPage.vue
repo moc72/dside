@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import { invoke } from "@tauri-apps/api/core";
 import Icon from "../Icon.vue";
 import ToggleRow from "./ToggleRow.vue";
 import { locale, locales, setLocale, t } from "../../i18n";
@@ -104,6 +105,31 @@ async function removeKey() {
 
 onMounted(() => {
   void refreshSecret();
+});
+
+interface ArchivedSession {
+  id: string;
+  title: string;
+  updatedAt: number;
+}
+
+const archived = ref<ArchivedSession[]>([]);
+
+async function loadArchived() {
+  try {
+    archived.value = await invoke<ArchivedSession[]>("sessions_archived");
+  } catch {
+    archived.value = [];
+  }
+}
+
+async function restore(id: string) {
+  await invoke("session_archive", { id, archived: false });
+  await loadArchived();
+}
+
+watch(activeItem, (value) => {
+  if (value === "archived") void loadArchived();
 });
 </script>
 
@@ -289,6 +315,24 @@ onMounted(() => {
         </div>
 
         <p class="hint" :class="{ warn: secretBackend === 'file' }">{{ secretHint }}</p>
+      </template>
+
+      <template v-else-if="activeItem === 'archived'">
+        <h1 class="title">{{ t("archived.title") }}</h1>
+        <p class="hint">{{ t("archived.hint") }}</p>
+
+        <p v-if="archived.length === 0" class="hint">{{ t("archived.empty") }}</p>
+
+        <div v-else class="card">
+          <div v-for="session in archived" :key="session.id" class="row">
+            <div class="text">
+              <div class="label">{{ session.title || t("archived.untitled") }}</div>
+            </div>
+            <button class="mini-text" type="button" @click="restore(session.id)">
+              {{ t("archived.restore") }}
+            </button>
+          </div>
+        </div>
       </template>
 
       <div v-else class="placeholder">
@@ -586,6 +630,20 @@ onMounted(() => {
 
 .hint.warn {
   color: var(--danger);
+}
+
+.mini-text {
+  padding: 5px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.mini-text:hover {
+  border-color: var(--accent);
+  color: var(--text-strong);
 }
 
 .secret {

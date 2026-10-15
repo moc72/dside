@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   title       TEXT NOT NULL DEFAULT '',
   grp         TEXT NOT NULL DEFAULT 'project',
   workspace   TEXT NOT NULL DEFAULT '',
+  archived    INTEGER NOT NULL DEFAULT 0,
   created_at  INTEGER NOT NULL,
   updated_at  INTEGER NOT NULL
 );
@@ -143,6 +144,7 @@ pub struct SessionRow {
     pub title: String,
     pub group: String,
     pub workspace: String,
+    pub archived: bool,
     pub updated_at: i64,
 }
 
@@ -230,6 +232,7 @@ impl Db {
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
             .map_err(|error| error.to_string())?;
         conn.execute_batch(SCHEMA).map_err(|error| error.to_string())?;
+        Self::migrate(&conn)?;
 
         // The database contains prompts, tool output and file content: keep it private.
         #[cfg(unix)]
@@ -245,6 +248,31 @@ impl Db {
 
     fn lock(&self) -> Result<MutexGuard<'_, Connection>, String> {
         self.conn.lock().map_err(|error| error.to_string())
+    }
+
+    /// `CREATE TABLE IF NOT EXISTS` never alters an existing table, so columns added
+    /// after the first release need an explicit step here.
+    fn migrate(conn: &Connection) -> Result<(), String> {
+        let columns: Vec<String> = {
+            let mut statement = conn
+                .prepare("PRAGMA table_info(sessions)")
+                .map_err(|error| error.to_string())?;
+            let collected = statement
+                .query_map([], |row| row.get::<_, String>(1))
+                .map_err(|error| error.to_string())?
+                .filter_map(Result::ok)
+                .collect();
+            collected
+        };
+
+        if !columns.iter().any(|name| name == "archived") {
+            conn.execute(
+                "ALTER TABLE sessions ADD COLUMN archived INTEGER NOT NULL DEFAULT 0",
+                [],
+            )
+            .map_err(|error| error.to_string())?;
+        }
+        Ok(())
     }
 
     pub fn ensure_session(
@@ -316,12 +344,20 @@ impl Db {
     }
 
     pub fn list_sessions(&self) -> Result<Vec<SessionRow>, String> {
+        self.session_rows("WHERE archived = 0")
+    }
+
+    pub fn list_archived_sessions(&self) -> Result<Vec<SessionRow>, String> {
+        self.session_rows("WHERE archived = 1")
+    }
+
+    fn session_rows(&self, filter: &str) -> Result<Vec<SessionRow>, String> {
         let conn = self.lock()?;
         let mut statement = conn
-            .prepare(
-                "SELECT id, title, grp, workspace, updated_at
-                 FROM sessions ORDER BY updated_at DESC",
-            )
+            .prepare(&format!(
+                "SELECT id, title, grp, workspace, archived, updated_at
+                 FROM sessions {filter} ORDER BY updated_at DESC"
+            ))
             .map_err(|error| error.to_string())?;
         let rows = statement
             .query_map([], |row| {
@@ -330,12 +366,24 @@ impl Db {
                     title: row.get(1)?,
                     group: row.get(2)?,
                     workspace: row.get(3)?,
-                    updated_at: row.get(4)?,
+                    archived: row.get::<_, i32>(4)? != 0,
+                    updated_at: row.get(5)?,
                 })
             })
             .map_err(|error| error.to_string())?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|error| error.to_string())
+    }
+
+    /// Archiving only takes a session out of the sidebar — nothing is deleted.
+    pub fn set_session_archived(&self, id: &str, archived: bool) -> Result<(), String> {
+        let conn = self.lock()?;
+        conn.execute(
+            "UPDATE sessions SET archived = ?2, updated_at = ?3 WHERE id = ?1",
+            params![id, archived as i32, now()],
+        )
+        .map_err(|error| error.to_string())?;
+        Ok(())
     }
 
     pub fn create_session(&self, id: &str, title: &str, workspace: &str) -> Result<(), String> {
@@ -881,6 +929,16 @@ pub fn sessions_list(db: tauri::State<'_, Db>) -> Result<Vec<SessionRow>, String
 }
 
 #[tauri::command]
+pub fn sessions_archived(db: tauri::State<'_, Db>) -> Result<Vec<SessionRow>, String> {
+    db.list_archived_sessions()
+}
+
+#[tauri::command]
+pub fn session_archive(db: tauri::State<'_, Db>, id: String, archived: bool) -> Result<(), String> {
+    db.set_session_archived(&id, archived)
+}
+
+#[tauri::command]
 pub fn session_create(
     db: tauri::State<'_, Db>,
     id: String,
@@ -1189,6 +1247,74 @@ mod tests {
 
         db.update_session("s1", None, Some("pinned")).unwrap();
         assert_eq!(db.list_sessions().unwrap()[0].group, "pinned");
+
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn archiving_hides_a_session_without_deleting_it() {
+        let directory =
+            std::env::temp_dir().join(format!("ds-ide-archive-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let db = Db::open(&directory.join("a.sqlite3")).unwrap();
+
+        db.ensure_session("s1", "Bleibt erhalten", "project", "/tmp")
+            .unwrap();
+        db.insert_message("s1", "user", Some("hallo"), None, None)
+            .unwrap();
+
+        db.set_session_archived("s1", true).unwrap();
+        assert!(db.list_sessions().unwrap().is_empty(), "gone from the sidebar");
+        let archived = db.list_archived_sessions().unwrap();
+        assert_eq!(archived.len(), 1, "still in the archive");
+        assert!(archived[0].archived);
+        assert_eq!(
+            db.load_history("s1").unwrap().len(),
+            1,
+            "the conversation is untouched"
+        );
+
+        db.set_session_archived("s1", false).unwrap();
+        assert_eq!(db.list_sessions().unwrap().len(), 1, "reactivated");
+
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    /// The existing installation has a `sessions` table without `archived`.
+    #[test]
+    fn migrate_adds_archived_to_an_old_database() {
+        let directory =
+            std::env::temp_dir().join(format!("ds-ide-migrate-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("old.sqlite3");
+
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE sessions (
+                   id         TEXT PRIMARY KEY,
+                   title      TEXT NOT NULL DEFAULT '',
+                   grp        TEXT NOT NULL DEFAULT 'project',
+                   workspace  TEXT NOT NULL DEFAULT '',
+                   created_at INTEGER NOT NULL,
+                   updated_at INTEGER NOT NULL
+                 );
+                 INSERT INTO sessions (id, title, grp, workspace, created_at, updated_at)
+                 VALUES ('s1', 'Alte Sitzung', 'project', '/tmp', 1, 1);",
+            )
+            .unwrap();
+        }
+
+        let db = Db::open(&path).unwrap();
+        let sessions = db.list_sessions().unwrap();
+        assert_eq!(sessions.len(), 1, "old row survived the migration");
+        assert!(!sessions[0].archived);
+
+        db.set_session_archived("s1", true).unwrap();
+        assert!(db.list_sessions().unwrap().is_empty());
+        assert_eq!(db.list_archived_sessions().unwrap().len(), 1);
 
         let _ = std::fs::remove_dir_all(&directory);
     }

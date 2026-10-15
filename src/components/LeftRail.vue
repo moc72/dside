@@ -51,6 +51,13 @@ async function togglePin(session: Session) {
   await loadSessions();
 }
 
+/** Hides the session from the rail. Nothing is deleted — see the archive in Settings. */
+async function archiveSession(session: Session) {
+  menuSession.value = null;
+  await invoke("session_archive", { id: session.id, archived: true });
+  await loadSessions();
+}
+
 const primaryItems = [
   { icon: "plus", key: "nav.newTask", soon: false },
   { icon: "search", key: "nav.search", soon: false },
@@ -111,6 +118,10 @@ function accountSettings() {
       <button class="menu-item" type="button" @click="startRename(menuSession)">
         <Icon name="pencil" :size="14" />
         <span>{{ t("session.rename") }}</span>
+      </button>
+      <button class="menu-item" type="button" @click="archiveSession(menuSession)">
+        <Icon name="archive" :size="14" />
+        <span>{{ t("session.archive") }}</span>
       </button>
     </div>
     <div class="rail-head">

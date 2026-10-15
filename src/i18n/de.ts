@@ -24,6 +24,14 @@ export const de = {
     pin: "Anheften",
     unpin: "Abheften",
     rename: "Umbenennen",
+    archive: "Archivieren",
+  },
+  archived: {
+    title: "Archivierte Aufgaben",
+    hint: "Archivierte Sitzungen bleiben vollständig erhalten — sie sind nur aus der Seitenleiste ausgeblendet.",
+    empty: "Nichts archiviert.",
+    untitled: "Ohne Titel",
+    restore: "Reaktivieren",
   },
   account: {
     uid: "UID",

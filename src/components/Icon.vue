@@ -61,6 +61,7 @@ const shapes: Record<string, string[]> = {
   check: ["M5 13l4 4 10-11"],
   pin: ["M12 17v5", "M8 3h8l-1 7 3 3v2H6v-2l3-3z"],
   pencil: ["M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3z", "M13.5 6.5l3 3"],
+  archive: ["M3 7h18v3H3z", "M5 10v9h14v-9", "M10 14h4"],
   sparkle: ["M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"],
   "external-link": ["M14 4h6v6", "M20 4l-9 9", "M18 14v5H5V6h5"],
   terminal: ["M4 5h16v14H4z", "M8 10l3 3-3 3", "M13 16h4"],
