@@ -5,6 +5,7 @@ import Icon from "./Icon.vue";
 import { t } from "../i18n";
 import { settings } from "../stores/settings";
 import { openTab, toggleWorkArea } from "../stores/workArea";
+import { toggleWeb } from "../stores/ui";
 import { activeEditor, detectEditors, detecting, editors } from "../composables/useEditors";
 
 const EDITOR_DOWNLOAD_URL = "https://code.visualstudio.com/download";
@@ -72,7 +73,7 @@ async function openDownload() {
       </div>
     </div>
 
-    <button class="icon-btn" type="button" :title="t('toolbar.browser')" @click="openTab('browser')">
+    <button class="icon-btn" type="button" :title="t('toolbar.browser')" @click="toggleWeb">
       <Icon name="globe" />
     </button>
     <button class="icon-btn" type="button" :title="t('toolbar.viewFile')" @click="openTab('file')">

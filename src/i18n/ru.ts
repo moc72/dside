@@ -10,7 +10,7 @@ export const ru: Messages = {
     search: "Поиск",
     skills: "Skills",
     scheduled: "Запланированные",
-    site: "Страница",
+    site: "Веб-дизайн",
     soon: "Скоро",
     collapseSidebar: "Свернуть панель навигации",
     expandSidebar: "Развернуть панель навигации",
@@ -132,6 +132,7 @@ export const ru: Messages = {
     menu: "Еще",
     open: "Открыть",
     opensInWindow: "Страницы открываются в отдельном окне — так фокус под нашим контролем.",
+    newWindow: "Новое окно",
   },
   composer: {
     placeholder: "Введите сообщение… (/ для команд)",

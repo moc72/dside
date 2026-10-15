@@ -53,6 +53,13 @@ export function toggleRail(): void {
 
 export const searchOpen = ref(false);
 
+/** The web design panel: URL row plus the list of browser windows we own. */
+export const webOpen = ref(false);
+
+export function toggleWeb(): void {
+  webOpen.value = !webOpen.value;
+}
+
 export function openSearch(): void {
   searchOpen.value = true;
 }

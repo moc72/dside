@@ -9,7 +9,7 @@ import { links } from "../engine/links";
 import type { Session, SessionGroup } from "../types";
 import { activeSessionId, sessions } from "../stores/sessions";
 import { settings } from "../stores/settings";
-import { openSearch, openSettings, railCollapsed } from "../stores/ui";
+import { openSearch, openSettings, railCollapsed, toggleWeb } from "../stores/ui";
 import { openTab } from "../stores/workArea";
 import {
   clearApiKey,
@@ -116,7 +116,7 @@ const primaryItems = [
   { icon: "search", key: "nav.search", soon: false },
   { icon: "grid", key: "nav.skills", soon: false },
   { icon: "clock", key: "nav.scheduled", soon: false },
-  { icon: "globe", key: "nav.site", soon: true },
+  { icon: "globe", key: "nav.site", soon: false },
 ] as const;
 
 const sectionOrder: SessionGroup[] = ["pinned", "scheduled", "project", "team"];
@@ -147,6 +147,10 @@ function onPrimary(key: string) {
   }
   if (key === "nav.scheduled") {
     openTab("schedules");
+    return;
+  }
+  if (key === "nav.site") {
+    toggleWeb();
   }
 }
 

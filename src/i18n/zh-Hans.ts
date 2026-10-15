@@ -10,7 +10,7 @@ export const zhHans: Messages = {
     search: "搜索",
     skills: "Skills",
     scheduled: "计划",
-    site: "站点",
+    site: "网页设计",
     soon: "即将",
     collapseSidebar: "收起侧边栏",
     expandSidebar: "展开侧边栏",
@@ -132,6 +132,7 @@ export const zhHans: Messages = {
     menu: "更多",
     open: "打开",
     opensInWindow: "页面在独立窗口中打开——因此焦点由我们掌控。",
+    newWindow: "新窗口",
   },
   composer: {
     placeholder: "输入消息… (/ 为命令)",

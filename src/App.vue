@@ -6,6 +6,7 @@ import Resizer from "./components/Resizer.vue";
 import TitleBar from "./components/TitleBar.vue";
 import LeftRail from "./components/LeftRail.vue";
 import SearchDialog from "./components/SearchDialog.vue";
+import WebDesignPanel from "./components/WebDesignPanel.vue";
 import AgentPanel from "./components/agent/AgentPanel.vue";
 import WorkArea from "./components/workarea/WorkArea.vue";
 import SettingsPage from "./components/settings/SettingsPage.vue";
@@ -204,7 +205,8 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
     </div>
   </div>
 
-  <SearchDialog v-if="searchOpen" />
+    <SearchDialog v-if="searchOpen" />
+    <WebDesignPanel />
   </template>
 </template>
 

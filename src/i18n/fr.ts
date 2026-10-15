@@ -9,7 +9,7 @@ export const fr: Messages = {
     search: "Rechercher",
     skills: "Compétences",
     scheduled: "Planifié",
-    site: "Page",
+    site: "Web design",
     soon: "Bientôt",
     collapseSidebar: "Réduire la barre latérale",
     expandSidebar: "Développer la barre latérale",
@@ -131,6 +131,7 @@ export const fr: Messages = {
     menu: "Plus",
     open: "Ouvrir",
     opensInWindow: "Les pages s'ouvrent dans leur propre fenêtre — le focus reste sous notre contrôle.",
+    newWindow: "Nouvelle fenêtre",
   },
   composer: {
     placeholder: "Message entrée… (/ pour les commandes)",

@@ -10,7 +10,7 @@ export const en: Messages = {
     search: "Search",
     skills: "Skills",
     scheduled: "Scheduled",
-    site: "Site",
+    site: "Web design",
     soon: "soon",
     collapseSidebar: "Collapse sidebar",
     expandSidebar: "Expand sidebar",
@@ -132,6 +132,7 @@ export const en: Messages = {
     menu: "More",
     open: "Open",
     opensInWindow: "Pages open in their own window — that keeps focus under our control.",
+    newWindow: "New window",
   },
   composer: {
     placeholder: "Enter message… (use / for commands)",

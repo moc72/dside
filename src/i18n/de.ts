@@ -8,7 +8,7 @@ export const de = {
     search: "Suchen",
     skills: "Skills",
     scheduled: "Geplant",
-    site: "Seite",
+    site: "Webdesign",
     soon: "bald",
     collapseSidebar: "Seitenleiste einklappen",
     expandSidebar: "Seitenleiste ausklappen",
@@ -130,6 +130,7 @@ export const de = {
     menu: "Mehr",
     open: "Öffnen",
     opensInWindow: "Seiten öffnen im eigenen Fenster — so bleibt der Fokus bei uns.",
+    newWindow: "Neues Fenster",
   },
   composer: {
     placeholder: "Nachricht eingeben… (/ für Befehle)",
