@@ -32,5 +32,8 @@ export default defineConfig(() => ({
       // 3. tell Vite to ignore watching `src-tauri` and the monaco source tree
       ignored: ["**/src-tauri/**", "**/monaco-editor-0.57.0/**"],
     },
+    // The Tauri webview caches aggressively and keeps deleted modules in its graph,
+    // which turns a removed file into a dev-server error on every start.
+    headers: { "Cache-Control": "no-store" },
   },
 }));
