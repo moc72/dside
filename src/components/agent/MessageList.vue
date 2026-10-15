@@ -22,7 +22,7 @@ defineProps<{
           {{ message.text }}
         </div>
         <div v-else-if="message.streaming && !message.reasoning" class="pending">
-          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <img class="thinking" src="/whale-anim.webp" alt="" />
         </div>
 
         <div v-if="message.tools && message.tools.length" class="tools">
@@ -102,6 +102,17 @@ defineProps<{
   display: flex;
   gap: 4px;
   padding: 6px 0;
+}
+
+/* The partner thinking: the whale swims instead of three blinking dots. */
+.thinking {
+  width: 34px;
+  height: auto;
+  object-fit: contain;
+}
+
+.row.user .avatar {
+  display: none;
 }
 
 .reasoning {

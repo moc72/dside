@@ -658,3 +658,52 @@ Auf Nutzerwunsch (MiniMax als Vorbild, aber bewusst schlanker):
 belegten Port 1420 scheitert. Dadurch entstanden mehrfach zusätzliche Fenster, die einzeln
 aufgeräumt werden mussten. Künftig: **nicht booten, wenn 1420 belegt ist**, sondern die
 Module gegen die laufende Instanz prüfen.
+
+## 17. Archiv, Konto, Wal-Animation (2026-10-15)
+
+### Archivieren statt löschen
+- `sessions.archived` per **Migration** ergänzt: `migrate()` prüft `PRAGMA table_info`
+  und macht bei Bedarf `ALTER TABLE` — `CREATE TABLE IF NOT EXISTS` ändert bestehende
+  Tabellen nicht. Auf der echten DB verifiziert (Spalte da, beide Sitzungen erhalten).
+- `list_sessions` blendet Archiviertes aus, `list_archived_sessions` zeigt es; Kommandos
+  `session_archive`, `sessions_archived`.
+- UI: Kontextmenü → **Archivieren**; Settings → **Archivierte Aufgaben** listet sie mit
+  **Reaktivieren**. Der Verlauf bleibt vollständig in der DB.
+- Evidenz: `archiving_hides_a_session_without_deleting_it` und
+  `migrate_adds_archived_to_an_old_database` grün.
+
+### Konto
+- **Anzeigename ist keine Attrappe mehr:** Setting `displayName`, Vorgabe vom System
+  (`default_display_name` liest `$USER`/`$USERNAME`/`$LOGNAME`), einstellbar in
+  Settings → Konto. Die erfundene „UID" aus dem MiniMax-Screenshot ist **entfernt**.
+- **Menü:** Einstellungen (lokal) · Konto + Nutzung → DeepSeek · Feedback → GitHub ·
+  Kontakt → Issues · Mehr erfahren → Projektseite · **Anmelden/Abmelden** je nach
+  Key-Zustand (Abmelden löscht den Key aus dem Schlüsselbund, Anmelden springt direkt in
+  Settings → Nutzung & Modell). „Änderungsprotokoll" entfernt (hatte kein Ziel).
+- **Alle externen Adressen stehen in `src/engine/links.ts`** — eine Datei, klar
+  kommentiert. `issues` zeigt vorläufig auf die Org-Seite, weil es noch kein öffentliches
+  Repo gibt; dort bitte auf das echte Repo zeigen.
+
+### Wal-Animation
+- `rembg` in `~/.local/share/ds-ide/tools/venv-rembg` installiert (Freigabe des Nutzers).
+  Achtung: die aktuelle Version lädt standardmäßig **bria-rmbg (1,02 GB)**, nicht u2net.
+- **Wichtig fürs Tempo:** `rembg i` per CLI lädt das Modell **bei jedem Aufruf neu**
+  (~22 s/Frame). Ein Python-Lauf mit `new_session()` einmal laden und dann alle Frames
+  durchziehen ist um ein Vielfaches schneller (`/tmp/kilo/whale/cut.py`).
+- 40 Frames (10 fps aus dem MP4) freigestellt, **fester gemeinsamer Zuschnitt**
+  636×470+66+55 (aus dem Union-Bounding-Box aller Frames — per-Frame-Trim würde den Wal
+  springen lassen).
+- Ergebnis: **animiertes WebP mit Alpha**, `public/whale-anim.webp` (128 px, 152 KB) und
+  `public/whale-splash.webp` (256 px, 332 KB), je 40 Frames.
+- **Eingebaut:** Start-Animation (Splash-Overlay, blendet nach ~1,6 s aus) und im Chat
+  schwimmt der Wal **statt der drei Blinkpunkte**, während auf die Antwort gewartet wird.
+  Das Fenster-/Taskleisten-Icon bleibt statisch — kein OS animiert App-Icons.
+- Statisch war schon fertig: Icon-Set aus `ziggy.png`, Chat-Avatar `public/whale.png`.
+- Stolperstein: Ein abgebrochener Batch hinterließ `f020-cut.png` mit **0 Bytes**; ffmpeg
+  bricht an so einer Lücke ab und lieferte nur 19 statt 40 Frames. Prüfen mit
+  `find … -size 0`.
+
+### Lernnotiz zsh
+`rm -f verzeichnis/*-glob.png` bricht in zsh bei **leerem Glob** mit „no matches found" ab
+und reißt per `&&` die ganze Kette mit. In Skripten `find … -delete` verwenden oder
+`setopt null_glob`.

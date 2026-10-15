@@ -22,6 +22,15 @@ import {
 import { visible as workAreaVisible } from "./stores/workArea";
 
 const body = ref<HTMLElement | null>(null);
+const splash = ref(true);
+
+onMounted(() => {
+  window.addEventListener("keydown", onKey);
+  window.setTimeout(() => {
+    splash.value = false;
+  }, 1600);
+});
+onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
 
 function onKey(event: KeyboardEvent) {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
@@ -32,9 +41,7 @@ function onKey(event: KeyboardEvent) {
   if (event.key === "Escape" && searchOpen.value) closeSearch();
 }
 
-onMounted(() => window.addEventListener("keydown", onKey));
 onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
-
 const bodyStyle = computed(() => {
   const columns: string[] = [];
   if (!railCollapsed.value) columns.push(`${railWidth.value}%`);
@@ -116,6 +123,10 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
   </div>
 
   <SearchDialog v-if="searchOpen" />
+
+  <div v-if="splash" class="splash">
+    <img src="/whale-splash.webp" alt="" />
+  </div>
 </template>
 
 <style scoped>
@@ -141,5 +152,28 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
   gap: 10px;
+}
+
+/* Launch animation. The taskbar/window icon stays static — no OS animates app icons. */
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background: var(--bg-app);
+  animation: splash-out 0.45s ease 1.15s forwards;
+}
+
+.splash img {
+  width: 220px;
+  height: auto;
+}
+
+@keyframes splash-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
 }
 </style>
