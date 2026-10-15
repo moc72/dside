@@ -85,6 +85,61 @@ pub fn engine_send(app: AppHandle, session_id: String, prompt: String) -> Result
     send_prompt(&app, &session_id, &prompt)
 }
 
+/// Asks the provider which models the stored key may use (`GET /models`).
+#[tauri::command]
+pub async fn engine_models(app: AppHandle) -> Result<Vec<String>, String> {
+    let base = {
+        let state = app.state::<EngineState>();
+        let slot = state.config.lock().map_err(|error| error.to_string())?;
+        slot.as_ref()
+            .map(|config| config.base_url.clone())
+            .unwrap_or_else(|| "https://api.deepseek.com".to_string())
+    };
+
+    let key = app
+        .try_state::<SecretStore>()
+        .and_then(|store| store.get())
+        .unwrap_or_default();
+    if key.trim().is_empty() {
+        return Err("models: API key is missing".to_string());
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .map_err(|error| error.to_string())?;
+    let response = client
+        .get(format!("{}/models", base.trim_end_matches('/')))
+        .bearer_auth(key)
+        .send()
+        .await
+        .map_err(|error| format!("models: {error}"))?;
+
+    if !response.status().is_success() {
+        return Err(format!("models: HTTP {}", response.status()));
+    }
+
+    let body: Value = response
+        .json()
+        .await
+        .map_err(|error| format!("models: {error}"))?;
+    let mut names: Vec<String> = body
+        .get("data")
+        .and_then(Value::as_array)
+        .map(|list| {
+            list.iter()
+                .filter_map(|entry| entry.get("id").and_then(Value::as_str).map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    names.sort();
+
+    if names.is_empty() {
+        return Err("models: the provider returned no model list".to_string());
+    }
+    Ok(names)
+}
+
 /// Resolves a pending `ACTION_REQUIRED` — the turn that asked continues with this answer.
 #[tauri::command]
 pub fn engine_answer(app: AppHandle, action_id: String, answer: String) -> Result<(), String> {

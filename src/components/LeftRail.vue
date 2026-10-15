@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import Icon from "./Icon.vue";
@@ -19,6 +19,7 @@ import {
 } from "../composables/useEngine";
 
 const accountOpen = ref(false);
+const confirmSignOut = ref(false);
 const systemName = ref("User");
 const displayName = computed(() => settings.displayName.trim() || systemName.value);
 
@@ -41,9 +42,19 @@ async function openLink(url: string) {
 }
 
 async function signOut() {
+  // First click only asks. The key is a credential — losing it by accident is rude.
+  if (!confirmSignOut.value) {
+    confirmSignOut.value = true;
+    return;
+  }
+  confirmSignOut.value = false;
   accountOpen.value = false;
   await clearApiKey();
 }
+
+watch(accountOpen, (open) => {
+  if (!open) confirmSignOut.value = false;
+});
 
 function signIn() {
   accountOpen.value = false;
@@ -164,7 +175,7 @@ function accountSettings() {
       </button>
     </div>
     <div class="rail-head">
-      <span class="brand">{{ t("app.name") }}</span>
+      <img class="brand-mark" src="/whale-anim.webp" :alt="t('app.name')" :title="t('app.name')" />
     </div>
 
     <nav class="rail-nav">
@@ -234,11 +245,11 @@ function accountSettings() {
           <Icon name="grid" :size="14" /><span>{{ t("account.usage") }}</span>
           <Icon name="external-link" :size="14" class="trail" />
         </button>
-        <button class="menu-item" type="button" @click="openLink(links.github)">
+        <button class="menu-item" type="button" @click="openLink(links.issues)">
           <Icon name="send" :size="14" /><span>{{ t("account.feedback") }}</span>
           <Icon name="external-link" :size="14" class="trail" />
         </button>
-        <button class="menu-item" type="button" @click="openLink(links.issues)">
+        <button class="menu-item" type="button" @click="openLink(links.mail)">
           <Icon name="doc" :size="14" /><span>{{ t("account.contact") }}</span>
           <Icon name="external-link" :size="14" class="trail" />
         </button>
@@ -246,8 +257,15 @@ function accountSettings() {
           <Icon name="globe" :size="14" /><span>{{ t("account.learnMore") }}</span>
           <Icon name="external-link" :size="14" class="trail" />
         </button>
-        <button v-if="engineReady" class="menu-item" type="button" @click="signOut">
-          <Icon name="external-link" :size="14" /><span>{{ t("account.logout") }}</span>
+        <button
+          v-if="engineReady"
+          class="menu-item"
+          :class="{ danger: confirmSignOut }"
+          type="button"
+          @click="signOut"
+        >
+          <Icon :name="confirmSignOut ? 'x' : 'external-link'" :size="14" />
+          <span>{{ confirmSignOut ? t("model.clear") : t("account.logout") }}</span>
         </button>
         <button v-else class="menu-item accent" type="button" @click="signIn">
           <Icon name="sparkle" :size="14" /><span>{{ t("account.signIn") }}</span>
@@ -274,10 +292,10 @@ function accountSettings() {
   padding: 0 8px 0 14px;
 }
 
-.brand {
-  font-weight: 700;
-  color: var(--text-strong);
-  white-space: nowrap;
+.brand-mark {
+  height: 26px;
+  width: auto;
+  object-fit: contain;
 }
 
 .rail-nav {
@@ -455,6 +473,10 @@ function accountSettings() {
 
 .menu-item.accent {
   color: var(--accent);
+}
+
+.menu-item.danger {
+  color: var(--danger);
 }
 
 .trail {

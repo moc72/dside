@@ -527,6 +527,7 @@ pub fn run() {
             engine::engine_set_config,
             engine::engine_configured,
             engine::engine_send,
+            engine::engine_models,
             engine::engine_answer,
             engine::engine_abort,
             engine::engine_reset,

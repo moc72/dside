@@ -8,6 +8,7 @@ import { locale, locales, setLocale, t } from "../../i18n";
 import type { Locale } from "../../i18n";
 import { links } from "../../engine/links";
 import { settings } from "../../stores/settings";
+import { knownModels, loadModels, modelsError } from "../../stores/models";
 import { settingsItem } from "../../stores/ui";
 import { reloadTree } from "../../composables/useWorkspace";
 import {
@@ -36,15 +37,7 @@ const groups = [
     key: "settings.groups.management",
     items: [
       { id: "usage", label: "settings.items.usageAndModel", icon: "grid" },
-      { id: "connection", label: "settings.items.connection", icon: "globe" },
       { id: "account", label: "settings.items.account", icon: "user" },
-    ],
-  },
-  {
-    key: "settings.groups.coding",
-    items: [
-      { id: "review", label: "settings.items.codeReview", icon: "doc" },
-      { id: "worktree", label: "settings.items.worktree", icon: "folder" },
     ],
   },
   {
@@ -312,18 +305,23 @@ watch(activeItem, (value) => {
 
           <div class="row">
             <div class="text">
-              <div class="label">{{ t("model.baseUrl") }}</div>
-              <div class="desc">{{ t("model.baseUrlDesc") }}</div>
-            </div>
-            <input v-model="settings.baseUrl" class="input" />
-          </div>
-
-          <div class="row">
-            <div class="text">
               <div class="label">{{ t("model.model") }}</div>
               <div class="desc">{{ t("model.modelDesc") }}</div>
             </div>
-            <input v-model="settings.model" class="input" />
+            <div class="model-field">
+              <input v-model="settings.model" class="input" list="ds-models" />
+              <button
+                class="mini"
+                type="button"
+                :title="t('skills.refresh')"
+                @click="loadModels"
+              >
+                <Icon name="reload" :size="14" />
+              </button>
+              <datalist id="ds-models">
+                <option v-for="name in knownModels" :key="name" :value="name" />
+              </datalist>
+            </div>
           </div>
 
           <ToggleRow
@@ -334,6 +332,7 @@ watch(activeItem, (value) => {
         </div>
 
         <p class="hint" :class="{ warn: secretBackend === 'file' }">{{ secretHint }}</p>
+        <p v-if="modelsError" class="hint warn">{{ modelsError }}</p>
       </template>
 
       <template v-else-if="activeItem === 'archived'">
@@ -715,6 +714,21 @@ watch(activeItem, (value) => {
 }
 
 .secret .input {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+
+.model-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  max-width: 360px;
+}
+
+.model-field .input {
   flex: 1;
   min-width: 0;
   width: auto;

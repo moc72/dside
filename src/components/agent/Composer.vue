@@ -3,12 +3,13 @@ import { computed, ref, watch } from "vue";
 import Icon from "../Icon.vue";
 import { t } from "../../i18n";
 import { settings } from "../../stores/settings";
+import { knownModels } from "../../stores/models";
 import { abortTurn, engineReady, running, sendPrompt } from "../../composables/useEngine";
 
 const text = ref("");
 const model = ref(settings.model);
 
-const knownModels = ["deepseek-chat", "deepseek-reasoner"];
+const fallbackModels = ["deepseek-chat", "deepseek-reasoner"];
 
 const canSend = computed(() => text.value.trim().length > 0 && !running.value);
 
@@ -59,7 +60,11 @@ function toggleAuthorization() {
         <div class="right">
           <input v-model="model" class="model" list="ds-models" :title="t('composer.model')" />
           <datalist id="ds-models">
-            <option v-for="name in knownModels" :key="name" :value="name" />
+            <option
+              v-for="name in knownModels.length ? knownModels : fallbackModels"
+              :key="name"
+              :value="name"
+            />
           </datalist>
 
           <button
