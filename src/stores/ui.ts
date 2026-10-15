@@ -35,7 +35,11 @@ watch([railWidth, workWidth, railCollapsed], () => {
   });
 });
 
-export function openSettings(): void {
+/** Which settings page to open next — set before `openSettings()` when linking deep. */
+export const settingsItem = ref<string | null>(null);
+
+export function openSettings(item?: string): void {
+  settingsItem.value = item ?? null;
   view.value = "settings";
 }
 

@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import Icon from "../Icon.vue";
 import ToggleRow from "./ToggleRow.vue";
 import { locale, locales, setLocale, t } from "../../i18n";
 import type { Locale } from "../../i18n";
+import { links } from "../../engine/links";
 import { settings } from "../../stores/settings";
+import { settingsItem } from "../../stores/ui";
 import { reloadTree } from "../../composables/useWorkspace";
 import {
   clearApiKey,
@@ -18,7 +21,7 @@ import {
 const emit = defineEmits<{ close: [] }>();
 
 const query = ref("");
-const activeItem = ref<string>("general");
+const activeItem = ref<string>(settingsItem.value ?? "general");
 
 const groups = [
   {
@@ -103,8 +106,24 @@ async function removeKey() {
   await clearApiKey();
 }
 
-onMounted(() => {
-  void refreshSecret();
+const systemName = ref("");
+
+async function openLink(url: string) {
+  try {
+    await openUrl(url);
+  } catch {
+    // no browser available
+  }
+}
+
+onMounted(async () => {
+  settingsItem.value = null;
+  await refreshSecret();
+  try {
+    systemName.value = await invoke<string>("default_display_name");
+  } catch {
+    systemName.value = "";
+  }
 });
 
 interface ArchivedSession {
@@ -333,6 +352,46 @@ watch(activeItem, (value) => {
             </button>
           </div>
         </div>
+      </template>
+
+      <template v-else-if="activeItem === 'account'">
+        <h1 class="title">{{ t("settings.items.account") }}</h1>
+
+        <div class="card">
+          <div class="row">
+            <div class="text">
+              <div class="label">{{ t("settings.general.displayName") }}</div>
+              <div class="desc">{{ t("settings.general.displayNameDesc") }}</div>
+            </div>
+            <input
+              v-model="settings.displayName"
+              class="input"
+              :placeholder="systemName"
+            />
+          </div>
+
+          <div class="row">
+            <div class="text">
+              <div class="label">{{ t("account.provider") }}</div>
+              <div class="desc">{{ t("settings.general.providerDesc") }}</div>
+            </div>
+            <button class="mini-text" type="button" @click="openLink(links.provider)">
+              {{ t("account.account") }}
+            </button>
+          </div>
+
+          <div class="row">
+            <div class="text">
+              <div class="label">{{ t("model.apiKey") }}</div>
+              <div class="desc">{{ secretHint }}</div>
+            </div>
+            <button class="mini-text" type="button" @click="activeItem = 'usage'">
+              {{ t("settings.general.manage") }}
+            </button>
+          </div>
+        </div>
+
+        <p class="hint">{{ t("settings.general.linksHint") }}</p>
       </template>
 
       <div v-else class="placeholder">

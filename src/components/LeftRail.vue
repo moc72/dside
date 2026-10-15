@@ -1,15 +1,54 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import Icon from "./Icon.vue";
 import { t } from "../i18n";
+import { links } from "../engine/links";
 import type { Session, SessionGroup } from "../types";
 import { activeSessionId, sessions } from "../stores/sessions";
+import { settings } from "../stores/settings";
 import { openSearch, openSettings, railCollapsed } from "../stores/ui";
 import { openTab } from "../stores/workArea";
-import { createSession, loadSessions, openSession } from "../composables/useEngine";
+import {
+  clearApiKey,
+  createSession,
+  engineReady,
+  loadSessions,
+  openSession,
+} from "../composables/useEngine";
 
 const accountOpen = ref(false);
+const systemName = ref("User");
+const displayName = computed(() => settings.displayName.trim() || systemName.value);
+
+onMounted(async () => {
+  if (settings.displayName.trim()) return;
+  try {
+    systemName.value = await invoke<string>("default_display_name");
+  } catch {
+    // keep the fallback
+  }
+});
+
+async function openLink(url: string) {
+  accountOpen.value = false;
+  try {
+    await openUrl(url);
+  } catch {
+    // no browser available
+  }
+}
+
+async function signOut() {
+  accountOpen.value = false;
+  await clearApiKey();
+}
+
+function signIn() {
+  accountOpen.value = false;
+  openSettings("usage");
+}
 const menuSession = ref<Session | null>(null);
 const menuX = ref(0);
 const menuY = ref(0);
@@ -180,31 +219,38 @@ function accountSettings() {
 
       <div v-if="accountOpen" class="backdrop" @click="accountOpen = false"></div>
       <div v-if="accountOpen" class="account-menu">
-        <div class="menu-uid">{{ t("account.uid") }}: 539944927909126149</div>
+        <div class="menu-head">
+          <span class="menu-name">{{ displayName }}</span>
+          <span class="menu-provider">{{ t("account.provider") }}</span>
+        </div>
         <button class="menu-item" type="button" @click="accountSettings">
           <Icon name="gear" :size="14" /><span>{{ t("account.settings") }}</span>
         </button>
-        <button class="menu-item" type="button">
+        <button class="menu-item" type="button" @click="openLink(links.provider)">
+          <Icon name="user" :size="14" /><span>{{ t("account.account") }}</span>
+          <Icon name="external-link" :size="14" class="trail" />
+        </button>
+        <button class="menu-item" type="button" @click="openLink(links.usage)">
           <Icon name="grid" :size="14" /><span>{{ t("account.usage") }}</span>
-          <Icon name="chevron-right" :size="14" class="trail" />
+          <Icon name="external-link" :size="14" class="trail" />
         </button>
-        <button class="menu-item" type="button">
+        <button class="menu-item" type="button" @click="openLink(links.github)">
           <Icon name="send" :size="14" /><span>{{ t("account.feedback") }}</span>
-          <Icon name="chevron-right" :size="14" class="trail" />
+          <Icon name="external-link" :size="14" class="trail" />
         </button>
-        <button class="menu-item" type="button">
-          <Icon name="doc" :size="14" /><span>{{ t("account.changelog") }}</span>
+        <button class="menu-item" type="button" @click="openLink(links.issues)">
+          <Icon name="doc" :size="14" /><span>{{ t("account.contact") }}</span>
+          <Icon name="external-link" :size="14" class="trail" />
         </button>
-        <button class="menu-item" type="button">
-          <Icon name="user" :size="14" /><span>{{ t("account.contact") }}</span>
-          <Icon name="chevron-right" :size="14" class="trail" />
+        <button class="menu-item" type="button" @click="openLink(links.home)">
+          <Icon name="globe" :size="14" /><span>{{ t("account.learnMore") }}</span>
+          <Icon name="external-link" :size="14" class="trail" />
         </button>
-        <button class="menu-item" type="button">
-          <Icon name="external-link" :size="14" /><span>{{ t("account.learnMore") }}</span>
-          <Icon name="chevron-right" :size="14" class="trail" />
-        </button>
-        <button class="menu-item" type="button">
+        <button v-if="engineReady" class="menu-item" type="button" @click="signOut">
           <Icon name="external-link" :size="14" /><span>{{ t("account.logout") }}</span>
+        </button>
+        <button v-else class="menu-item accent" type="button" @click="signIn">
+          <Icon name="sparkle" :size="14" /><span>{{ t("account.signIn") }}</span>
         </button>
       </div>
     </div>
@@ -389,8 +435,20 @@ function accountSettings() {
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
 }
 
-.menu-uid {
+.menu-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
   padding: 6px 10px 10px;
+}
+
+.menu-name {
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.menu-provider {
   color: var(--text-muted);
   font-size: 11px;
 }

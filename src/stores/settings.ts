@@ -15,6 +15,7 @@ export interface SettingsState {
   workspace: string;
   baseUrl: string;
   model: string;
+  displayName: string;
 }
 
 /** The API key is deliberately NOT here: it lives in the OS keyring (see secret.rs). */
@@ -30,6 +31,7 @@ const PERSISTED_KEYS: (keyof SettingsState)[] = [
   "workspace",
   "baseUrl",
   "model",
+  "displayName",
 ];
 
 const LEGACY_KEY = "ds-ide.settings";
@@ -46,6 +48,7 @@ const defaults: SettingsState = {
   workspace: "",
   baseUrl: "https://api.deepseek.com",
   model: "deepseek-chat",
+  displayName: "",
 };
 
 export const settings = reactive<SettingsState>({ ...defaults });

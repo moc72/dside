@@ -986,6 +986,17 @@ pub fn settings_set(db: tauri::State<'_, Db>, key: String, value: String) -> Res
     db.set_setting(&key, &value)
 }
 
+/// The OS user's name, used until the user sets a display name of their own.
+#[tauri::command]
+pub fn default_display_name() -> String {
+    std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .or_else(|_| std::env::var("LOGNAME"))
+        .ok()
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or_else(|| "User".to_string())
+}
+
 #[tauri::command]
 pub fn memories_list(db: tauri::State<'_, Db>, limit: Option<usize>) -> Result<Vec<MemoryRow>, String> {
     db.list_memories(limit.unwrap_or(200))

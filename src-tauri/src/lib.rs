@@ -540,6 +540,7 @@ pub fn run() {
             db::session_todos,
             db::settings_all,
             db::settings_set,
+            db::default_display_name,
             db::memories_list,
             db::memory_delete,
             db::memory_report,
