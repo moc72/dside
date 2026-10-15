@@ -534,6 +534,7 @@ pub fn run() {
             db::session_create,
             db::session_history,
             db::session_delete,
+            db::session_update,
             db::session_todos,
             db::settings_all,
             db::settings_set,

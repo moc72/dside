@@ -159,6 +159,11 @@ function handleEvent(event: EngineEvent): void {
     case "action_required":
       pendingAction.value = event.action ?? null;
       break;
+    case "title": {
+      const session = sessions.value.find((entry) => entry.id === event.sessionId);
+      if (session && event.text) session.title = event.text;
+      break;
+    }
     case "turn_end":
       endAssistantMessage(event.stopReason);
       pendingAction.value = null;

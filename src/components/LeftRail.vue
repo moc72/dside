@@ -1,14 +1,55 @@
 <script setup lang="ts">
 import { ref } from "vue";
+import { invoke } from "@tauri-apps/api/core";
 import Icon from "./Icon.vue";
 import { t } from "../i18n";
-import type { SessionGroup } from "../types";
+import type { Session, SessionGroup } from "../types";
 import { activeSessionId, sessions } from "../stores/sessions";
 import { openSearch, openSettings, railCollapsed } from "../stores/ui";
 import { openTab } from "../stores/workArea";
-import { createSession, openSession } from "../composables/useEngine";
+import { createSession, loadSessions, openSession } from "../composables/useEngine";
 
 const accountOpen = ref(false);
+const menuSession = ref<Session | null>(null);
+const menuX = ref(0);
+const menuY = ref(0);
+const renamingId = ref<string | null>(null);
+const renameDraft = ref("");
+
+const vFocus = {
+  mounted: (element: HTMLInputElement) => element.focus(),
+};
+
+function openMenu(event: MouseEvent, session: Session) {
+  event.preventDefault();
+  menuX.value = event.clientX;
+  menuY.value = event.clientY;
+  menuSession.value = session;
+}
+
+function startRename(session: Session) {
+  menuSession.value = null;
+  renamingId.value = session.id;
+  renameDraft.value = session.title;
+}
+
+async function commitRename() {
+  const id = renamingId.value;
+  const title = renameDraft.value.trim();
+  renamingId.value = null;
+  if (!id || !title) return;
+  await invoke("session_update", { id, title });
+  await loadSessions();
+}
+
+async function togglePin(session: Session) {
+  menuSession.value = null;
+  await invoke("session_update", {
+    id: session.id,
+    group: session.group === "pinned" ? "project" : "pinned",
+  });
+  await loadSessions();
+}
 
 const primaryItems = [
   { icon: "plus", key: "nav.newTask", soon: false },
@@ -57,6 +98,21 @@ function accountSettings() {
 
 <template>
   <aside class="rail" :class="{ collapsed: railCollapsed }">
+    <div v-if="menuSession" class="menu-backdrop" @click="menuSession = null" @contextmenu.prevent="menuSession = null"></div>
+    <div
+      v-if="menuSession"
+      class="session-menu"
+      :style="{ left: `${menuX}px`, top: `${menuY}px` }"
+    >
+      <button class="menu-item" type="button" @click="togglePin(menuSession)">
+        <Icon name="pin" :size="14" />
+        <span>{{ menuSession.group === "pinned" ? t("session.unpin") : t("session.pin") }}</span>
+      </button>
+      <button class="menu-item" type="button" @click="startRename(menuSession)">
+        <Icon name="pencil" :size="14" />
+        <span>{{ t("session.rename") }}</span>
+      </button>
+    </div>
     <div class="rail-head">
       <span class="brand">{{ t("app.name") }}</span>
     </div>
@@ -86,9 +142,20 @@ function accountSettings() {
           :class="{ active: session.id === activeSessionId }"
           type="button"
           @click="openSession(session.id)"
+          @contextmenu.prevent="openMenu($event, session)"
         >
           <Icon name="doc" :size="14" />
-          <span>{{ session.title }}</span>
+          <input
+            v-if="renamingId === session.id"
+            v-model="renameDraft"
+            v-focus
+            class="rename"
+            @click.stop
+            @keydown.enter.prevent="commitRename"
+            @keydown.esc.prevent="renamingId = null"
+            @blur="commitRename"
+          />
+          <span v-else>{{ session.title }}</span>
         </button>
       </section>
     </div>
@@ -192,6 +259,35 @@ function accountSettings() {
   color: var(--text-muted);
   font-size: 10px;
   line-height: 15px;
+}
+
+.rename {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  padding: 0 4px;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  background: var(--bg-input);
+  color: var(--text-strong);
+  font-size: 12px;
+}
+
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 41;
+}
+
+.session-menu {
+  position: fixed;
+  z-index: 42;
+  min-width: 180px;
+  padding: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
 }
 
 .session.active {

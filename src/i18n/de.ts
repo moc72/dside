@@ -20,6 +20,11 @@ export const de = {
     agentTeam: "Agent-Team",
     noTasks: "Keine Aufgaben",
   },
+  session: {
+    pin: "Anheften",
+    unpin: "Abheften",
+    rename: "Umbenennen",
+  },
   account: {
     uid: "UID",
     settings: "Einstellungen",

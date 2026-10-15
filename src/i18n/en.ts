@@ -22,6 +22,11 @@ export const en: Messages = {
     agentTeam: "Agent Team",
     noTasks: "No tasks",
   },
+  session: {
+    pin: "Pin",
+    unpin: "Unpin",
+    rename: "Rename",
+  },
   account: {
     uid: "UID",
     settings: "Settings",

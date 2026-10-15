@@ -3,7 +3,7 @@ use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 
 const SCHEMA: &str = "
@@ -276,6 +276,42 @@ impl Db {
             params![id, now()],
         )
         .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    pub fn session_title(&self, id: &str) -> Result<Option<String>, String> {
+        let conn = self.lock()?;
+        conn.query_row(
+            "SELECT title FROM sessions WHERE id = ?1",
+            params![id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())
+    }
+
+    pub fn update_session(
+        &self,
+        id: &str,
+        title: Option<&str>,
+        group: Option<&str>,
+    ) -> Result<(), String> {
+        let conn = self.lock()?;
+        let stamp = now();
+        if let Some(title) = title {
+            conn.execute(
+                "UPDATE sessions SET title = ?2, updated_at = ?3 WHERE id = ?1",
+                params![id, title, stamp],
+            )
+            .map_err(|error| error.to_string())?;
+        }
+        if let Some(group) = group {
+            conn.execute(
+                "UPDATE sessions SET grp = ?2, updated_at = ?3 WHERE id = ?1",
+                params![id, group, stamp],
+            )
+            .map_err(|error| error.to_string())?;
+        }
         Ok(())
     }
 
@@ -860,6 +896,16 @@ pub fn session_delete(db: tauri::State<'_, Db>, id: String) -> Result<(), String
 }
 
 #[tauri::command]
+pub fn session_update(
+    db: tauri::State<'_, Db>,
+    id: String,
+    title: Option<String>,
+    group: Option<String>,
+) -> Result<(), String> {
+    db.update_session(&id, title.as_deref(), group.as_deref())
+}
+
+#[tauri::command]
 pub fn session_history(
     db: tauri::State<'_, Db>,
     session_id: String,
@@ -1119,6 +1165,30 @@ mod tests {
         assert_eq!(report.total, 3);
         assert_eq!(report.duplicates.len(), 1, "one repeat of the first entry");
         assert!(report.stale.is_empty(), "fresh entries are not stale");
+
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn sessions_can_be_renamed_and_pinned() {
+        let directory =
+            std::env::temp_dir().join(format!("ds-ide-session-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let db = Db::open(&directory.join("s.sqlite3")).unwrap();
+
+        db.ensure_session("s1", "", "project", "/tmp").unwrap();
+        assert_eq!(db.session_title("s1").unwrap().as_deref(), Some(""));
+
+        db.update_session("s1", Some("Monaco-Anbindung"), None)
+            .unwrap();
+        assert_eq!(
+            db.session_title("s1").unwrap().as_deref(),
+            Some("Monaco-Anbindung")
+        );
+
+        db.update_session("s1", None, Some("pinned")).unwrap();
+        assert_eq!(db.list_sessions().unwrap()[0].group, "pinned");
 
         let _ = std::fs::remove_dir_all(&directory);
     }

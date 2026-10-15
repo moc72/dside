@@ -142,6 +142,9 @@ pub fn send_prompt(app: &AppHandle, session_id: &str, prompt: &str) -> Result<()
         session.seq
     };
 
+    // A brand-new session is named after its first message.
+    maybe_generate_title(app, session_id, prompt, config.clone());
+
     let app_handle = app.clone();
     let sid = session_id.to_string();
 
@@ -467,6 +470,82 @@ mod tests {
         assert!(!outcome.content.trim().is_empty(), "empty sub-agent answer");
         println!("subagent answer: {}", outcome.content.trim());
     }
+}
+
+fn emit_title(app: &AppHandle, session_id: &str, title: &str) {
+    let mut event = EngineEvent::new(session_id, 0, "title");
+    event.text = Some(title.to_string());
+    emit(app, event);
+}
+
+/// Names a new session after its first message: instantly from the text, then — if the
+/// model answers — with a short, human title on top. The instant one means the rail is
+/// never empty; the model one is what the user actually reads most of the time.
+fn maybe_generate_title(
+    app: &AppHandle,
+    session_id: &str,
+    first_message: &str,
+    config: EngineConfig,
+) {
+    let Some(db) = app.try_state::<Db>() else {
+        return;
+    };
+    let needs_title = db
+        .session_title(session_id)
+        .ok()
+        .flatten()
+        .map(|title| title.trim().is_empty())
+        .unwrap_or(false);
+    if !needs_title {
+        return;
+    }
+
+    let fallback: String = first_message
+        .lines()
+        .next()
+        .unwrap_or("")
+        .trim()
+        .chars()
+        .take(60)
+        .collect();
+    if fallback.is_empty() {
+        return;
+    }
+    let _ = db.update_session(session_id, Some(&fallback), None);
+    emit_title(app, session_id, &fallback);
+
+    let app_handle = app.clone();
+    let sid = session_id.to_string();
+    let owned_message = first_message.to_string();
+    tauri::async_runtime::spawn(async move {
+        let messages = vec![
+            ChatMessage::system(
+                "You name chat sessions. Answer with the title only: three to six words, \
+                 no quotes, no trailing period, in the language of the message.",
+            ),
+            ChatMessage::user(owned_message),
+        ];
+        let mut sink = |_kind: deepseek::DeltaKind, _chunk: &str| {};
+        let Ok(outcome) = deepseek::stream_chat(&config, &messages, &[], &mut sink).await else {
+            return;
+        };
+
+        let title: String = outcome
+            .content
+            .trim()
+            .trim_matches('"')
+            .trim()
+            .chars()
+            .take(80)
+            .collect();
+        if title.is_empty() {
+            return;
+        }
+        if let Some(db) = app_handle.try_state::<Db>() {
+            let _ = db.update_session(&sid, Some(&title), None);
+        }
+        emit_title(&app_handle, &sid, &title);
+    });
 }
 
 async fn run_turn(
