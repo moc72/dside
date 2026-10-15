@@ -227,6 +227,17 @@ fn memory_tool(app: &AppHandle, args: &Value) -> tools::ToolOutcome {
                 Err(error) => tools::ToolOutcome::err(format!("memory: {error}")),
             }
         }
+        "curate" => match db.memory_report(30) {
+            Ok(report) => tools::ToolOutcome::ok(format!(
+                "{} memories; {} exact duplicate(s) {:?}; {} stale and never used {:?}",
+                report.total,
+                report.duplicates.len(),
+                report.duplicates,
+                report.stale.len(),
+                report.stale
+            )),
+            Err(error) => tools::ToolOutcome::err(format!("memory: {error}")),
+        },
         _ => match db.list_memories(50) {
             Ok(rows) if rows.is_empty() => tools::ToolOutcome::ok("(no memories stored)"),
             Ok(rows) => {

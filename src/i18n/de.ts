@@ -53,6 +53,11 @@ export const de = {
     scopeUser: "Nutzer",
     scopeAgent: "Seeky",
     scopeSession: "Sitzung",
+    check: "Gedächtnis prüfen",
+    clean: "Nichts zu bereinigen.",
+    duplicates: "{count} doppelte Einträge",
+    stale: "{count} nie benutzte, alte Einträge",
+    prune: "Entfernen",
   },
   skills: {
     title: "Skills",

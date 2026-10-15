@@ -55,6 +55,11 @@ export const en: Messages = {
     scopeUser: "User",
     scopeAgent: "Seeky",
     scopeSession: "Session",
+    check: "Check memory",
+    clean: "Nothing to clean up.",
+    duplicates: "{count} duplicate entries",
+    stale: "{count} long-unused entries",
+    prune: "Remove",
   },
   skills: {
     title: "Skills",

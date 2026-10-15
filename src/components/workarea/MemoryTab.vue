@@ -13,7 +13,14 @@ interface MemoryRow {
   createdAt: number;
 }
 
+interface MemoryReport {
+  total: number;
+  duplicates: number[];
+  stale: number[];
+}
+
 const rows = ref<MemoryRow[]>([]);
+const report = ref<MemoryReport | null>(null);
 const loading = ref(false);
 const error = ref<string | null>(null);
 
@@ -51,6 +58,22 @@ function formatDate(seconds: number): string {
   }).format(new Date(seconds * 1000));
 }
 
+/** The "doctor" pass: mechanical findings only. Deleting stays a human decision. */
+async function check() {
+  try {
+    report.value = await invoke<MemoryReport>("memory_report");
+  } catch {
+    report.value = null;
+  }
+}
+
+async function prune(ids: number[]) {
+  if (ids.length === 0) return;
+  await invoke("memory_prune", { ids });
+  report.value = null;
+  await load();
+}
+
 onMounted(() => {
   void load();
 });
@@ -63,10 +86,33 @@ onMounted(() => {
         <h2 class="title">{{ t("memory.title") }}</h2>
         <p class="subtitle">{{ t("memory.hint") }}</p>
       </div>
-      <button class="mini" type="button" :title="t('memory.refresh')" @click="load">
-        <Icon name="reload" :size="14" />
-      </button>
+      <div class="actions">
+        <button class="mini" type="button" :title="t('memory.check')" @click="check">
+          <Icon name="sparkle" :size="14" />
+        </button>
+        <button class="mini" type="button" :title="t('memory.refresh')" @click="load">
+          <Icon name="reload" :size="14" />
+        </button>
+      </div>
     </header>
+
+    <div v-if="report" class="report">
+      <div v-if="report.duplicates.length || report.stale.length">
+        <div v-if="report.duplicates.length" class="report-row">
+          <span>{{ t("memory.duplicates", { count: report.duplicates.length }) }}</span>
+          <button class="mini-text" type="button" @click="prune(report.duplicates)">
+            {{ t("memory.prune") }}
+          </button>
+        </div>
+        <div v-if="report.stale.length" class="report-row">
+          <span>{{ t("memory.stale", { count: report.stale.length }) }}</span>
+          <button class="mini-text" type="button" @click="prune(report.stale)">
+            {{ t("memory.prune") }}
+          </button>
+        </div>
+      </div>
+      <p v-else class="report-clean">{{ t("memory.clean") }}</p>
+    </div>
 
     <p v-if="loading" class="note">{{ t("viewFile.loading") }}</p>
     <p v-else-if="error" class="note error">{{ error }}</p>
@@ -145,6 +191,53 @@ onMounted(() => {
 
 .note.error {
   color: var(--danger);
+}
+
+.actions {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+.report {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+}
+
+.report-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.report-row + .report-row {
+  margin-top: 8px;
+}
+
+.report-clean {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.mini-text {
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+}
+
+.mini-text:hover {
+  border-color: var(--accent);
+  color: var(--text-strong);
 }
 
 .list {

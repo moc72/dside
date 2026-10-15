@@ -455,9 +455,24 @@ Nach **jedem** Punkt: `pnpm build`, `cargo test`, PROGRESS.md aktualisieren.
    - Evidenz: `cargo test` → `db::tests::memories_round_trip` ok (insert/list/context/
      touch/delete); `pnpm build` grün; `pnpm tauri dev` startet, Module HTTP 200;
      **keine Rust-Warnungen** mehr.
-6. **„Doktor": Kuration** (§12 Stufe 5) — Memories zusammenfassen, Widersprüche und
-   Veraltetes markieren. MiniMax' `mavis-doctor` ist dafür die Vorlage, aber nicht
-   veröffentlicht → Eigenbau.
+6. ✓ **Kuration / „Doktor"** — erledigt, aber **bewusst mechanisch**.
+   - `db.rs`: `memory_report(stale_after_days)` liefert `MemoryReport { total, duplicates,
+     stale }`. Duplikate = gleicher Text nach Normalisierung (Whitespace + Groß/Klein);
+     behalten wird der älteste Eintrag. `stale` = **nie benutzt** und älter als die Frist
+     (30 Tage). Kommandos `memory_report`, `memory_prune(ids)`.
+   - Tool `memory` hat jetzt `action: "curate"` — der Partner kann den Bericht selbst
+     anfordern und dann **gezielt** mergen oder vergessen.
+   - UI: im Gedächtnis-Tab ein **Prüfen**-Knopf (Sparkle). Der Bericht erscheint als Karte
+     mit „N doppelte Einträge" / „N nie benutzte, alte Einträge" und je einem
+     **Entfernen**-Knopf. Ohne Befund: „Nichts zu bereinigen."
+   - **Entscheidung:** Der „Doktor" schlägt vor, **löscht aber nie von selbst**. Was
+     *inhaltlich* zusammengehört, kann eine Heuristik nicht beurteilen — das bleibt beim
+     Modell (per `curate`) oder beim Nutzer. Ein Gedächtnis, das sich selbst ungefragt
+     aufräumt, ist genau die Sorte Werkzeug, der man nicht mehr traut.
+   - Evidenz: `cargo test` → `db::tests::memory_report_flags_exact_duplicates` ok
+     (Erkennung trotz abweichender Leerzeichen/Groß-Klein-Schreibung, frische Einträge
+     nicht als stale); `pnpm build` grün (9 Tests grün, 6 ignoriert); App startet,
+     Modul HTTP 200.
 7. ✓ **Weitere Tools** — teilweise erledigt: `web_fetch`, `code_review`, `ask_user`.
    - **`web_fetch`** — holt eine http(s)-URL (30 s Timeout), `html_to_text` entfernt
      Script-/Style-Blöcke, Tags und dekodiert die gängigen Entities, Ausgabe gekappt.

@@ -198,6 +198,16 @@ pub struct SearchHit {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MemoryReport {
+    pub total: i64,
+    /// Entries that repeat an older one (exact after normalising whitespace and case).
+    pub duplicates: Vec<i64>,
+    /// Never used and older than the cutoff — candidates for forgetting.
+    pub stale: Vec<i64>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MemoryRow {
     pub id: i64,
     pub kind: String,
@@ -767,6 +777,62 @@ impl Db {
             .map_err(|error| error.to_string())?;
         Ok(())
     }
+
+    /// The mechanical half of curation: what is provably redundant, and what has gone
+    /// unused for a long time. Judgement about *meaning* stays with the model or the user —
+    /// this only proposes, it never deletes on its own.
+    pub fn memory_report(&self, stale_after_days: i64) -> Result<MemoryReport, String> {
+        let conn = self.lock()?;
+        let mut statement = conn
+            .prepare(
+                "SELECT id, text, COALESCE(last_used_at, 0), created_at
+                 FROM memories ORDER BY id",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, i64>(3)?,
+                ))
+            })
+            .map_err(|error| error.to_string())?;
+
+        let cutoff = now() - stale_after_days.max(1) * 86_400;
+        let mut seen: HashMap<String, i64> = HashMap::new();
+        let mut duplicates = Vec::new();
+        let mut stale = Vec::new();
+        let mut total = 0i64;
+
+        for row in rows {
+            let (id, text, last_used, created_at) = row.map_err(|error| error.to_string())?;
+            total += 1;
+
+            let key = text
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .to_lowercase();
+            match seen.get(&key) {
+                Some(_) => duplicates.push(id),
+                None => {
+                    seen.insert(key, id);
+                }
+            }
+
+            if last_used == 0 && created_at < cutoff {
+                stale.push(id);
+            }
+        }
+
+        Ok(MemoryReport {
+            total,
+            duplicates,
+            stale,
+        })
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -824,6 +890,21 @@ pub fn memories_list(db: tauri::State<'_, Db>, limit: Option<usize>) -> Result<V
 #[tauri::command]
 pub fn memory_delete(db: tauri::State<'_, Db>, id: i64) -> Result<(), String> {
     db.delete_memory(id)
+}
+
+#[tauri::command]
+pub fn memory_report(db: tauri::State<'_, Db>) -> Result<MemoryReport, String> {
+    db.memory_report(30)
+}
+
+#[tauri::command]
+pub fn memory_prune(db: tauri::State<'_, Db>, ids: Vec<i64>) -> Result<usize, String> {
+    let mut removed = 0;
+    for id in ids {
+        db.delete_memory(id)?;
+        removed += 1;
+    }
+    Ok(removed)
 }
 
 #[tauri::command]
@@ -1015,6 +1096,29 @@ mod tests {
 
         db.delete_schedule(id).unwrap();
         assert!(db.list_schedules().unwrap().is_empty());
+
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn memory_report_flags_exact_duplicates() {
+        let directory =
+            std::env::temp_dir().join(format!("ds-ide-doctor-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let db = Db::open(&directory.join("d.sqlite3")).unwrap();
+
+        db.insert_memory("preference", "user", "Mag kurze Antworten", None)
+            .unwrap();
+        db.insert_memory("preference", "user", "mag  kurze   antworten", None)
+            .unwrap();
+        db.insert_memory("fact", "user", "Etwas anderes", None)
+            .unwrap();
+
+        let report = db.memory_report(30).unwrap();
+        assert_eq!(report.total, 3);
+        assert_eq!(report.duplicates.len(), 1, "one repeat of the first entry");
+        assert!(report.stale.is_empty(), "fresh entries are not stale");
 
         let _ = std::fs::remove_dir_all(&directory);
     }

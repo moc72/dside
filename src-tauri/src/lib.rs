@@ -539,6 +539,8 @@ pub fn run() {
             db::settings_set,
             db::memories_list,
             db::memory_delete,
+            db::memory_report,
+            db::memory_prune,
             db::search,
             db::schedules_list,
             db::schedule_create,
