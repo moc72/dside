@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import Resizer from "./components/Resizer.vue";
 import TitleBar from "./components/TitleBar.vue";
 import LeftRail from "./components/LeftRail.vue";
@@ -7,6 +8,7 @@ import SearchDialog from "./components/SearchDialog.vue";
 import AgentPanel from "./components/agent/AgentPanel.vue";
 import WorkArea from "./components/workarea/WorkArea.vue";
 import SettingsPage from "./components/settings/SettingsPage.vue";
+import { deepSeekMark } from "./components/deepseek-mark";
 import {
   CENTER_MIN,
   closeSearch,
@@ -22,13 +24,21 @@ import {
 import { visible as workAreaVisible } from "./stores/workArea";
 
 const body = ref<HTMLElement | null>(null);
-const splash = ref(true);
+
+/**
+ * The splash is a separate, chrome-less Tauri window that loads this same page. It only
+ * renders the brand; the main window stays hidden until Rust closes the splash.
+ */
+let windowLabel = "main";
+try {
+  windowLabel = getCurrentWindow().label;
+} catch {
+  // running in a plain browser — treat it as the main window
+}
+const isSplash = ref(windowLabel === "splash");
 
 onMounted(() => {
   window.addEventListener("keydown", onKey);
-  window.setTimeout(() => {
-    splash.value = false;
-  }, 1600);
 });
 onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
 
@@ -41,7 +51,6 @@ function onKey(event: KeyboardEvent) {
   if (event.key === "Escape" && searchOpen.value) closeSearch();
 }
 
-onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
 const bodyStyle = computed(() => {
   const columns: string[] = [];
   if (!railCollapsed.value) columns.push(`${railWidth.value}%`);
@@ -96,6 +105,12 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
 </script>
 
 <template>
+  <div v-if="isSplash" class="splash-window">
+    <img src="/whale-splash.webp" alt="" />
+    <span class="splash-mark" v-html="deepSeekMark"></span>
+  </div>
+
+  <template v-else>
   <SettingsPage v-if="view === 'settings'" @close="view = 'chat'" />
 
   <div v-else class="ide">
@@ -123,10 +138,7 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
   </div>
 
   <SearchDialog v-if="searchOpen" />
-
-  <div v-if="splash" class="splash">
-    <img src="/whale-splash.webp" alt="" />
-  </div>
+  </template>
 </template>
 
 <style scoped>
@@ -154,26 +166,30 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
   gap: 10px;
 }
 
-/* Launch animation. The taskbar/window icon stays static — no OS animates app icons. */
-.splash {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  display: grid;
-  place-items: center;
+/* The splash window is chrome-less: it shows the brand and nothing else. */
+.splash-window {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  height: 100vh;
   background: var(--bg-app);
-  animation: splash-out 0.45s ease 1.15s forwards;
 }
 
-.splash img {
-  width: 220px;
+.splash-window img {
+  width: 190px;
   height: auto;
 }
 
-@keyframes splash-out {
-  to {
-    opacity: 0;
-    visibility: hidden;
-  }
+.splash-mark {
+  display: inline-flex;
+  color: var(--text-strong);
+}
+
+.splash-mark :deep(svg) {
+  display: block;
+  height: 22px;
+  width: auto;
 }
 </style>

@@ -137,7 +137,6 @@ onBeforeUnmount(() => {
 .agent {
   display: flex;
   flex-direction: column;
-  background: transparent;
   padding-inline: 16px;
 }
 

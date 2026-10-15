@@ -516,6 +516,26 @@ pub fn run() {
                 }
             });
 
+            // Splash: the main window stays hidden until this closes, so startup shows the
+            // brand rather than a half-built UI.
+            let splash_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(1900)).await;
+                if let Some(splash) = splash_handle.get_webview_window("splash") {
+                    let _ = splash.close();
+                    eprintln!("startup: splash closed");
+                } else {
+                    eprintln!("startup: no splash window found");
+                }
+                if let Some(main) = splash_handle.get_webview_window("main") {
+                    let _ = main.show();
+                    let _ = main.set_focus();
+                    eprintln!("startup: main window shown");
+                } else {
+                    eprintln!("startup: no main window found");
+                }
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

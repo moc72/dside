@@ -174,9 +174,9 @@ export const fr: Messages = {
     save: "Enregistrer",
     clear: "Supprimer",
     notSet: "Aucune clé enregistrée — sans elle, le partenaire ne peut pas répondre.",
-    storedKeyring: "Enregistré dans le coffre du système.",
+    storedKeyring: "Stocké dans le coffre OS.",
     storedFile:
-      "Attention : coffre indisponible — la clé est stockée dans un fichier en mode 0600.",
+      "Attention : keyring non disponible — la clé est stockée en fichier avec mode 0600.",
     baseUrl: "URL de base",
     baseUrlDesc: "Point de terminaison pour les complétions de chat",
     model: "Modèle",

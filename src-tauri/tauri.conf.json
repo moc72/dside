@@ -12,12 +12,25 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "DS.IDE",
         "width": 1440,
         "height": 900,
         "minWidth": 960,
         "minHeight": 600,
-        "center": true
+        "center": true,
+        "visible": false
+      },
+      {
+        "label": "splash",
+        "url": "index.html",
+        "width": 440,
+        "height": 330,
+        "resizable": false,
+        "decorations": false,
+        "center": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true
       }
     ],
     "security": {

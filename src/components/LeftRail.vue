@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import Icon from "./Icon.vue";
 import { t } from "../i18n";
+import { deepSeekMark } from "./deepseek-mark";
 import { links } from "../engine/links";
 import type { Session, SessionGroup } from "../types";
 import { activeSessionId, sessions } from "../stores/sessions";
@@ -176,6 +177,7 @@ function accountSettings() {
     </div>
     <div class="rail-head">
       <img class="brand-mark" src="/whale-anim.webp" :alt="t('app.name')" :title="t('app.name')" />
+      <span class="ds-mark" v-html="deepSeekMark"></span>
     </div>
 
     <nav class="rail-nav">
@@ -287,15 +289,26 @@ function accountSettings() {
 .rail-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 10px;
   height: 44px;
-  padding: 0 8px 0 14px;
+  padding: 0 14px;
 }
 
 .brand-mark {
   height: 26px;
   width: auto;
   object-fit: contain;
+}
+
+.ds-mark {
+  display: inline-flex;
+  color: var(--text-strong);
+}
+
+.ds-mark :deep(svg) {
+  display: block;
+  height: 17px;
+  width: auto;
 }
 
 .rail-nav {
