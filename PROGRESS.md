@@ -633,3 +633,28 @@ TEST ist ein **eigenes Git-Repo** (vorher lag es nur untracked im noch leeren
 - Kein Secret im Quellcode oder in den getrackten Dateien.
 - Hinweis: Weil `~/Projects` selbst ein (noch leeres) Repo ist, sieht dieses beim Commit
   `TEST` als eingebettetes Repo (Gitlink) — gewollt, aber gut zu wissen.
+
+## 16. Sitzungen: Titel, Anheften, Umbenennen (2026-10-15)
+
+Auf Nutzerwunsch (MiniMax als Vorbild, aber bewusst schlanker):
+- **Titel aus der ersten Nachricht.** `maybe_generate_title` schreibt sofort einen
+  Text-Fallback (erste Zeile, 60 Zeichen) und lässt dann im Hintergrund einen kurzen
+  Modellaufruf („drei bis sechs Wörter, keine Anführungszeichen") einen besseren Titel
+  setzen. Beide Schritte schreiben in die DB und schicken ein `title`-Event, damit die
+  Leiste sofort nachzieht. Der Titel wird **nur** gesetzt, wenn er noch leer ist — ein
+  selbst umbenannter Titel wird nie überschrieben.
+- **Kontextmenü in der Leiste** (Rechtsklick auf eine Sitzung): **nur Anheften/Abheften
+  und Umbenennen** — nicht die MiniMax-Liste (Archive, Fork, Show in Finder, Copy …).
+  Bewusste Entscheidung: wir zeigen nur, was auch funktioniert.
+- **Umbenennen** passiert **inline** in der Zeile (kein `window.prompt`): Enter übernimmt,
+  Esc bricht ab, Blur übernimmt.
+- Rust: `session_title`, `update_session(id, title?, group?)`, Kommando `session_update`.
+- Evidenz: `cargo test` → `db::tests::sessions_can_be_renamed_and_pinned` ok (leerer Titel
+  → Umbenennen → Anheften); `pnpm build` grün; Module gegen die laufende Dev-Instanz
+  HTTP 200 (inkl. `/whale.png`).
+
+### Lernnotiz zum Ablauf
+`pnpm tauri dev` startet das App-Binary **auch dann**, wenn der `beforeDevCommand` am
+belegten Port 1420 scheitert. Dadurch entstanden mehrfach zusätzliche Fenster, die einzeln
+aufgeräumt werden mussten. Künftig: **nicht booten, wenn 1420 belegt ist**, sondern die
+Module gegen die laufende Instanz prüfen.
