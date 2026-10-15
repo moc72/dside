@@ -398,7 +398,14 @@ recoverable-deletion, task-management, web-search) und `_v2/AGENT_CONTEXT.md.hbs
 Nutzerauftrag: „so gut wie eigenständig abarbeiten, außer bei Überprüfungen".
 Nach **jedem** Punkt: `pnpm build`, `cargo test`, PROGRESS.md aktualisieren.
 
-**Stand 2026-10-15: Punkte 1-5 erledigt und verifiziert. Offen: 6-10.**
+**Stand 2026-10-15 (zweite Runde): Punkte 1-9 sowie 12, 13, 14, 15 sind erledigt und
+verifiziert. Offen: 10 (Walfisch-Branding — wartet auf das Nutzer-Asset) und die
+Subagenten (`task*`, Punkt 7 nur teilweise). Alle Commits sind auf `origin/main`
+(zuletzt `349fd70`).**
+
+Verifikation dieser Runde: `pnpm build` grün · `cargo test` 9 passed / 6 ignored ·
+alle Live-Tests grün (`list_local_skills_smoke`, `live_code_review_runs_git`,
+`live_web_fetch_reads_example_com`, drei DeepSeek-Live-Tests; Key aus dem OS-Schlüsselbund).
 
 1. ✓ **Autoscroll im AgentPanel** — erledigt. `AgentPanel.vue`: rAF-gedrosseltes Nachführen
    der Scrollposition, `following`-Flag aus einer 48px-Bodenzone, „Nach unten"-Knopf
