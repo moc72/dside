@@ -102,9 +102,10 @@ const systemName = ref("");
 
 async function openLink(url: string) {
   try {
-    await openUrl(url);
+    if (/^https?:/i.test(url)) await invoke("open_browser_window", { url });
+    else await openUrl(url);
   } catch {
-    // no browser available
+    // nothing sensible to do if even that fails
   }
 }
 

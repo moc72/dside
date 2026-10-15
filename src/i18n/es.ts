@@ -129,6 +129,8 @@ export const es: Messages = {
     forward: "Adelante",
     reload: "Actualizar",
     menu: "Más",
+    open: "Abrir",
+    opensInWindow: "Las páginas se abren en su propia ventana — así el foco queda bajo nuestro control.",
   },
   composer: {
     placeholder: "Escribir mensaje… (/ para comandos)",

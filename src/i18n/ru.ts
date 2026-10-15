@@ -130,6 +130,8 @@ export const ru: Messages = {
     forward: "Вперед",
     reload: "Обновить",
     menu: "Еще",
+    open: "Открыть",
+    opensInWindow: "Страницы открываются в отдельном окне — так фокус под нашим контролем.",
   },
   composer: {
     placeholder: "Введите сообщение… (/ для команд)",

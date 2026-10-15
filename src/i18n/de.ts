@@ -128,6 +128,8 @@ export const de = {
     forward: "Vorwärts",
     reload: "Neu laden",
     menu: "Mehr",
+    open: "Öffnen",
+    opensInWindow: "Seiten öffnen im eigenen Fenster — so bleibt der Fokus bei uns.",
   },
   composer: {
     placeholder: "Nachricht eingeben… (/ für Befehle)",

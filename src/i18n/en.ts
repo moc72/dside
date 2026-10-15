@@ -130,6 +130,8 @@ export const en: Messages = {
     forward: "Forward",
     reload: "Reload",
     menu: "More",
+    open: "Open",
+    opensInWindow: "Pages open in their own window — that keeps focus under our control.",
   },
   composer: {
     placeholder: "Enter message… (use / for commands)",

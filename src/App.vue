@@ -38,20 +38,65 @@ try {
 }
 const isSplash = ref(windowLabel === "splash");
 
-/** The splash waits until its artwork is really there, then hands over. */
+/**
+ * Launch splash. The bar is theatre — no download is measured here — but a bar that moves
+ * unevenly reads as "working" while a smooth one reads as "fake". Steps are (ms, percent):
+ * small plateaus for the stalls, bigger jumps for the catch-up moments.
+ */
+const SPLASH_MS = 7000;
+const SPLASH_STEPS: Array<[number, number]> = [
+  [0, 0],
+  [420, 7],
+  [780, 8],
+  [1260, 24],
+  [1520, 25],
+  [2200, 46],
+  [2680, 50],
+  [3400, 69],
+  [3960, 71],
+  [4700, 86],
+  [5240, 87],
+  [5980, 96],
+  [6540, 99],
+  [7000, 100],
+];
+
+const progress = ref(0);
+
+function animateProgress(done: () => void) {
+  const started = performance.now();
+  const tick = (now: number) => {
+    const elapsed = Math.min(SPLASH_MS, now - started);
+    let value = 100;
+    for (let index = 1; index < SPLASH_STEPS.length; index += 1) {
+      const [at, percent] = SPLASH_STEPS[index];
+      if (elapsed <= at) {
+        const [prevAt, prevPercent] = SPLASH_STEPS[index - 1];
+        const ratio = at === prevAt ? 1 : (elapsed - prevAt) / (at - prevAt);
+        value = prevPercent + (percent - prevPercent) * ratio;
+        break;
+      }
+    }
+    progress.value = value;
+    if (elapsed < SPLASH_MS) {
+      requestAnimationFrame(tick);
+    } else {
+      done();
+    }
+  };
+  requestAnimationFrame(tick);
+}
+
+/** The splash holds itself for the full run, then hands over. */
 async function finishSplash() {
-  const started = Date.now();
   await new Promise<void>((resolve) => {
     const image = new Image();
     image.onload = () => resolve();
     image.onerror = () => resolve();
     image.src = "/whale-splash.webp";
   });
-  // A splash that flashes past is worse than none.
-  const remaining = Math.max(0, 1100 - (Date.now() - started));
-  window.setTimeout(() => {
-    void invoke("splash_ready").catch(() => undefined);
-  }, remaining);
+  await new Promise<void>((resolve) => animateProgress(resolve));
+  await invoke("splash_ready").catch(() => undefined);
 }
 
 onMounted(() => {
@@ -129,6 +174,7 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
   <div v-if="isSplash" class="splash-window">
     <img src="/whale-splash.webp" alt="" />
     <span class="splash-mark" v-html="deepSeekMark"></span>
+    <div class="splash-bar"><span :style="{ width: `${progress}%` }"></span></div>
   </div>
 
   <template v-else>
@@ -212,5 +258,20 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
   display: block;
   height: 22px;
   width: auto;
+}
+
+.splash-bar {
+  width: 190px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+
+.splash-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
 }
 </style>

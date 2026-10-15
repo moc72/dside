@@ -5,6 +5,7 @@ use std::process::Command;
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
 
+mod browser;
 mod db;
 mod engine;
 mod secret;
@@ -540,7 +541,7 @@ pub fn run() {
             // The fallback makes sure a broken frontend cannot leave the user windowless.
             let fallback_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                tokio::time::sleep(std::time::Duration::from_secs(12)).await;
                 if let Some(main) = fallback_handle.get_webview_window("main") {
                     if !main.is_visible().unwrap_or(false) {
                         eprintln!("startup: splash fallback fired");
@@ -562,6 +563,9 @@ pub fn run() {
             engine::engine_send,
             engine::engine_models,
             engine::provider_balance,
+            browser::open_browser_window,
+            browser::browser_navigate,
+            browser::browser_action,
             splash_ready,
             engine::engine_answer,
             engine::engine_abort,

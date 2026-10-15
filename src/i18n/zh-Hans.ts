@@ -130,6 +130,8 @@ export const zhHans: Messages = {
     forward: "前进",
     reload: "重新加载",
     menu: "更多",
+    open: "打开",
+    opensInWindow: "页面在独立窗口中打开——因此焦点由我们掌控。",
   },
   composer: {
     placeholder: "输入消息… (/ 为命令)",

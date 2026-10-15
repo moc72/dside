@@ -36,9 +36,11 @@ onMounted(async () => {
 async function openLink(url: string) {
   accountOpen.value = false;
   try {
-    await openUrl(url);
+    // Our own window keeps focus under our control — the user's browser does not.
+    if (/^https?:/i.test(url)) await invoke("open_browser_window", { url });
+    else await openUrl(url);
   } catch {
-    // no browser available
+    // nothing sensible to do if even that fails
   }
 }
 
