@@ -30,6 +30,22 @@ export function previewKindFor(path: string): PreviewKind {
   return "text";
 }
 
+const mimeTypes: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  bmp: "image/bmp",
+  svg: "image/svg+xml",
+  avif: "image/avif",
+  ico: "image/x-icon",
+};
+
+export function mimeFor(path: string): string {
+  return mimeTypes[extensionOf(path)] ?? "application/octet-stream";
+}
+
 /**
  * Markdown to HTML, then through DOMPurify. Rendering foreign text as HTML without
  * sanitising it would hand any document in the workspace script access to the app.

@@ -52,6 +52,7 @@ async function render(path: string) {
 
       await page.render({ canvas, viewport }).promise;
     }
+    pages.value = pdf.numPages;
   } catch (cause) {
     error.value = String(cause);
   }
@@ -72,6 +73,8 @@ watch(
 <template>
   <div ref="host" class="pdf">
     <p v-if="error" class="error">{{ t("viewFile.error") }} — {{ error }}</p>
+    <p v-else-if="pages === 0" class="note">{{ t("viewFile.loading") }}</p>
+    <p v-else class="note">{{ pages }} {{ pages === 1 ? "Seite" : "Seiten" }}</p>
   </div>
 </template>
 
@@ -101,5 +104,11 @@ watch(
   color: var(--danger);
   font-size: 12px;
   word-break: break-word;
+}
+
+.note {
+  margin: 0 0 4px;
+  color: var(--text-muted);
+  font-size: 11px;
 }
 </style>

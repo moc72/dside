@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import Icon from "../Icon.vue";
 import FileTree from "../FileTree.vue";
 import MonacoEditor from "../MonacoEditor.vue";
@@ -8,7 +8,7 @@ import PdfView from "./PdfView.vue";
 import { t } from "../../i18n";
 import type { FileNode } from "../../types";
 import { languageFromPath } from "../../lib/language";
-import { previewKindFor, renderMarkdown } from "../../lib/preview";
+import { mimeFor, previewKindFor, renderMarkdown } from "../../lib/preview";
 import {
   initWorkspace,
   readFile,
@@ -32,16 +32,30 @@ const editorTheme = computed(() => (resolvedTheme.value === "light" ? "vs" : "vs
 
 const kind = computed(() => (props.path ? previewKindFor(props.path) : "text"));
 const markdownMode = ref<"preview" | "source">("preview");
-const assetUrl = computed(() => (props.path ? convertFileSrc(props.path) : ""));
-const rendered = computed(() =>
-  kind.value === "markdown" ? renderMarkdown(content.value) : "",
+const imageSrc = ref("");
+
+/**
+ * Images come through Rust as base64 rather than through the asset protocol: the webview
+ * blocks `asset://` requests from the dev-server origin ("protocols must match").
+ */
+watch(
+  [() => props.path, kind],
+  async ([path, currentKind]) => {
+    markdownMode.value = "preview";
+    imageSrc.value = "";
+    if (!path || currentKind !== "image") return;
+    try {
+      const data = await invoke<string>("read_file_base64", { path });
+      imageSrc.value = `data:${mimeFor(path)};base64,${data}`;
+    } catch (cause) {
+      error.value = String(cause);
+    }
+  },
+  { immediate: true },
 );
 
-watch(
-  () => props.path,
-  () => {
-    markdownMode.value = "preview";
-  },
+const rendered = computed(() =>
+  kind.value === "markdown" ? renderMarkdown(content.value) : "",
 );
 
 const viewerOptions = {
@@ -111,7 +125,7 @@ function toggle(node: FileNode) {
           <span class="path">{{ selectedPath }}</span>
         </div>
 
-        <img v-if="kind === 'image'" class="image" :src="assetUrl" :alt="selectedPath ?? ''" />
+        <img v-if="kind === 'image'" class="image" :src="imageSrc" :alt="selectedPath ?? ''" />
 
         <PdfView v-else-if="kind === 'pdf'" :path="selectedPath" />
 
