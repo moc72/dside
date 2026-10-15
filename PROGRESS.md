@@ -777,9 +777,20 @@ Mehr erfahren → `modestcoders.eu`.
   `base64_matches_the_system_on_a_real_file` (182 618 Bytes, identisch zum System-`base64`).
 - `pnpm build` grün; PDF-Worker und Worker-Chunks liegen im Build.
 
+### Office-Formate (gleicher Abend)
+- **Word** (`docx`, `odt`) → `mammoth` → HTML → **DOMPurify** (derselbe Säuberer wie Markdown).
+- **Tabellen** (`xlsx`, `xls`, `ods`, `csv`) → SheetJS; die Tabelle wird **hier Zelle für
+  Zelle gebaut und escaped**, nicht von der Bibliothek als HTML geliefert — sonst müsste man
+  ihr zweimal vertrauen. Gedeckelt auf 300 Zeilen × 40 Spalten.
+- **`rtf`** → grobe Text-Extraktion (Steuerwörter und Klammern weg). Ehrlich: lesbar, ohne Layout.
+- **`doc`/`ppt`/`pptx`/`odp`** → klare Meldung („Dieses Format kann nicht angezeigt werden“)
+  statt Buchstabensalat. Alte Binärformate brauchen einen Konverter, den bündeln wir nicht.
+- **PDF-Standardfonts** liegen in `public/pdfjs/standard_fonts/` (16 Dateien) und werden über
+  `standardFontDataUrl` geladen → die „system font“-Warnung ist weg.
+
 ### Offen
-- PDF-Schriftwarnung (`TimesNewRomanPS-BoldMT`) ist kosmetisch: pdf.js kann Standardfonts
-  aus `standard_fonts/` laden, wenn wir sie nach `public/` legen und `standardFontDataUrl`
-  setzen.
-- Office: `docx` (mammoth), `xlsx` (SheetJS), `txt`/`rtf` simpel.
-- **Bilder und PDF sind noch nicht von Hand durchgeklickt** — der Fix kam nach dem Fund.
+- **`xlsx` 0.18.5 ist die letzte npm-Ausgabe (2022)** und hat Advisories zum Parsen *fremder*
+  Dateien (Prototype Pollution). Für die Vorschau *eigener* Dateien akzeptiert, aber auf der
+  Liste: auf den offiziellen SheetJS-Build wechseln.
+- Tabellenvorschau zeigt nur das **erste** Blatt, ohne Formeln und Formatierung.
+- PDF, Bilder und Markdown sind von Hand bestätigt; **Office noch nicht durchgeklickt**.

@@ -121,6 +121,7 @@ export const de = {
     error: "Datei konnte nicht gelesen werden.",
     preview: "Vorschau",
     source: "Quelle",
+    unsupported: "Dieses Format kann nicht angezeigt werden.",
     workspace: "Arbeitsverzeichnis",
   },
   browser: {

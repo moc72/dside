@@ -123,6 +123,7 @@ export const en: Messages = {
     error: "Could not read the file.",
     preview: "Preview",
     source: "Source",
+    unsupported: "This format cannot be previewed.",
     workspace: "Workspace",
   },
   browser: {

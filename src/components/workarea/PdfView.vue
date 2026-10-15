@@ -7,6 +7,9 @@ import { t } from "../../i18n";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
+/** Bundled so pdf.js does not warn about missing system fonts on every document. */
+const STANDARD_FONTS = "/pdfjs/standard_fonts/";
+
 const props = defineProps<{ path: string }>();
 
 const host = ref<HTMLDivElement | null>(null);
@@ -40,7 +43,10 @@ async function render(path: string) {
 
   try {
     const data = decodeBase64(await invoke<string>("read_file_base64", { path }));
-    const pdf = await pdfjs.getDocument({ data }).promise;
+    const pdf = await pdfjs.getDocument({
+      data,
+      standardFontDataUrl: STANDARD_FONTS,
+    }).promise;
     pages.value = pdf.numPages;
 
     const available = Math.max(320, container.clientWidth - 32);

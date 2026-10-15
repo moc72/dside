@@ -123,6 +123,7 @@ export const ru: Messages = {
     error: "Файл не может быть прочитан.",
     preview: "Предпросмотр",
     source: "Исходник",
+    unsupported: "Этот формат нельзя просмотреть.",
     workspace: "Рабочая директория",
   },
   browser: {

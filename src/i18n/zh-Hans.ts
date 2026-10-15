@@ -123,6 +123,7 @@ export const zhHans: Messages = {
     error: "无法读取文件。",
     preview: "预览",
     source: "源文本",
+    unsupported: "无法预览此格式。",
     workspace: "工作目录",
   },
   browser: {

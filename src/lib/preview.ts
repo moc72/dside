@@ -1,7 +1,7 @@
 import DOMPurify from "dompurify";
 import { marked } from "marked";
 
-export type PreviewKind = "markdown" | "image" | "pdf" | "text";
+export type PreviewKind = "markdown" | "image" | "pdf" | "docx" | "sheet" | "rtf" | "unsupported" | "text";
 
 const markdownExtensions = new Set(["md", "markdown", "mdown", "mkd"]);
 const imageExtensions = new Set([
@@ -16,6 +16,11 @@ const imageExtensions = new Set([
   "ico",
 ]);
 const pdfExtensions = new Set(["pdf"]);
+const docxExtensions = new Set(["docx", "odt"]);
+const sheetExtensions = new Set(["xlsx", "xls", "ods", "csv"]);
+const rtfExtensions = new Set(["rtf"]);
+/** Old binary Word documents: no library reads these without a converter. */
+const unsupportedExtensions = new Set(["doc", "ppt", "pptx", "odp"]);
 
 export function extensionOf(path: string): string {
   const name = path.split("/").pop() ?? path;
@@ -27,7 +32,40 @@ export function previewKindFor(path: string): PreviewKind {
   if (markdownExtensions.has(extension)) return "markdown";
   if (imageExtensions.has(extension)) return "image";
   if (pdfExtensions.has(extension)) return "pdf";
+  if (docxExtensions.has(extension)) return "docx";
+  if (sheetExtensions.has(extension)) return "sheet";
+  if (rtfExtensions.has(extension)) return "rtf";
+  if (unsupportedExtensions.has(extension)) return "unsupported";
   return "text";
+}
+
+export function base64ToArrayBuffer(value: string): ArrayBuffer {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes.buffer;
+}
+
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * Crude RTF to text: drop escapes, control words and braces. Enough to read a document,
+ * not enough to preserve its look — and honest about which of the two it is.
+ */
+export function rtfToText(source: string): string {
+  return source
+    .replace(/\\'[0-9a-f]{2}/gi, "")
+    .replace(/\\[a-z]+-?\d* ?/gi, "")
+    .replace(/[{}]/g, "")
+    .trim();
 }
 
 const mimeTypes: Record<string, string> = {

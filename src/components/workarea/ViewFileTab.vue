@@ -8,7 +8,8 @@ import PdfView from "./PdfView.vue";
 import { t } from "../../i18n";
 import type { FileNode } from "../../types";
 import { languageFromPath } from "../../lib/language";
-import { mimeFor, previewKindFor, renderMarkdown } from "../../lib/preview";
+import { escapeHtml, mimeFor, previewKindFor, renderMarkdown, rtfToText } from "../../lib/preview";
+import { renderDocx, renderSheet } from "../../lib/office";
 import {
   initWorkspace,
   loadChildren,
@@ -60,6 +61,28 @@ const rendered = computed(() =>
   kind.value === "markdown" ? renderMarkdown(content.value) : "",
 );
 
+const officeHtml = ref("");
+
+/** Word, spreadsheets and RTF: their own loader, because they are not text and not images. */
+watch(
+  [() => props.path, kind],
+  async ([path, currentKind]) => {
+    officeHtml.value = "";
+    if (!path) return;
+    if (!["docx", "sheet", "rtf"].includes(currentKind)) return;
+    error.value = null;
+    try {
+      const base64 = await invoke<string>("read_file_base64", { path });
+      if (currentKind === "docx") officeHtml.value = await renderDocx(base64);
+      else if (currentKind === "sheet") officeHtml.value = renderSheet(base64);
+      else officeHtml.value = `<pre>${escapeHtml(rtfToText(atob(base64)))}</pre>`;
+    } catch (cause) {
+      error.value = String(cause);
+    }
+  },
+  { immediate: true },
+);
+
 const viewerOptions = {
   readOnly: true,
   minimap: { enabled: false },
@@ -75,7 +98,7 @@ async function load(path: string) {
     // and that failure used to surface as "could not read the file" over a preview that
     // was loading fine.
     const preview = previewKindFor(path);
-    if (preview === "image" || preview === "pdf") {
+    if (preview !== "text" && preview !== "markdown") {
       content.value = "";
       return;
     }
@@ -145,6 +168,17 @@ async function toggle(node: FileNode) {
           class="markdown"
           v-html="rendered"
         ></div>
+
+        <div
+          v-else-if="kind === 'docx' || kind === 'sheet' || kind === 'rtf'"
+          class="markdown"
+          v-html="officeHtml"
+        ></div>
+
+        <div v-else-if="kind === 'unsupported'" class="placeholder">
+          <Icon name="doc" :size="28" />
+          <p>{{ t("viewFile.unsupported") }}</p>
+        </div>
 
         <MonacoEditor
           v-else

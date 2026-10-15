@@ -122,6 +122,7 @@ export const es: Messages = {
     error: "No se pudo leer el archivo.",
     preview: "Vista previa",
     source: "Código",
+    unsupported: "Este formato no se puede previsualizar.",
     workspace: "Directorio de trabajo",
   },
   browser: {

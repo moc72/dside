@@ -122,6 +122,7 @@ export const fr: Messages = {
     error: "Impossible de lire le fichier.",
     preview: "Aperçu",
     source: "Source",
+    unsupported: "Ce format ne peut pas être prévisualisé.",
     workspace: "Répertoire de travail",
   },
   browser: {
