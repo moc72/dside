@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde::Serialize;
-use tauri::Manager;
+use tauri::{AppHandle, Manager};
 
 mod db;
 mod engine;
@@ -495,6 +495,26 @@ fn default_workspace() -> String {
     std::env::var("HOME").unwrap_or_else(|_| ".".to_string())
 }
 
+/// Called by the splash window once it has painted. Idempotent, so a late call is harmless.
+#[tauri::command]
+fn splash_ready(app: AppHandle) {
+    show_main_window(&app);
+}
+
+fn show_main_window(app: &AppHandle) {
+    if let Some(splash) = app.get_webview_window("splash") {
+        let _ = splash.close();
+        eprintln!("startup: splash closed");
+    }
+    if let Some(main) = app.get_webview_window("main") {
+        if !main.is_visible().unwrap_or(false) {
+            let _ = main.show();
+            let _ = main.set_focus();
+            eprintln!("startup: main window shown");
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -516,23 +536,16 @@ pub fn run() {
                 }
             });
 
-            // Splash: the main window stays hidden until this closes, so startup shows the
-            // brand rather than a half-built UI.
-            let splash_handle = app.handle().clone();
+            // Splash: the main window stays hidden until the splash says it has painted.
+            // The fallback makes sure a broken frontend cannot leave the user windowless.
+            let fallback_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                tokio::time::sleep(std::time::Duration::from_millis(1900)).await;
-                if let Some(splash) = splash_handle.get_webview_window("splash") {
-                    let _ = splash.close();
-                    eprintln!("startup: splash closed");
-                } else {
-                    eprintln!("startup: no splash window found");
-                }
-                if let Some(main) = splash_handle.get_webview_window("main") {
-                    let _ = main.show();
-                    let _ = main.set_focus();
-                    eprintln!("startup: main window shown");
-                } else {
-                    eprintln!("startup: no main window found");
+                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                if let Some(main) = fallback_handle.get_webview_window("main") {
+                    if !main.is_visible().unwrap_or(false) {
+                        eprintln!("startup: splash fallback fired");
+                        show_main_window(&fallback_handle);
+                    }
                 }
             });
 
@@ -548,6 +561,7 @@ pub fn run() {
             engine::engine_configured,
             engine::engine_send,
             engine::engine_models,
+            splash_ready,
             engine::engine_answer,
             engine::engine_abort,
             engine::engine_reset,

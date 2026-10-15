@@ -19,7 +19,8 @@
         "minWidth": 960,
         "minHeight": 600,
         "center": true,
-        "visible": false
+        "visible": false,
+        "backgroundColor": "#141414"
       },
       {
         "label": "splash",
@@ -30,7 +31,8 @@
         "decorations": false,
         "center": true,
         "alwaysOnTop": true,
-        "skipTaskbar": true
+        "skipTaskbar": true,
+        "backgroundColor": "#141414"
       }
     ],
     "security": {

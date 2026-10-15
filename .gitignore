@@ -29,6 +29,9 @@ minimax-code-main/
 minimax-jarvis/
 monaco-editor-0.57.0/
 
+# Font source drop — the used cuts are copied into public/fonts (with UFL.txt)
+Ubuntu/
+
 # Local secrets fallback (the key belongs in the OS keyring)
 src-tauri/secrets.json
 

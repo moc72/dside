@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import Resizer from "./components/Resizer.vue";
 import TitleBar from "./components/TitleBar.vue";
@@ -37,7 +38,27 @@ try {
 }
 const isSplash = ref(windowLabel === "splash");
 
+/** The splash waits until its artwork is really there, then hands over. */
+async function finishSplash() {
+  const started = Date.now();
+  await new Promise<void>((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve();
+    image.onerror = () => resolve();
+    image.src = "/whale-splash.webp";
+  });
+  // A splash that flashes past is worse than none.
+  const remaining = Math.max(0, 1100 - (Date.now() - started));
+  window.setTimeout(() => {
+    void invoke("splash_ready").catch(() => undefined);
+  }, remaining);
+}
+
 onMounted(() => {
+  if (isSplash.value) {
+    void finishSplash();
+    return;
+  }
   window.addEventListener("keydown", onKey);
 });
 onBeforeUnmount(() => window.removeEventListener("keydown", onKey));

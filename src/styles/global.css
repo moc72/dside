@@ -1,3 +1,51 @@
+@font-face {
+  font-family: "Ubuntu";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/Ubuntu-Regular.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Ubuntu";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/Ubuntu-Italic.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Ubuntu";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/Ubuntu-Medium.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Ubuntu";
+  font-style: italic;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/Ubuntu-MediumItalic.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Ubuntu";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/Ubuntu-Bold.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Ubuntu";
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url("/fonts/Ubuntu-Light.ttf") format("truetype");
+}
+
 :root {
   color-scheme: dark;
 
@@ -24,7 +72,7 @@
 
   --radius: 6px;
   --radius-sm: 4px;
-  --font: "Segoe UI", Inter, Avenir, Helvetica, Arial, sans-serif;
+  --font: "Ubuntu", "Segoe UI", Inter, Avenir, Helvetica, Arial, sans-serif;
   --mono: Menlo, "DejaVu Sans Mono", Consolas, monospace;
 }
 
