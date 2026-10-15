@@ -505,3 +505,17 @@ Claude Code, Cursor, Codex und OpenCode. Für DS.IDE: eigenes Verzeichnis
 15. ✓ **Dialog-Buttons platzsparend** — API-Key-Zeile: Textbuttons durch **✅ / ❌**
     ersetzt (Tooltips „Speichern"/„Entfernen"), Eingabefeld flexibel statt fix 320px
     (lief vorher rechts aus dem Panel).
+
+## 15. Repository (2026-10-15)
+
+TEST ist ein **eigenes Git-Repo** (vorher lag es nur untracked im noch leeren
+`~/Projects`-Repo).
+- Remote: `http://192.168.0.40/modest/DS.IDE.git`, Branch `main`
+- Erster Commit: `2d1a5d2` „first commit", 82 Dateien, Push erfolgreich (Upstream gesetzt)
+- `.gitignore` erweitert: `kilocode-main/`, `minimax-code-main/`, `minimax-jarvis/`,
+  `monaco-editor-0.57.0/` (nur lokale Referenz) und `src-tauri/secrets.json`.
+  `src-tauri/target/` ist über `src-tauri/.gitignore` abgedeckt, `node_modules`/`dist`
+  über die Wurzel. **Nichts davon ist im Repo** (geprüft: 0 Treffer).
+- Kein Secret im Quellcode oder in den getrackten Dateien.
+- Hinweis: Weil `~/Projects` selbst ein (noch leeres) Repo ist, sieht dieses beim Commit
+  `TEST` als eingebettetes Repo (Gitlink) — gewollt, aber gut zu wissen.
