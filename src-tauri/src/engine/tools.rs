@@ -235,7 +235,7 @@ pub fn definitions() -> Vec<Value> {
             "type": "function",
             "function": {
                 "name": "ask_user",
-                "description": "Ask the user a question and wait for the answer. Use it when a decision materially changes the outcome and you cannot infer it. Provide short options when the answer is a choice.",
+                "description": "Ask the user a question and PAUSE the turn until they answer. Use this instead of asking in prose whenever a decision materially changes the outcome and you cannot infer it — the question appears above the composer and the run waits for the reply. Provide short options when the answer is a choice.",
                 "parameters": {
                     "type": "object",
                     "properties": {

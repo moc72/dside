@@ -11,6 +11,7 @@ defineProps<{
 <template>
   <div class="messages">
     <div v-for="message in messages" :key="message.id" class="row" :class="message.role">
+      <img v-if="message.role === 'assistant'" class="avatar" src="/whale.png" alt="" />
       <div class="bubble">
         <details v-if="message.reasoning" class="reasoning" :open="message.streaming && !message.text">
           <summary>{{ t("message.reasoning") }}</summary>
@@ -66,6 +67,16 @@ defineProps<{
 
 .row {
   display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.avatar {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  margin-top: 2px;
+  object-fit: contain;
 }
 
 .row.user {

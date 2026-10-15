@@ -525,9 +525,24 @@ Key aus dem OS-Schlüsselbund).
    ein `todowrite`-Ergebnis eintrifft.
    Evidenz: `cargo test` grün (Test prüft `list_todos()[0].content`), `pnpm build` grün,
    App startet, Module HTTP 200, `todos`-Query liefert die erwartete Spaltenform.
-10. **Walfisch-Branding** — Asset kommt vom Nutzer (Adobe). Einbau: **Splash-Animation
-    beim Start** und **Avatar im Chat**; das Fenster-/Taskleisten-Icon bleibt ein
-    **statisches** PNG, weil kein OS animierte App-Icons unterstützt.
+10. ◐ **Walfisch-Branding** — statischer Teil erledigt, Animation offen.
+    - Quelle gefunden: `~/Schreibtisch/ziggy.png` (512×512, **bereits korrekt freigestellt**:
+      Ecken voll transparent, mittlere Deckkraft 0,33) plus `ziggy1.webp`, `ziggy.webp`.
+    - **App-Icon-Set erzeugt**: `ziggy.png` getrimmt, auf 900 px skaliert, mittig auf
+      1024×1024 gepolstert → `pnpm tauri icon` → `src-tauri/icons/*` (inkl. Android/iOS)
+      aktualisiert.
+    - **Avatar im Chat**: `public/whale.png` (128×128, transparent), in `MessageList.vue`
+      links neben Assistant-Nachrichten (22 px). Liegt auch im Build (`dist/whale.png`).
+    - **Animation offen — und der Grund ist echt:** Die Videovorlage
+      (`~/Downloads/ai-artwork-video_*.mp4`, 752×560) hat einen **blauen Verlaufs­hintergrund**
+      (Ecken von `rgb(56,164,212)` bis `rgb(171,238,255)`), und der Wal ist **ebenfalls blau**
+      inklusive hellem Bauch. Farb-Keying zerstört ihn deshalb — genau daran scheitern die
+      Web-Tools. Sauber geht das nur mit **Segmentierung** (z. B. `rembg`/U²-Net), nicht mit
+      `colorkey`. Das braucht ein Modell (~170 MB Download).
+    - Nächster Schritt, wenn gewünscht: `rembg` in einer venv installieren, die 97 Frames
+      freistellen und als **animiertes WebP** (Alpha, viel kleiner als GIF) für Splash und
+      Chat-Avatar ausgeben. Fenster-/Taskleisten-Icon bleibt statisch — kein OS animiert
+      App-Icons.
 11. **Regelmäßig**: `pnpm build` + `cargo test` + Verifikation im Fenster + PROGRESS.md.
 
 ### Bewusste Grenzen in dieser Runde
