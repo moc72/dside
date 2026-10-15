@@ -794,3 +794,36 @@ Mehr erfahren → `modestcoders.eu`.
   Liste: auf den offiziellen SheetJS-Build wechseln.
 - Tabellenvorschau zeigt nur das **erste** Blatt, ohne Formeln und Formatierung.
 - PDF, Bilder und Markdown sind von Hand bestätigt; **Office noch nicht durchgeklickt**.
+
+## 20. Morgen-Liste (2026-10-15, spät)
+
+### Was schon persistiert wird und was nicht (geprüft im Code)
+| Zustand | gespeichert? | wo |
+|---|---|---|
+| Panel-Breiten (links/rechts) | **ja** | `localStorage` `ds-ide.ui.v2` |
+| Seitenleiste eingeklappt | **ja** | dito |
+| Work-Area sichtbar | **ja** | `ds-ide.workarea` |
+| Arbeitsverzeichnis | **ja** | `settings`-Tabelle |
+| Anzeigename, Modell, Toggles, Sprache | **ja** | `settings`-Tabelle |
+| **Fenstergröße/-position** | **nein** | Tauri speichert das nicht von selbst |
+| **Aktive Sitzung** | **nein** | nur im Speicher |
+| **Offene Work-Area-Tabs** | **nein** | nur im Speicher |
+| **Zuletzt geöffnete Datei** | **nein** | nur im Speicher |
+
+Fenster: dafür gibt es `tauri-plugin-window-state` (genau dessen Zweck).
+Sitzung/Tabs/Datei: gehören in die `settings`-Tabelle bzw. in eine kleine
+`ui_state`-Ablage — vier Felder, kein großes Vorhaben.
+
+### Offene Punkte
+1. **`pptx`** zeigt bewusst „Dieses Format kann nicht angezeigt werden". Präsentationen
+   sind ein eigener Fall (keine brauchbare Browser-Bibliothek für echtes Layout);
+   entweder eine einfache Folien-Extraktion oder ehrlich draußen lassen.
+2. **`doc`/`ppt` (Binärformate)** bleiben draußen — brauchen einen Konverter.
+3. **`xlsx` 0.18.5** gegen den offiziellen SheetJS-Build tauschen (Advisories).
+4. **Companion-System**: die Alternative zum Mavis-Partner.
+   - Rolle **Partner**, nicht Agent — im Recall und in der Persona sichtbar.
+   - Wer Seekys Gedächtnis ändert, wird markiert: `origin` (`seeky` | `user`) und
+     `edited_at` in `memories`; im Recall steht dann „vom Nutzer geändert".
+   - Löschen als **Stilllegen**, nicht physisch entfernen.
+   - Gedächtnis-Einsicht wandert dafür aus dem Work-Area-Tab nach
+     Einstellungen → „Konto & Modell" bzw. „Personalisierung".
