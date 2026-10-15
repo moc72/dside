@@ -399,13 +399,13 @@ Nutzerauftrag: „so gut wie eigenständig abarbeiten, außer bei Überprüfunge
 Nach **jedem** Punkt: `pnpm build`, `cargo test`, PROGRESS.md aktualisieren.
 
 **Stand 2026-10-15 (zweite Runde): Punkte 1-9 sowie 12, 13, 14, 15 sind erledigt und
-verifiziert. Offen: 10 (Walfisch-Branding — wartet auf das Nutzer-Asset) und die
-Subagenten (`task*`, Punkt 7 nur teilweise). Alle Commits sind auf `origin/main`
-(zuletzt `349fd70`).**
+verifiziert. Offen ist nur noch 10 (Walfisch-Branding — wartet auf das Nutzer-Asset).
+Alle Commits sind auf `origin/main`.**
 
-Verifikation dieser Runde: `pnpm build` grün · `cargo test` 9 passed / 6 ignored ·
+Verifikation dieser Runde: `pnpm build` grün · `cargo test` 9 passed / 8 ignored ·
 alle Live-Tests grün (`list_local_skills_smoke`, `live_code_review_runs_git`,
-`live_web_fetch_reads_example_com`, drei DeepSeek-Live-Tests; Key aus dem OS-Schlüsselbund).
+`live_web_fetch_reads_example_com`, zwei Subagenten-Tests, drei DeepSeek-Live-Tests;
+Key aus dem OS-Schlüsselbund).
 
 1. ✓ **Autoscroll im AgentPanel** — erledigt. `AgentPanel.vue`: rAF-gedrosseltes Nachführen
    der Scrollposition, `following`-Flag aus einer 48px-Bodenzone, „Nach unten"-Knopf
@@ -480,7 +480,7 @@ alle Live-Tests grün (`list_local_skills_smoke`, `live_code_review_runs_git`,
      (Erkennung trotz abweichender Leerzeichen/Groß-Klein-Schreibung, frische Einträge
      nicht als stale); `pnpm build` grün (9 Tests grün, 6 ignoriert); App startet,
      Modul HTTP 200.
-7. ✓ **Weitere Tools** — teilweise erledigt: `web_fetch`, `code_review`, `ask_user`.
+7. ✓ **Weitere Tools** — erledigt: `web_fetch`, `code_review`, `ask_user`, `task`.
    - **`web_fetch`** — holt eine http(s)-URL (30 s Timeout), `html_to_text` entfernt
      Script-/Style-Blöcke, Tags und dekodiert die gängigen Entities, Ausgabe gekappt.
      Bewusst ohne DOM-Parser: dependency-frei und vorhersagbar.
@@ -489,16 +489,21 @@ alle Live-Tests grün (`list_local_skills_smoke`, `live_code_review_runs_git`,
      die Bewertung macht das Modell.
    - **`ask_user`** — **echter** `ACTION_REQUIRED`-Round-Trip statt Attrappe: der Turn
      emittiert ein Event mit Frage und optionalen Optionen, parkt einen `oneshot::Sender`
-     in `EngineState.pending` und **wartet** (Timeout 5 min). Das neue Kommando
+     in `EngineState.pending` und **wartet** (Timeout 5 min). Das Kommando
      `engine_answer(actionId, answer)` löst ihn auf; im Chat erscheint über dem Composer
      eine Rückfrage-Karte mit Optionsknöpfen und freiem Feld.
-   - **`task*` (Subagenten) bewusst NICHT** gebaut: braucht verschachtelte Agenten-Sitzungen,
-     eigenes Budget und Streaming-Semantik. Das ist ein eigenes Vorhaben, kein Anhängsel —
-     steht weiter unten als offener Punkt.
-   - Evidenz: `cargo test` → `html_to_text_drops_scripts_styles_and_tags` ok, und mit
-     `--ignored`: `live_web_fetch_reads_example_com` ok (184 Bytes Text) sowie
-     `live_code_review_runs_git` ok (git-Diff im Arbeitsbaum); `pnpm build` grün;
-     App startet, Module HTTP 200.
+   - **`task` (Subagent)** — eigener Kontext, eigene Tool-Runden (max. 8), liefert **nur das
+     Endergebnis** zurück (gekappt auf 20 000 Zeichen). Sein Verlauf erscheint **nicht** im
+     Chat, sondern nur die Tool-Karte — genau darum geht es: den Elternkontext sauber halten.
+     Absichtliche Schutzgeländer: **kein** verschachteltes `task` (keine Rekursion) und
+     **kein** `ask_user` im Subagenten (er könnte den Nutzer über die Eltern-UI nicht
+     erreichen). `task_tool` braucht **kein** `AppHandle` — dadurch ist es direkt testbar.
+   - Evidenz: `cargo test` → `html_to_text_drops_scripts_styles_and_tags` ok; mit
+     `--ignored`: `live_web_fetch_reads_example_com` ok (184 Bytes Text),
+     `live_code_review_runs_git` ok (git-Diff im Arbeitsbaum),
+     `live_task_subagent_answers_without_tools` → „BEREIT",
+     `live_task_subagent_uses_its_tools` → Subagent zählte per `glob` **150** Einträge und
+     gab nur die Zahl zurück; `pnpm build` grün; App startet.
    - **Nicht verifiziert:** ein echter `ask_user`-Durchlauf braucht eine Antwort im UI —
      der Pfad ist gebaut und kompiliert, aber noch nicht von Hand durchgeklickt.
 8. ✓ **„Suche" verdrahtet, Rest ehrlich gekennzeichnet** — erledigt.

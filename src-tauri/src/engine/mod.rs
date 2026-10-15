@@ -306,6 +306,169 @@ async fn ask_user(
     }
 }
 
+/// A sub-agent: a fresh conversation with the same model and tools, returning only its
+/// final answer. Its work is deliberately invisible in the UI — only the tool card shows —
+/// so the point is to keep the parent context clean.
+///
+/// Guards: no nested `task` (no recursion), no `ask_user` (it could not reach the user
+/// through the parent's UI), and a hard inner turn cap.
+pub async fn task_tool(config: &EngineConfig, args: &Value) -> tools::ToolOutcome {
+    const MAX_INNER_TURNS: u32 = 8;
+    const MAX_ANSWER_CHARS: usize = 20_000;
+
+    let prompt = args
+        .get("prompt")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let Some(prompt) = prompt else {
+        return tools::ToolOutcome::err("task: 'prompt' is required");
+    };
+    if config.api_key.trim().is_empty() {
+        return tools::ToolOutcome::err("task: engine is not configured");
+    }
+
+    let workspace = if config.workspace.trim().is_empty() {
+        std::env::var("HOME").unwrap_or_else(|_| ".".to_string())
+    } else {
+        config.workspace.clone()
+    };
+    let ctx = tools::ToolContext {
+        workspace: PathBuf::from(&workspace),
+        full_authorization: config.full_authorization,
+        skills_root: crate::skills::skills_root(),
+    };
+
+    let definitions: Vec<Value> = tools::definitions()
+        .into_iter()
+        .filter(|tool| {
+            let name = tool
+                .pointer("/function/name")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            name != "task" && name != "ask_user"
+        })
+        .collect();
+
+    let mut messages = vec![
+        ChatMessage::system(
+            "You are a sub-agent inside DS.IDE, working on one self-contained task. \
+             You have tools (read, write, edit, bash, glob, grep, web_fetch, skill). \
+             Do the work and answer with the result and the evidence needed to trust it. \
+             Do not ask questions — nobody can answer them here.",
+        ),
+        ChatMessage::user(prompt.to_string()),
+    ];
+    let mut todos: Vec<Value> = Vec::new();
+
+    for _ in 0..MAX_INNER_TURNS {
+        let mut sink = |_kind: deepseek::DeltaKind, _chunk: &str| {};
+        let outcome = match deepseek::stream_chat(config, &messages, &definitions, &mut sink).await {
+            Ok(outcome) => outcome,
+            Err(error) => return tools::ToolOutcome::err(format!("task: {error}")),
+        };
+
+        let has_tool_calls = !outcome.tool_calls.is_empty();
+        messages.push(ChatMessage {
+            role: "assistant".to_string(),
+            content: if outcome.content.is_empty() {
+                None
+            } else {
+                Some(outcome.content.clone())
+            },
+            tool_calls: if has_tool_calls {
+                Some(outcome.tool_calls.clone())
+            } else {
+                None
+            },
+            tool_call_id: None,
+        });
+
+        if !has_tool_calls {
+            let answer = outcome.content.trim();
+            if answer.is_empty() {
+                return tools::ToolOutcome::ok("(the sub-agent returned no answer)");
+            }
+            let capped: String = answer.chars().take(MAX_ANSWER_CHARS).collect();
+            return tools::ToolOutcome::ok(capped);
+        }
+
+        for call in &outcome.tool_calls {
+            let arguments: Value =
+                serde_json::from_str(&call.function.arguments).unwrap_or(Value::Null);
+            let result = tools::execute(&call.function.name, &arguments, &ctx, &mut todos).await;
+            messages.push(ChatMessage::tool(call.id.clone(), result.content));
+        }
+    }
+
+    tools::ToolOutcome::err(format!(
+        "task: the sub-agent used its {MAX_INNER_TURNS} turns without a final answer"
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn live_config() -> Option<EngineConfig> {
+        let api_key = std::env::var("DS_IDE_API_KEY").ok()?;
+        if api_key.trim().is_empty() {
+            return None;
+        }
+        Some(EngineConfig {
+            api_key,
+            base_url: std::env::var("DS_IDE_BASE_URL")
+                .unwrap_or_else(|_| "https://api.deepseek.com".to_string()),
+            model: std::env::var("DS_IDE_MODEL").unwrap_or_else(|_| "deepseek-chat".to_string()),
+            system_prompt: String::new(),
+            workspace: std::env::temp_dir().to_string_lossy().to_string(),
+            full_authorization: true,
+            max_turns: 4,
+        })
+    }
+
+    #[tokio::test]
+    #[ignore = "requires DS_IDE_API_KEY"]
+    async fn live_task_subagent_answers_without_tools() {
+        let Some(config) = live_config() else {
+            eprintln!("skipped: DS_IDE_API_KEY not set");
+            return;
+        };
+        let outcome = task_tool(
+            &config,
+            &serde_json::json!({ "prompt": "Antworte mit genau einem Wort: BEREIT" }),
+        )
+        .await;
+
+        assert!(!outcome.is_error, "task failed: {}", outcome.content);
+        assert!(
+            outcome.content.to_uppercase().contains("BEREIT"),
+            "unexpected answer: {}",
+            outcome.content
+        );
+        println!("subagent answer: {}", outcome.content.trim());
+    }
+
+    #[tokio::test]
+    #[ignore = "requires DS_IDE_API_KEY"]
+    async fn live_task_subagent_uses_its_tools() {
+        let Some(config) = live_config() else {
+            return;
+        };
+        let outcome = task_tool(
+            &config,
+            &serde_json::json!({
+                "prompt": "Zähle mit dem Tool glob (pattern '*') die Einträge im aktuellen Verzeichnis und nenne mir die Anzahl als Zahl."
+            }),
+        )
+        .await;
+
+        assert!(!outcome.is_error, "task failed: {}", outcome.content);
+        assert!(!outcome.content.trim().is_empty(), "empty sub-agent answer");
+        println!("subagent answer: {}", outcome.content.trim());
+    }
+}
+
 async fn run_turn(
     app: &AppHandle,
     config: &EngineConfig,
@@ -471,6 +634,8 @@ async fn run_turn(
                 memory_tool(app, &arguments)
             } else if call.function.name == "ask_user" {
                 ask_user(app, session_id, &arguments, &mut seq).await
+            } else if call.function.name == "task" {
+                task_tool(config, &arguments).await
             } else {
                 tools::execute(&call.function.name, &arguments, &ctx, &mut todos).await
             };

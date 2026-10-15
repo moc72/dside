@@ -250,6 +250,21 @@ pub fn definitions() -> Vec<Value> {
                 }
             }
         }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "task",
+                "description": "Run a self-contained sub-task in a fresh context and get only its final answer back. Use it for work that would otherwise flood your own context (broad searches, long reading, isolated research). The sub-agent cannot see this conversation, so its prompt must be complete on its own. Use sparingly: each run costs its own tokens.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "prompt": { "type": "string", "description": "Complete, self-contained instruction for the sub-agent." },
+                        "description": { "type": "string", "description": "Short label shown to the user, three to five words." }
+                    },
+                    "required": ["prompt"]
+                }
+            }
+        }),
     ]
 }
 
