@@ -181,7 +181,8 @@ export const zhHans: Messages = {
     baseUrl: "基础 URL",
     baseUrlDesc: "Chat Completions 的端点。",
     model: "模型",
-    modelDesc: "模型 ID, z. B. deepseek-chat oder deepseek-reasoner",
+    modelDesc: "模型 ID，由服务商提供",
+    balanceTotal: "总余额（赠送 + 充值）",
     fullAuthorizationDesc: "Erlaubt dem Partner, Dateien zu schreiben, zu ändern und Befehle auszuführen",
   },
   settings: {

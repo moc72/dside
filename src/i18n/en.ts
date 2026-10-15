@@ -182,7 +182,8 @@ export const en: Messages = {
     baseUrl: "Base URL",
     baseUrlDesc: "Endpoint for chat completions",
     model: "Model",
-    modelDesc: "Model id, e.g. deepseek-chat or deepseek-reasoner",
+    modelDesc: "Model id, as reported by the provider",
+    balanceTotal: "Total balance (grants + top-ups)",
     fullAuthorizationDesc:
       "Lets the partner write and edit files and run commands",
   },

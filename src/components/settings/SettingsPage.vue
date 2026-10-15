@@ -92,6 +92,8 @@ async function saveKey() {
   if (!apiKeyDraft.value.trim()) return;
   await saveApiKey(apiKeyDraft.value);
   apiKeyDraft.value = "";
+  // A fresh key usually means a fresh account: pull models and credits right away.
+  await Promise.all([loadModels(), loadBalance()]);
 }
 
 async function removeKey() {
@@ -287,10 +289,16 @@ watch(activeItem, (value) => {
           <div class="row">
             <div class="text">
               <div class="label">{{ t("account.provider") }}</div>
-              <div class="desc">{{ t("model.providerValue") }}</div>
+              <div class="desc">{{ t("model.balanceTotal") }}</div>
             </div>
             <div class="model-field">
-              <span v-if="balance" class="value">{{ balance.total }} {{ balance.currency }}</span>
+              <span
+                v-if="balance"
+                class="value"
+                :title="`${balance.toppedUp} + ${balance.granted} ${balance.currency}`"
+              >
+                {{ balance.total }} {{ balance.currency }}
+              </span>
               <button
                 class="mini"
                 type="button"

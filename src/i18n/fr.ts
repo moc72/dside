@@ -182,7 +182,8 @@ export const fr: Messages = {
     baseUrl: "URL de base",
     baseUrlDesc: "Point de terminaison pour les complétions de chat",
     model: "Modèle",
-    modelDesc: "Identifiant de modèle, par ex. deepseek-chat ou deepseek-reasoner",
+    modelDesc: "Identifiant du modèle, tel que fourni par le fournisseur",
+    balanceTotal: "Solde total (crédits offerts + recharges)",
     fullAuthorizationDesc:
       "Autorise le partenaire à créer, modifier des fichiers et à exécuter des commandes",
   },

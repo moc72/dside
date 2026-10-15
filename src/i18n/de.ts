@@ -181,7 +181,8 @@ export const de = {
     baseUrl: "Basis-URL",
     baseUrlDesc: "Endpunkt für Chat-Completions",
     model: "Modell",
-    modelDesc: "Modell-ID, z. B. deepseek-chat oder deepseek-reasoner",
+    modelDesc: "Modell-ID, wie vom Anbieter gemeldet",
+    balanceTotal: "Guthaben gesamt (Gutschriften + Aufladungen)",
     fullAuthorizationDesc:
       "Erlaubt dem Partner, Dateien zu schreiben, zu ändern und Befehle auszuführen",
   },

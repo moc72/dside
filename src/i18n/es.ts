@@ -180,7 +180,8 @@ export const es: Messages = {
     baseUrl: "URL base",
     baseUrlDesc: "Punto final para completaciones de chat",
     model: "Modelo",
-    modelDesc: "ID del modelo, ej. deepseek-chat o deepseek-reasoner",
+    modelDesc: "ID del modelo, según lo indica el proveedor",
+    balanceTotal: "Saldo total (créditos + recargas)",
     fullAuthorizationDesc: "Permite al agente escribir archivos, modificarlos y ejecutar comandos",
   },
   settings: {

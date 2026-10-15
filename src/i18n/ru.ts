@@ -181,7 +181,8 @@ export const ru: Messages = {
     baseUrl: "Базовый URL",
     baseUrlDesc: "Эндпоинт для Chat-Completions",
     model: "Модель",
-    modelDesc: "Идентификатор модели, z. B. deepseek-chat oder deepseek-reasoner",
+    modelDesc: "ID модели, как сообщает провайдер",
+    balanceTotal: "Общий баланс (бонусы + пополнения)",
     fullAuthorizationDesc: "Разрешает партнеру писать, изменять файлы и выполнять команды",
   },
   settings: {

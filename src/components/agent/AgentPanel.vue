@@ -138,6 +138,17 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   padding-inline: 16px;
+  position: relative;
+}
+
+/* Watermark behind the conversation: present, never in the way of reading. */
+.agent::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: url("/whale-mark.png") center 28% / 320px auto no-repeat;
+  opacity: 0.06;
+  pointer-events: none;
 }
 
 .scroll-wrap {
