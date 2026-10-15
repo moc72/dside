@@ -200,7 +200,7 @@ export const fr: Messages = {
       personalization: "Personnalisation",
       usageAndModel: "Utilisation & Modèle",
       connection: "Connexion",
-      account: "Compte",
+      account: "Compte et modèle",
       codeReview: "Revue de code",
       worktree: "Worktree",
       archivedTasks: "Tâches archivées",

@@ -198,7 +198,7 @@ export const zhHans: Messages = {
       personalization: "个性化",
       usageAndModel: "使用与模型",
       connection: "连接",
-      account: "账户",
+      account: "账户与模型",
       codeReview: "代码审查",
       worktree: "工作树",
       archivedTasks: "已归档任务",

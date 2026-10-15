@@ -4,12 +4,17 @@ import Icon from "../Icon.vue";
 import { t } from "../../i18n";
 import { settings } from "../../stores/settings";
 import { knownModels } from "../../stores/models";
+import type { ModelInfo } from "../../stores/models";
 import { abortTurn, engineReady, running, sendPrompt } from "../../composables/useEngine";
 
 const text = ref("");
 const model = ref(settings.model);
 
-const fallbackModels = ["deepseek-chat", "deepseek-reasoner"];
+/** Used until the provider list is loaded; the real ids come from the API. */
+const fallbackModels: ModelInfo[] = [
+  { id: "deepseek-flash", name: "DeepSeek V4.1 Flash" },
+  { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro" },
+];
 
 const canSend = computed(() => text.value.trim().length > 0 && !running.value);
 
@@ -61,10 +66,12 @@ function toggleAuthorization() {
           <input v-model="model" class="model" list="ds-models" :title="t('composer.model')" />
           <datalist id="ds-models">
             <option
-              v-for="name in knownModels.length ? knownModels : fallbackModels"
-              :key="name"
-              :value="name"
-            />
+              v-for="entry in knownModels.length ? knownModels : fallbackModels"
+              :key="entry.id"
+              :value="entry.id"
+            >
+              {{ entry.name }}
+            </option>
           </datalist>
 
           <button

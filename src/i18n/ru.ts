@@ -37,7 +37,7 @@ export const ru: Messages = {
   },
   account: {
     settings: "Настройки",
-    account: "Кonto",
+    account: "Аккаунт",
     provider: "DeepSeek",
     usage: "Использование",
     feedback: "Обратная связь",
@@ -198,7 +198,7 @@ export const ru: Messages = {
       personalization: "Персонализация",
       usageAndModel: "Использование & Модель",
       connection: "Соединение",
-      account: "Кonto",
+      account: "Аккаунт и модель",
       codeReview: "Рецензия кода",
       worktree: "Worktree",
       archivedTasks: "Архивированные задачи",

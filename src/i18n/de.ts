@@ -199,7 +199,7 @@ export const de = {
       personalization: "Personalisierung",
       usageAndModel: "Nutzung & Modell",
       connection: "Verbindung",
-      account: "Konto",
+      account: "Konto & Modell",
       codeReview: "Code-Review",
       worktree: "Arbeitsbaum",
       archivedTasks: "Archivierte Aufgaben",

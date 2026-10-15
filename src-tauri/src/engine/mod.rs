@@ -85,9 +85,27 @@ pub fn engine_send(app: AppHandle, session_id: String, prompt: String) -> Result
     send_prompt(&app, &session_id, &prompt)
 }
 
-/// Asks the provider which models the stored key may use (`GET /models`).
-#[tauri::command]
-pub async fn engine_models(app: AppHandle) -> Result<Vec<String>, String> {
+/// What the provider reports for one model. The API knows friendlier names than the id,
+/// so the UI shows those and sends the id.
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelInfo {
+    pub id: String,
+    pub name: String,
+    pub context_window: Option<i64>,
+}
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BalanceInfo {
+    pub available: bool,
+    pub currency: String,
+    pub total: String,
+    pub granted: String,
+    pub topped_up: String,
+}
+
+async fn provider_request(app: &AppHandle, path: &str) -> Result<Value, String> {
     let base = {
         let state = app.state::<EngineState>();
         let slot = state.config.lock().map_err(|error| error.to_string())?;
@@ -95,49 +113,96 @@ pub async fn engine_models(app: AppHandle) -> Result<Vec<String>, String> {
             .map(|config| config.base_url.clone())
             .unwrap_or_else(|| "https://api.deepseek.com".to_string())
     };
-
     let key = app
         .try_state::<SecretStore>()
         .and_then(|store| store.get())
         .unwrap_or_default();
     if key.trim().is_empty() {
-        return Err("models: API key is missing".to_string());
+        return Err("API key is missing".to_string());
     }
 
+    let url = format!("{}/{}", base.trim_end_matches('/'), path.trim_start_matches('/'));
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(20))
         .build()
         .map_err(|error| error.to_string())?;
+
     let response = client
-        .get(format!("{}/models", base.trim_end_matches('/')))
+        .get(url)
         .bearer_auth(key)
         .send()
         .await
-        .map_err(|error| format!("models: {error}"))?;
+        .map_err(|error| error.to_string())?;
 
     if !response.status().is_success() {
-        return Err(format!("models: HTTP {}", response.status()));
+        return Err(format!("HTTP {}", response.status()));
     }
+    response.json::<Value>().await.map_err(|error| error.to_string())
+}
 
-    let body: Value = response
-        .json()
+/// Asks the provider which models the stored key may use (`GET /models`).
+#[tauri::command]
+pub async fn engine_models(app: AppHandle) -> Result<Vec<ModelInfo>, String> {
+    let body = provider_request(&app, "/models")
         .await
         .map_err(|error| format!("models: {error}"))?;
-    let mut names: Vec<String> = body
+
+    let models: Vec<ModelInfo> = body
         .get("data")
         .and_then(Value::as_array)
         .map(|list| {
             list.iter()
-                .filter_map(|entry| entry.get("id").and_then(Value::as_str).map(str::to_string))
+                .filter_map(|entry| {
+                    let id = entry.get("id").and_then(Value::as_str)?;
+                    Some(ModelInfo {
+                        id: id.to_string(),
+                        name: entry
+                            .get("name")
+                            .and_then(Value::as_str)
+                            .unwrap_or(id)
+                            .to_string(),
+                        context_window: entry.get("context_window").and_then(Value::as_i64),
+                    })
+                })
                 .collect()
         })
         .unwrap_or_default();
-    names.sort();
 
-    if names.is_empty() {
+    if models.is_empty() {
         return Err("models: the provider returned no model list".to_string());
     }
-    Ok(names)
+    Ok(models)
+}
+
+/// Credits left, straight from the provider (`GET /user/balance`).
+#[tauri::command]
+pub async fn provider_balance(app: AppHandle) -> Result<BalanceInfo, String> {
+    let body = provider_request(&app, "/user/balance")
+        .await
+        .map_err(|error| format!("balance: {error}"))?;
+    let first = body
+        .get("balance_infos")
+        .and_then(Value::as_array)
+        .and_then(|list| list.first());
+
+    let text = |entry: Option<&Value>, key: &str| {
+        entry
+            .and_then(|value| value.get(key))
+            .and_then(Value::as_str)
+            .unwrap_or("0")
+            .to_string()
+    };
+
+    Ok(BalanceInfo {
+        available: body
+            .get("is_available")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        currency: text(first, "currency"),
+        total: text(first, "total_balance"),
+        granted: text(first, "granted_balance"),
+        topped_up: text(first, "topped_up_balance"),
+    })
 }
 
 /// Resolves a pending `ACTION_REQUIRED` — the turn that asked continues with this answer.

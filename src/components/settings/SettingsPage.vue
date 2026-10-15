@@ -8,7 +8,7 @@ import { locale, localeLabel, locales, setLocale, t } from "../../i18n";
 import type { Locale } from "../../i18n";
 import { links } from "../../engine/links";
 import { settings } from "../../stores/settings";
-import { knownModels, loadModels, modelsError } from "../../stores/models";
+import { knownModels, loadBalance, loadModels, modelsError, balance, balanceError } from "../../stores/models";
 import { settingsItem } from "../../stores/ui";
 import { reloadTree } from "../../composables/useWorkspace";
 import {
@@ -36,7 +36,6 @@ const groups = [
   {
     key: "settings.groups.management",
     items: [
-      { id: "usage", label: "settings.items.usageAndModel", icon: "grid" },
       { id: "account", label: "settings.items.account", icon: "user" },
     ],
   },
@@ -116,6 +115,9 @@ onMounted(async () => {
     systemName.value = await invoke<string>("default_display_name");
   } catch {
     systemName.value = "";
+  }
+  if (engineReady.value) {
+    await Promise.all([loadModels(), loadBalance()]);
   }
 });
 
@@ -269,15 +271,37 @@ watch(activeItem, (value) => {
         </div>
       </template>
 
-      <template v-else-if="activeItem === 'usage'">
-        <h1 class="title">{{ t("model.title") }}</h1>
+      <template v-else-if="activeItem === 'account'">
+        <h1 class="title">{{ t("settings.items.account") }}</h1>
 
         <div class="card">
           <div class="row">
             <div class="text">
-              <div class="label">{{ t("model.provider") }}</div>
+              <div class="label">{{ t("settings.general.displayName") }}</div>
+              <div class="desc">{{ t("settings.general.displayNameDesc") }}</div>
             </div>
-            <span class="value">{{ t("model.providerValue") }}</span>
+            <input v-model="settings.displayName" class="input" :placeholder="systemName" />
+          </div>
+
+          <div class="row">
+            <div class="text">
+              <div class="label">{{ t("account.provider") }}</div>
+              <div class="desc">{{ t("model.providerValue") }}</div>
+            </div>
+            <div class="model-field">
+              <span v-if="balance" class="value">{{ balance.total }} {{ balance.currency }}</span>
+              <button
+                class="mini"
+                type="button"
+                :title="t('account.usage')"
+                @click="openLink(links.usage)"
+              >
+                <Icon name="external-link" :size="14" />
+              </button>
+              <button class="mini" type="button" :title="t('skills.refresh')" @click="loadBalance">
+                <Icon name="reload" :size="14" />
+              </button>
+            </div>
           </div>
 
           <div class="row">
@@ -319,7 +343,9 @@ watch(activeItem, (value) => {
                 <Icon name="reload" :size="14" />
               </button>
               <datalist id="ds-models">
-                <option v-for="name in knownModels" :key="name" :value="name" />
+                <option v-for="entry in knownModels" :key="entry.id" :value="entry.id">
+                  {{ entry.name }}
+                </option>
               </datalist>
             </div>
           </div>
@@ -333,6 +359,7 @@ watch(activeItem, (value) => {
 
         <p class="hint" :class="{ warn: secretBackend === 'file' }">{{ secretHint }}</p>
         <p v-if="modelsError" class="hint warn">{{ modelsError }}</p>
+        <p v-if="balanceError" class="hint warn">{{ balanceError }}</p>
       </template>
 
       <template v-else-if="activeItem === 'archived'">
@@ -351,46 +378,6 @@ watch(activeItem, (value) => {
             </button>
           </div>
         </div>
-      </template>
-
-      <template v-else-if="activeItem === 'account'">
-        <h1 class="title">{{ t("settings.items.account") }}</h1>
-
-        <div class="card">
-          <div class="row">
-            <div class="text">
-              <div class="label">{{ t("settings.general.displayName") }}</div>
-              <div class="desc">{{ t("settings.general.displayNameDesc") }}</div>
-            </div>
-            <input
-              v-model="settings.displayName"
-              class="input"
-              :placeholder="systemName"
-            />
-          </div>
-
-          <div class="row">
-            <div class="text">
-              <div class="label">{{ t("account.provider") }}</div>
-              <div class="desc">{{ t("settings.general.providerDesc") }}</div>
-            </div>
-            <button class="mini-text" type="button" @click="openLink(links.provider)">
-              {{ t("account.account") }}
-            </button>
-          </div>
-
-          <div class="row">
-            <div class="text">
-              <div class="label">{{ t("model.apiKey") }}</div>
-              <div class="desc">{{ secretHint }}</div>
-            </div>
-            <button class="mini-text" type="button" @click="activeItem = 'usage'">
-              {{ t("settings.general.manage") }}
-            </button>
-          </div>
-        </div>
-
-        <p class="hint">{{ t("settings.general.linksHint") }}</p>
       </template>
 
       <div v-else class="placeholder">

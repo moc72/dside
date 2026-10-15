@@ -197,7 +197,7 @@ export const es: Messages = {
       personalization: "Personalización",
       usageAndModel: "Uso y modelo",
       connection: "Conexión",
-      account: "Cuenta",
+      account: "Cuenta y modelo",
       codeReview: "Revisión de código",
       worktree: "Árbol de trabajo",
       archivedTasks: "Tareas archivadas",

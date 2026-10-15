@@ -561,6 +561,7 @@ pub fn run() {
             engine::engine_configured,
             engine::engine_send,
             engine::engine_models,
+            engine::provider_balance,
             splash_ready,
             engine::engine_answer,
             engine::engine_abort,
