@@ -6,6 +6,8 @@ export interface FileNode {
   content?: string;
   children?: FileNode[];
   expanded?: boolean;
+  /** Whether `children` were read; folders load lazily when expanded. */
+  loaded?: boolean;
 }
 
 export interface EditorCandidate {

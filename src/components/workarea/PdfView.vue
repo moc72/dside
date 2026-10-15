@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import * as pdfjs from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -13,6 +13,12 @@ const host = ref<HTMLDivElement | null>(null);
 const pages = ref(0);
 const error = ref<string | null>(null);
 
+/** Guards against the resize observer firing at our own re-render. */
+let busy = false;
+let observer: ResizeObserver | null = null;
+let resizeTimer: number | undefined;
+let lastWidth = 0;
+
 /** The bytes come from Rust, not from a URL: no fetch, no CORS, no custom-scheme quirks. */
 function decodeBase64(value: string): Uint8Array {
   const binary = atob(value);
@@ -25,8 +31,9 @@ function decodeBase64(value: string): Uint8Array {
 
 async function render(path: string) {
   const container = host.value;
-  if (!container) return;
+  if (!container || busy) return;
 
+  busy = true;
   error.value = null;
   pages.value = 0;
   container.replaceChildren();
@@ -37,6 +44,7 @@ async function render(path: string) {
     pages.value = pdf.numPages;
 
     const available = Math.max(320, container.clientWidth - 32);
+    lastWidth = container.clientWidth;
 
     for (let number = 1; number <= pdf.numPages; number += 1) {
       const page = await pdf.getPage(number);
@@ -52,14 +60,32 @@ async function render(path: string) {
 
       await page.render({ canvas, viewport }).promise;
     }
-    pages.value = pdf.numPages;
   } catch (cause) {
     error.value = String(cause);
+  } finally {
+    busy = false;
   }
 }
 
 onMounted(() => {
   void render(props.path);
+
+  observer = new ResizeObserver(() => {
+    const container = host.value;
+    if (!container || busy) return;
+    if (Math.abs(container.clientWidth - lastWidth) < 24) return;
+    if (resizeTimer) window.clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(() => {
+      void render(props.path);
+    }, 280);
+  });
+  if (host.value) observer.observe(host.value);
+});
+
+onBeforeUnmount(() => {
+  observer?.disconnect();
+  observer = null;
+  if (resizeTimer) window.clearTimeout(resizeTimer);
 });
 
 watch(

@@ -11,6 +11,7 @@ import { languageFromPath } from "../../lib/language";
 import { mimeFor, previewKindFor, renderMarkdown } from "../../lib/preview";
 import {
   initWorkspace,
+  loadChildren,
   readFile,
   tree,
   treeError,
@@ -103,8 +104,9 @@ function select(node: FileNode) {
   openFile(node.path);
 }
 
-function toggle(node: FileNode) {
+async function toggle(node: FileNode) {
   node.expanded = !node.expanded;
+  if (node.expanded && !node.loaded) await loadChildren(node);
 }
 </script>
 

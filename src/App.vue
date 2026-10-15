@@ -88,7 +88,7 @@ function animateProgress(done: () => void) {
   requestAnimationFrame(tick);
 }
 
-/** The splash holds itself for the full run, then hands over. */
+/** The splash stays hidden until its artwork is ready, then holds for the full run. */
 async function finishSplash() {
   await new Promise<void>((resolve) => {
     const image = new Image();
@@ -96,6 +96,7 @@ async function finishSplash() {
     image.onerror = () => resolve();
     image.src = "/whale-splash.webp";
   });
+  await invoke("splash_visible").catch(() => undefined);
   await new Promise<void>((resolve) => animateProgress(resolve));
   await invoke("splash_ready").catch(() => undefined);
 }

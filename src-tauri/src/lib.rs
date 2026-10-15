@@ -417,6 +417,9 @@ pub struct NodeDto {
     children: Vec<NodeDto>,
     expanded: bool,
     language: Option<String>,
+    /// Whether `children` were actually read. Folders beyond the depth limit are not
+    /// loaded yet, and the frontend fetches them when the user expands them.
+    loaded: bool,
 }
 
 fn read_dir_nodes(dir: &Path, depth: u32) -> Vec<NodeDto> {
@@ -445,7 +448,8 @@ fn read_dir_nodes(dir: &Path, depth: u32) -> Vec<NodeDto> {
     let mut files: Vec<NodeDto> = Vec::new();
 
     for (name, path, is_folder) in collected.into_iter().take(MAX_CHILDREN) {
-        let children = if is_folder && depth > 0 {
+        let descend = is_folder && depth > 0;
+        let children = if descend {
             read_dir_nodes(&path, depth - 1)
         } else {
             Vec::new()
@@ -457,6 +461,7 @@ fn read_dir_nodes(dir: &Path, depth: u32) -> Vec<NodeDto> {
             children,
             expanded: false,
             language: None,
+            loaded: descend,
         };
         if is_folder {
             folders.push(node);
@@ -475,7 +480,18 @@ fn read_workspace_tree(root: String, depth: Option<u32>) -> Result<Vec<NodeDto>,
     if !path.is_dir() {
         return Err(format!("not a directory: {root}"));
     }
-    Ok(read_dir_nodes(&path, depth.unwrap_or(2).min(6)))
+    Ok(read_dir_nodes(&path, depth.unwrap_or(1).min(6)))
+}
+
+/// One directory level. The file tree calls this when a folder is expanded, so opening a
+/// small subfolder never means walking the whole tree first.
+#[tauri::command]
+fn read_dir_children(path: String) -> Result<Vec<NodeDto>, String> {
+    let target = PathBuf::from(&path);
+    if !target.is_dir() {
+        return Err(format!("not a directory: {path}"));
+    }
+    Ok(read_dir_nodes(&target, 0))
 }
 
 #[tauri::command]
@@ -542,6 +558,17 @@ fn default_workspace() -> String {
     std::env::var("HOME").unwrap_or_else(|_| ".".to_string())
 }
 
+/// Shows the splash only once its artwork is on screen — the window is created hidden for
+/// exactly this reason, so nobody sees a black rectangle while the webview boots.
+#[tauri::command]
+fn splash_visible(app: AppHandle) {
+    if let Some(splash) = app.get_webview_window("splash") {
+        let _ = splash.show();
+        let _ = splash.set_focus();
+        eprintln!("startup: splash shown");
+    }
+}
+
 /// Called by the splash window once it has painted. Idempotent, so a late call is harmless.
 #[tauri::command]
 fn splash_ready(app: AppHandle) {
@@ -602,6 +629,7 @@ pub fn run() {
             detect_editors,
             open_workspace_in_editor,
             read_workspace_tree,
+            read_dir_children,
             read_text_file,
             read_file_base64,
             default_workspace,
@@ -614,6 +642,7 @@ pub fn run() {
             browser::browser_windows,
             browser::browser_action,
             browser::browser_close,
+            splash_visible,
             splash_ready,
             engine::engine_answer,
             engine::engine_abort,
