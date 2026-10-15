@@ -1,0 +1,56 @@
+import { ref, watch } from "vue";
+import type { AppView } from "../types";
+import { loadJson, saveJson } from "../lib/persist";
+
+export const RAIL_MIN = 12;
+export const RAIL_MAX = 28;
+export const WORK_MIN = 15;
+export const WORK_MAX = 55;
+export const CENTER_MIN = 30;
+
+const STORAGE_KEY = "ds-ide.ui.v2";
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+interface StoredUi {
+  railWidth: number;
+  workWidth: number;
+  railCollapsed: boolean;
+}
+
+const stored = loadJson<Partial<StoredUi>>(STORAGE_KEY, {});
+
+export const view = ref<AppView>("chat");
+export const railCollapsed = ref(stored.railCollapsed ?? false);
+export const railWidth = ref(clamp(stored.railWidth ?? 15, RAIL_MIN, RAIL_MAX));
+export const workWidth = ref(clamp(stored.workWidth ?? 15, WORK_MIN, WORK_MAX));
+
+watch([railWidth, workWidth, railCollapsed], () => {
+  saveJson(STORAGE_KEY, {
+    railWidth: railWidth.value,
+    workWidth: workWidth.value,
+    railCollapsed: railCollapsed.value,
+  });
+});
+
+export function openSettings(): void {
+  view.value = "settings";
+}
+
+export function closeSettings(): void {
+  view.value = "chat";
+}
+
+export function toggleRail(): void {
+  railCollapsed.value = !railCollapsed.value;
+}
+
+export function setRailWidth(value: number): void {
+  railWidth.value = clamp(value, RAIL_MIN, RAIL_MAX);
+}
+
+export function setWorkWidth(value: number): void {
+  workWidth.value = clamp(value, WORK_MIN, WORK_MAX);
+}
