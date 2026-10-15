@@ -12,11 +12,9 @@ const accountOpen = ref(false);
 const primaryItems = [
   { icon: "plus", key: "nav.newTask" },
   { icon: "search", key: "nav.search" },
-  { icon: "grid", key: "nav.plugins" },
+  { icon: "grid", key: "nav.skills" },
   { icon: "clock", key: "nav.scheduled" },
   { icon: "globe", key: "nav.site" },
-  { icon: "monitor", key: "nav.connectMobile" },
-  { icon: "terminal", key: "nav.remoteControl" },
 ] as const;
 
 const sectionOrder: SessionGroup[] = ["pinned", "scheduled", "project", "team"];
@@ -91,13 +89,6 @@ function accountSettings() {
         <div class="menu-uid">{{ t("account.uid") }}: 539944927909126149</div>
         <button class="menu-item" type="button" @click="accountSettings">
           <Icon name="gear" :size="14" /><span>{{ t("account.settings") }}</span>
-        </button>
-        <button class="menu-item accent" type="button">
-          <Icon name="sparkle" :size="14" /><span>{{ t("account.subscribe") }}</span>
-        </button>
-        <button class="menu-item" type="button">
-          <Icon name="check" :size="14" /><span>{{ t("account.dailyCheckIn") }}</span>
-          <Icon name="chevron-right" :size="14" class="trail" />
         </button>
         <button class="menu-item" type="button">
           <Icon name="grid" :size="14" /><span>{{ t("account.usage") }}</span>

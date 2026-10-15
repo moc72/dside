@@ -8,11 +8,9 @@ export const en: Messages = {
   nav: {
     newTask: "New task",
     search: "Search",
-    plugins: "Plugins",
+    skills: "Skills",
     scheduled: "Scheduled",
     site: "Site",
-    connectMobile: "Connect Mobile",
-    remoteControl: "Remote control",
     collapseSidebar: "Collapse sidebar",
     expandSidebar: "Expand sidebar",
   },
@@ -26,8 +24,6 @@ export const en: Messages = {
   account: {
     uid: "UID",
     settings: "Settings",
-    subscribe: "Subscribe",
-    dailyCheckIn: "Daily Check-in",
     usage: "Usage",
     feedback: "Feedback",
     changelog: "Changelog",

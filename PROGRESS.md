@@ -496,8 +496,13 @@ Claude Code, Cursor, Codex und OpenCode. Für DS.IDE: eigenes Verzeichnis
 `~/.ds-ide/skills/**/SKILL.md` + Loader.
 
 ### Zusätzliche Backlog-Punkte (nach 10)
-12. **Nav bereinigen** — „Mobil verbinden" und „Fernsteuerung" entfernen; „Abonnieren" und
-    „Täglicher Check-in" streichen; „Plugins" → „Skills"; Menü auf echte Dinge kürzen.
+12. ✓ **Nav bereinigt** — erledigt. Entfernt: „Mobil verbinden" und „Fernsteuerung"
+    (brauchen MiniMax' Companion-App), „Abonnieren" (DeepSeek hat nur Top-up-Credits) und
+    „Täglicher Check-in" (MiniMax-Free-Tier). „Plugins" → **„Skills"**. Übrig bleiben
+    „Neue Aufgabe" (funktioniert), „Suche" (Punkt 8), „Skills" (14), „Geplant" (13),
+    „Seite" (14) — die letzten drei bewusst als geplante Ziele, nicht als Attrappen.
+    Evidenz: `pnpm build` grün (vue-tsc prüft die i18n-Kataloge gegen die Form-Referenz,
+    also sind beide Sprachen konsistent).
 13. **Eigener Scheduler** — Tabelle `schedules` (cron/at, prompt, enabled, last_run) + ein
     Rust-Hintergrundtask (tokio, minütlich), der fällige Läufe startet; UI mit
     „keep awake"-Schalter. Ehrliche Grenze: läuft nur, solange DS.IDE läuft (kein Daemon).

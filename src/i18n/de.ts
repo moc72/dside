@@ -6,11 +6,9 @@ export const de = {
   nav: {
     newTask: "Neue Aufgabe",
     search: "Suchen",
-    plugins: "Plugins",
+    skills: "Skills",
     scheduled: "Geplant",
     site: "Seite",
-    connectMobile: "Mobil verbinden",
-    remoteControl: "Fernsteuerung",
     collapseSidebar: "Seitenleiste einklappen",
     expandSidebar: "Seitenleiste ausklappen",
   },
@@ -24,8 +22,6 @@ export const de = {
   account: {
     uid: "UID",
     settings: "Einstellungen",
-    subscribe: "Abonnieren",
-    dailyCheckIn: "Täglicher Check-in",
     usage: "Nutzung",
     feedback: "Feedback",
     changelog: "Änderungsprotokoll",
