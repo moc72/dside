@@ -11,6 +11,7 @@ export const en: Messages = {
     skills: "Skills",
     scheduled: "Scheduled",
     site: "Site",
+    soon: "soon",
     collapseSidebar: "Collapse sidebar",
     expandSidebar: "Expand sidebar",
   },
@@ -101,6 +102,14 @@ export const en: Messages = {
   message: {
     notWired: "Not wired up yet: no model backend is connected.",
     reasoning: "Reasoning",
+  },
+  search: {
+    title: "Search sessions and messages",
+    placeholder: "Search…",
+    hint: "Enter opens the session",
+    empty: "Nothing found.",
+    session: "Session",
+    message: "Message",
   },
   engine: {
     needsKey: "No API key set — add it in Settings → Usage & model.",

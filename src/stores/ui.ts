@@ -47,6 +47,16 @@ export function toggleRail(): void {
   railCollapsed.value = !railCollapsed.value;
 }
 
+export const searchOpen = ref(false);
+
+export function openSearch(): void {
+  searchOpen.value = true;
+}
+
+export function closeSearch(): void {
+  searchOpen.value = false;
+}
+
 export function setRailWidth(value: number): void {
   railWidth.value = clamp(value, RAIL_MIN, RAIL_MAX);
 }

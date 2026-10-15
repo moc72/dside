@@ -9,6 +9,7 @@ export const de = {
     skills: "Skills",
     scheduled: "Geplant",
     site: "Seite",
+    soon: "bald",
     collapseSidebar: "Seitenleiste einklappen",
     expandSidebar: "Seitenleiste ausklappen",
   },
@@ -99,6 +100,14 @@ export const de = {
   message: {
     notWired: "Noch nicht angebunden: Es ist kein Modell-Backend verbunden.",
     reasoning: "Denken",
+  },
+  search: {
+    title: "Sitzungen und Nachrichten durchsuchen",
+    placeholder: "Suchen…",
+    hint: "Enter öffnet die Sitzung",
+    empty: "Nichts gefunden.",
+    session: "Sitzung",
+    message: "Nachricht",
   },
   engine: {
     needsKey:

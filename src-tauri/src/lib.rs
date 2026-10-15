@@ -526,6 +526,7 @@ pub fn run() {
             db::settings_set,
             db::memories_list,
             db::memory_delete,
+            db::search,
             secret::secret_status,
             secret::secret_set,
             secret::secret_clear,

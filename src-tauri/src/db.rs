@@ -78,6 +78,31 @@ fn now() -> i64 {
         .unwrap_or(0)
 }
 
+/// Cut a readable window around the first match, so hits make sense in a list.
+fn snippet_around(text: &str, needle: &str, width: usize) -> String {
+    let lowered = text.to_lowercase();
+    let needle_lower = needle.to_lowercase();
+    let chars: Vec<char> = text.chars().collect();
+
+    let Some(position) = lowered.find(&needle_lower) else {
+        return chars.into_iter().take(width).collect();
+    };
+
+    let prefix_chars = text[..position].chars().count();
+    let start = prefix_chars.saturating_sub(width / 3);
+    let end = (start + width).min(chars.len());
+
+    let mut out = String::new();
+    if start > 0 {
+        out.push('…');
+    }
+    out.extend(chars[start..end].iter());
+    if end < chars.len() {
+        out.push('…');
+    }
+    out.replace('\n', " ")
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionRow {
@@ -115,6 +140,15 @@ pub struct TodoRow {
     pub content: String,
     pub status: Option<String>,
     pub priority: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchHit {
+    pub kind: String,
+    pub session_id: String,
+    pub session_title: String,
+    pub snippet: String,
 }
 
 #[derive(Serialize)]
@@ -451,6 +485,71 @@ impl Db {
     }
 
     // -----------------------------------------------------------------------
+    // Search
+    // -----------------------------------------------------------------------
+
+    pub fn search(&self, query: &str, limit: usize) -> Result<Vec<SearchHit>, String> {
+        let trimmed = query.trim();
+        if trimmed.is_empty() {
+            return Ok(Vec::new());
+        }
+        let needle = format!("%{trimmed}%");
+        let conn = self.lock()?;
+        let mut hits: Vec<SearchHit> = Vec::new();
+
+        let mut sessions = conn
+            .prepare(
+                "SELECT id, title FROM sessions
+                 WHERE title LIKE ?1 ORDER BY updated_at DESC LIMIT ?2",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = sessions
+            .query_map(params![needle, limit as i64], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
+            .map_err(|error| error.to_string())?;
+        for row in rows {
+            let (id, title) = row.map_err(|error| error.to_string())?;
+            hits.push(SearchHit {
+                kind: "session".to_string(),
+                session_id: id,
+                snippet: title.clone(),
+                session_title: title,
+            });
+        }
+
+        let mut messages = conn
+            .prepare(
+                "SELECT m.session_id, s.title, m.content
+                 FROM messages m JOIN sessions s ON s.id = m.session_id
+                 WHERE m.content LIKE ?1 AND m.role IN ('user', 'assistant')
+                 ORDER BY m.id DESC LIMIT ?2",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = messages
+            .query_map(params![needle, limit as i64], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                ))
+            })
+            .map_err(|error| error.to_string())?;
+        for row in rows {
+            let (session_id, session_title, content) = row.map_err(|error| error.to_string())?;
+            hits.push(SearchHit {
+                kind: "message".to_string(),
+                session_id,
+                session_title,
+                snippet: snippet_around(&content.unwrap_or_default(), trimmed, 140),
+            });
+        }
+
+        hits.truncate(limit);
+        Ok(hits)
+    }
+
+    // -----------------------------------------------------------------------
     // Long-term memory
     // -----------------------------------------------------------------------
 
@@ -603,6 +702,15 @@ pub fn memory_delete(db: tauri::State<'_, Db>, id: i64) -> Result<(), String> {
     db.delete_memory(id)
 }
 
+#[tauri::command]
+pub fn search(
+    db: tauri::State<'_, Db>,
+    query: String,
+    limit: Option<usize>,
+) -> Result<Vec<SearchHit>, String> {
+    db.search(&query, limit.unwrap_or(40))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -681,6 +789,46 @@ mod tests {
 
         db.delete_memory(id).unwrap();
         assert!(db.list_memories(10).unwrap().is_empty());
+
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn search_finds_sessions_and_messages() {
+        let directory =
+            std::env::temp_dir().join(format!("ds-ide-search-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let db = Db::open(&directory.join("s.sqlite3")).unwrap();
+
+        db.ensure_session("s1", "Monaco Editor", "project", "/tmp")
+            .unwrap();
+        db.insert_message("s1", "user", Some("Wie baue ich Monaco ein?"), None, None)
+            .unwrap();
+        db.insert_message(
+            "s1",
+            "assistant",
+            Some("Tauri und Vite moegen Worker sehr."),
+            None,
+            None,
+        )
+        .unwrap();
+
+        let by_title = db.search("Monaco", 20).unwrap();
+        assert!(
+            by_title.iter().any(|hit| hit.kind == "session"),
+            "title hit expected"
+        );
+
+        let by_body = db.search("Worker", 20).unwrap();
+        assert!(
+            by_body
+                .iter()
+                .any(|hit| hit.kind == "message" && hit.snippet.contains("Worker")),
+            "message hit with snippet expected"
+        );
+
+        assert!(db.search("   ", 20).unwrap().is_empty(), "blank query");
 
         let _ = std::fs::remove_dir_all(&directory);
     }

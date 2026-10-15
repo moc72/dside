@@ -460,9 +460,17 @@ Nach **jedem** Punkt: `pnpm build`, `cargo test`, PROGRESS.md aktualisieren.
    veröffentlicht → Eigenbau.
 7. **Weitere Tools** aus dem MiniMax-Set: `web_fetch`, `ask_user`, `task*` (Subagenten),
    `skill`, `code_review`.
-8. **Buttons ehrlich machen** — „Neue Aufgabe" ✓ (erledigt) und „Suche" echt verdrahten;
-   `Plugins`, `Geplant`, `Site`, `Mobil verbinden`, `Fernsteuerung` sichtbar als
-   „nicht implementiert" kennzeichnen statt zu suggerieren.
+8. ✓ **„Suche" verdrahtet, Rest ehrlich gekennzeichnet** — erledigt.
+   - Rust: `Db::search` + `snippet_around` (Kontext-Ausschnitt um den Treffer) und Kommando
+     `search` — durchsucht Sitzungstitel und Nachrichteninhalte (`LIKE`, Limit 40).
+   - UI: `SearchDialog.vue` als Overlay (Teleport), öffnet über „Suchen" in der Leiste
+     **oder Strg/Cmd+K**, Esc schließt, Enter öffnet den ersten Treffer. Treffer sind als
+     „Sitzung"/„Nachricht" gekennzeichnet, Klick öffnet die Sitzung.
+   - Ehrlichkeit: „Skills", „Geplant" und „Seite" tragen jetzt ein **„bald"**-Abzeichen,
+     damit die Leiste nicht mehr suggeriert, sie würden schon funktionieren.
+   - Evidenz: `cargo test` → `db::tests::search_finds_sessions_and_messages` ok
+     (Titeltreffer, Nachrichtentreffer mit Snippet, leere Query bleibt leer);
+     `pnpm build` grün; App startet, Module HTTP 200.
 9. ✓ **Fortschritts-Tab aus echten Todos** — erledigt. Die hartkodierten
    „Liefergegenstände" aus `stores/sessions.ts` sind **entfernt**; der Tab liest jetzt
    `session_todos` (Rust liefert `TodoRow { id, content, status, priority }` statt nur

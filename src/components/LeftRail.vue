@@ -4,17 +4,17 @@ import Icon from "./Icon.vue";
 import { t } from "../i18n";
 import type { SessionGroup } from "../types";
 import { activeSessionId, sessions } from "../stores/sessions";
-import { openSettings, railCollapsed } from "../stores/ui";
+import { openSearch, openSettings, railCollapsed } from "../stores/ui";
 import { createSession, openSession } from "../composables/useEngine";
 
 const accountOpen = ref(false);
 
 const primaryItems = [
-  { icon: "plus", key: "nav.newTask" },
-  { icon: "search", key: "nav.search" },
-  { icon: "grid", key: "nav.skills" },
-  { icon: "clock", key: "nav.scheduled" },
-  { icon: "globe", key: "nav.site" },
+  { icon: "plus", key: "nav.newTask", soon: false },
+  { icon: "search", key: "nav.search", soon: false },
+  { icon: "grid", key: "nav.skills", soon: true },
+  { icon: "clock", key: "nav.scheduled", soon: true },
+  { icon: "globe", key: "nav.site", soon: true },
 ] as const;
 
 const sectionOrder: SessionGroup[] = ["pinned", "scheduled", "project", "team"];
@@ -31,7 +31,13 @@ function groupItems(group: SessionGroup) {
 }
 
 function onPrimary(key: string) {
-  if (key === "nav.newTask") void createSession();
+  if (key === "nav.newTask") {
+    void createSession();
+    return;
+  }
+  if (key === "nav.search") {
+    openSearch();
+  }
 }
 
 function accountSettings() {
@@ -56,6 +62,7 @@ function accountSettings() {
       >
         <Icon :name="item.icon" />
         <span>{{ t(item.key) }}</span>
+        <span v-if="item.soon" class="soon">{{ t("nav.soon") }}</span>
       </button>
     </nav>
 
@@ -166,6 +173,16 @@ function accountSettings() {
 .session:hover,
 .menu-item:hover {
   background: var(--bg-hover);
+}
+
+.soon {
+  margin-left: auto;
+  padding: 0 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 15px;
 }
 
 .session.active {

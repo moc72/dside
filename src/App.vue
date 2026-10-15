@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import Resizer from "./components/Resizer.vue";
 import TitleBar from "./components/TitleBar.vue";
 import LeftRail from "./components/LeftRail.vue";
+import SearchDialog from "./components/SearchDialog.vue";
 import AgentPanel from "./components/agent/AgentPanel.vue";
 import WorkArea from "./components/workarea/WorkArea.vue";
 import SettingsPage from "./components/settings/SettingsPage.vue";
 import {
   CENTER_MIN,
+  closeSearch,
+  openSearch,
   railCollapsed,
   railWidth,
+  searchOpen,
   setRailWidth,
   setWorkWidth,
   view,
@@ -18,6 +22,18 @@ import {
 import { visible as workAreaVisible } from "./stores/workArea";
 
 const body = ref<HTMLElement | null>(null);
+
+function onKey(event: KeyboardEvent) {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+    event.preventDefault();
+    openSearch();
+    return;
+  }
+  if (event.key === "Escape" && searchOpen.value) closeSearch();
+}
+
+onMounted(() => window.addEventListener("keydown", onKey));
+onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
 
 const bodyStyle = computed(() => {
   const columns: string[] = [];
@@ -98,6 +114,8 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
       </div>
     </div>
   </div>
+
+  <SearchDialog v-if="searchOpen" />
 </template>
 
 <style scoped>
