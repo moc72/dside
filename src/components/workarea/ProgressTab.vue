@@ -1,14 +1,52 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref, watch } from "vue";
+import { invoke } from "@tauri-apps/api/core";
 import Icon from "../Icon.vue";
 import { t } from "../../i18n";
-import { deliverablesByGroup } from "../../stores/sessions";
+import { activeSessionId } from "../../stores/sessions";
+import { todosRevision } from "../../composables/useEngine";
 
-const collapsed = ref<Record<string, boolean>>({});
-
-function toggle(group: string) {
-  collapsed.value[group] = !collapsed.value[group];
+interface TodoRow {
+  id: number;
+  content: string;
+  status: string | null;
+  priority: string | null;
 }
+
+const rows = ref<TodoRow[]>([]);
+const loading = ref(false);
+
+const statuses = ["in_progress", "pending", "completed"] as const;
+
+const statusLabels: Record<string, "progress.statusInProgress" | "progress.statusPending" | "progress.statusCompleted"> = {
+  in_progress: "progress.statusInProgress",
+  pending: "progress.statusPending",
+  completed: "progress.statusCompleted",
+};
+
+const grouped = computed(() =>
+  statuses
+    .map((status) => ({
+      status,
+      items: rows.value.filter((row) => (row.status ?? "pending") === status),
+    }))
+    .filter((group) => group.items.length > 0),
+);
+
+async function load() {
+  loading.value = true;
+  try {
+    rows.value = await invoke<TodoRow[]>("session_todos", {
+      sessionId: activeSessionId.value,
+    });
+  } catch {
+    rows.value = [];
+  } finally {
+    loading.value = false;
+  }
+}
+
+watch([activeSessionId, todosRevision], () => void load(), { immediate: true });
 </script>
 
 <template>
@@ -17,21 +55,25 @@ function toggle(group: string) {
     <p class="subtitle">{{ t("progress.subtitle") }}</p>
 
     <div class="section-head">
-      <span>{{ t("progress.deliverables") }}</span>
+      <span>{{ t("progress.tasks") }}</span>
       <Icon name="chevron-down" :size="14" />
     </div>
 
-    <p v-if="deliverablesByGroup.length === 0" class="empty">{{ t("progress.empty") }}</p>
+    <p v-if="loading" class="empty">{{ t("viewFile.loading") }}</p>
+    <p v-else-if="grouped.length === 0" class="empty">{{ t("progress.empty") }}</p>
 
-    <div v-for="group in deliverablesByGroup" :key="group.group" class="group">
-      <button class="group-head" type="button" @click="toggle(group.group)">
-        <span>{{ group.group }}</span>
-        <Icon :name="collapsed[group.group] ? 'chevron-right' : 'chevron-down'" :size="13" />
-      </button>
-      <ul v-show="!collapsed[group.group]" class="items">
-        <li v-for="item in group.items" :key="item.id">
-          <Icon name="doc" :size="13" />
-          <span>{{ item.label }}</span>
+    <div v-for="group in grouped" :key="group.status" class="group">
+      <div class="group-head">
+        <span>{{ t(statusLabels[group.status]) }}</span>
+        <span class="count">{{ group.items.length }}</span>
+      </div>
+      <ul class="items">
+        <li v-for="item in group.items" :key="item.id" :class="group.status">
+          <Icon
+            :name="group.status === 'completed' ? 'check' : group.status === 'in_progress' ? 'reload' : 'doc'"
+            :size="13"
+          />
+          <span>{{ item.content }}</span>
         </li>
       </ul>
     </div>
@@ -70,23 +112,22 @@ function toggle(group: string) {
 }
 
 .group {
-  margin-top: 4px;
+  margin-top: 10px;
 }
 
 .group-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: 100%;
   padding: 5px 2px;
-  border: none;
-  background: transparent;
   color: var(--text-muted);
   font-size: 12px;
+  font-weight: 600;
 }
 
-.group-head:hover {
-  color: var(--text);
+.count {
+  font-weight: 400;
+  opacity: 0.7;
 }
 
 .items {
@@ -97,17 +138,17 @@ function toggle(group: string) {
 
 .items li {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   padding: 5px 2px;
   color: var(--text);
   font-size: 12px;
+  line-height: 1.45;
 }
 
-.items li span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.items li.completed {
+  color: var(--text-muted);
+  text-decoration: line-through;
 }
 
 .empty {

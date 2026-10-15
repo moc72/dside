@@ -463,8 +463,14 @@ Nach **jedem** Punkt: `pnpm build`, `cargo test`, PROGRESS.md aktualisieren.
 8. **Buttons ehrlich machen** — „Neue Aufgabe" ✓ (erledigt) und „Suche" echt verdrahten;
    `Plugins`, `Geplant`, `Site`, `Mobil verbinden`, `Fernsteuerung` sichtbar als
    „nicht implementiert" kennzeichnen statt zu suggerieren.
-9. **Fortschritt/Deliverables aus echten Daten** — die Tabelle `todos` speist den rechten
-   Tab statt der Beispieldaten in `stores/sessions.ts`.
+9. ✓ **Fortschritts-Tab aus echten Todos** — erledigt. Die hartkodierten
+   „Liefergegenstände" aus `stores/sessions.ts` sind **entfernt**; der Tab liest jetzt
+   `session_todos` (Rust liefert `TodoRow { id, content, status, priority }` statt nur
+   Strings) und gruppiert nach Status — „In Arbeit / Offen / Erledigt", Erledigtes
+   durchgestrichen. Aktualisiert sich live: `useEngine` zählt `todosRevision` hoch, sobald
+   ein `todowrite`-Ergebnis eintrifft.
+   Evidenz: `cargo test` grün (Test prüft `list_todos()[0].content`), `pnpm build` grün,
+   App startet, Module HTTP 200, `todos`-Query liefert die erwartete Spaltenform.
 10. **Walfisch-Branding** — Asset kommt vom Nutzer (Adobe). Einbau: **Splash-Animation
     beim Start** und **Avatar im Chat**; das Fenster-/Taskleisten-Icon bleibt ein
     **statisches** PNG, weil kein OS animierte App-Icons unterstützt.

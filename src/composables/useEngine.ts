@@ -50,6 +50,9 @@ export const engineReady = ref(false);
 export const lastError = ref<string | null>(null);
 export const secretBackend = ref<"keyring" | "file" | "none">("none");
 
+/** Bumped whenever the partner rewrites its plan, so the Progress panel can reload. */
+export const todosRevision = ref(0);
+
 type SecretStatus = { present: boolean; backend: string };
 
 /** The API key used to live in localStorage. Move it to the keyring once, then forget it. */
@@ -141,6 +144,7 @@ function handleEvent(event: EngineEvent): void {
           durationMs: event.tool.durationMs,
           running: false,
         });
+        if (event.tool.name === "todowrite") todosRevision.value += 1;
       }
       break;
     case "error":

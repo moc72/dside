@@ -65,8 +65,11 @@ export const de = {
   progress: {
     title: "Fortschritt",
     subtitle: "Fortschritt bei längeren Aufgaben verfolgen.",
-    deliverables: "Liefergegenstände",
-    empty: "Noch keine Liefergegenstände.",
+    tasks: "Aufgaben",
+    statusInProgress: "In Arbeit",
+    statusPending: "Offen",
+    statusCompleted: "Erledigt",
+    empty: "Noch keine Aufgaben.",
   },
   viewFile: {
     hint: "Wähle eine Datei im Dateibaum.",

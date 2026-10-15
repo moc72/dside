@@ -110,6 +110,15 @@ pub struct HistoryMessage {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TodoRow {
+    pub id: i64,
+    pub content: String,
+    pub status: Option<String>,
+    pub priority: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MemoryRow {
     pub id: i64,
     pub kind: String,
@@ -296,13 +305,23 @@ impl Db {
         Ok(())
     }
 
-    pub fn list_todos(&self, session_id: &str) -> Result<Vec<String>, String> {
+    pub fn list_todos(&self, session_id: &str) -> Result<Vec<TodoRow>, String> {
         let conn = self.lock()?;
         let mut statement = conn
-            .prepare("SELECT content FROM todos WHERE session_id = ?1 ORDER BY id")
+            .prepare(
+                "SELECT id, content, status, priority FROM todos
+                 WHERE session_id = ?1 ORDER BY id",
+            )
             .map_err(|error| error.to_string())?;
         let rows = statement
-            .query_map([session_id], |row| row.get::<_, String>(0))
+            .query_map([session_id], |row| {
+                Ok(TodoRow {
+                    id: row.get(0)?,
+                    content: row.get(1)?,
+                    status: row.get(2)?,
+                    priority: row.get(3)?,
+                })
+            })
             .map_err(|error| error.to_string())?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|error| error.to_string())
@@ -560,7 +579,7 @@ pub fn session_history(
 }
 
 #[tauri::command]
-pub fn session_todos(db: tauri::State<'_, Db>, session_id: String) -> Result<Vec<String>, String> {
+pub fn session_todos(db: tauri::State<'_, Db>, session_id: String) -> Result<Vec<TodoRow>, String> {
     db.list_todos(&session_id)
 }
 
@@ -624,7 +643,8 @@ mod tests {
         assert_eq!(history[0].role, "user");
         assert_eq!(history[1].tools.len(), 1, "tool call attached to assistant");
         assert_eq!(history[1].tools[0].name, "glob");
-        assert_eq!(db.list_todos("s1").unwrap(), vec!["A".to_string()]);
+        assert_eq!(db.list_todos("s1").unwrap().len(), 1);
+        assert_eq!(db.list_todos("s1").unwrap()[0].content, "A");
 
         let llm = db.load_llm_messages("s1").unwrap();
         assert_eq!(llm.len(), 2);

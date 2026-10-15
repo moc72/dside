@@ -67,8 +67,11 @@ export const en: Messages = {
   progress: {
     title: "Progress",
     subtitle: "Track progress on longer tasks.",
-    deliverables: "Deliverables",
-    empty: "No deliverables yet.",
+    tasks: "Tasks",
+    statusInProgress: "In progress",
+    statusPending: "Pending",
+    statusCompleted: "Done",
+    empty: "No tasks yet.",
   },
   viewFile: {
     hint: "Select a file from the workspace tree.",

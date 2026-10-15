@@ -1,5 +1,5 @@
 import { computed, reactive, ref } from "vue";
-import type { ChatMessage, Deliverable, Session, ToolActivity } from "../types";
+import type { ChatMessage, Session, ToolActivity } from "../types";
 
 export const sessions = ref<Session[]>([]);
 
@@ -94,21 +94,3 @@ export function selectSession(id: string): void {
   activeSessionId.value = id;
   currentAssistantId = null;
 }
-
-export const deliverables = ref<Deliverable[]>([
-  { id: "d1", group: "Manuskript", label: "Prolog Probewurf — das Buch" },
-  { id: "d2", group: "Manuskript", label: "Kap. I — Section 4, mit Tabellen" },
-  { id: "d3", group: "Manuskript", label: "Kap. I — Section 3 (Empirisch)" },
-  { id: "d4", group: "Mavis markdowns", label: "Hestia-kompatibler Export" },
-  { id: "d5", group: "Skript", label: "MiniMax-DB → Hestia" },
-]);
-
-export const deliverablesByGroup = computed(() => {
-  const groups = new Map<string, Deliverable[]>();
-  for (const item of deliverables.value) {
-    const list = groups.get(item.group) ?? [];
-    list.push(item);
-    groups.set(item.group, list);
-  }
-  return [...groups.entries()].map(([group, items]) => ({ group, items }));
-});
