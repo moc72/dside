@@ -4,6 +4,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import Icon from "../Icon.vue";
 import FileTree from "../FileTree.vue";
 import MonacoEditor from "../MonacoEditor.vue";
+import PdfView from "./PdfView.vue";
 import { t } from "../../i18n";
 import type { FileNode } from "../../types";
 import { languageFromPath } from "../../lib/language";
@@ -111,6 +112,8 @@ function toggle(node: FileNode) {
         </div>
 
         <img v-if="kind === 'image'" class="image" :src="assetUrl" :alt="selectedPath ?? ''" />
+
+        <PdfView v-else-if="kind === 'pdf'" :path="selectedPath" />
 
         <div
           v-else-if="kind === 'markdown' && markdownMode === 'preview'"

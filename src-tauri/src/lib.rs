@@ -491,6 +491,52 @@ fn read_text_file(path: String) -> Result<String, String> {
     fs::read_to_string(&target).map_err(|error| error.to_string())
 }
 
+/// Reads a binary file as base64 so the webview can preview it (PDF). Capped, so a stray
+/// click on a huge file cannot eat the webview's memory.
+#[tauri::command]
+fn read_file_base64(path: String) -> Result<String, String> {
+    const MAX_BYTES: u64 = 40 * 1024 * 1024;
+
+    let target = PathBuf::from(&path);
+    let meta = std::fs::metadata(&target).map_err(|error| error.to_string())?;
+    if !meta.is_file() {
+        return Err("not a file".to_string());
+    }
+    if meta.len() > MAX_BYTES {
+        return Err("file too large for preview".to_string());
+    }
+
+    let bytes = std::fs::read(&target).map_err(|error| error.to_string())?;
+    Ok(base64_encode(&bytes))
+}
+
+/// Hand-rolled to avoid another dependency; sixteen lines and easy to test.
+fn base64_encode(bytes: &[u8]) -> String {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+
+    for chunk in bytes.chunks(3) {
+        let first = chunk[0] as u32;
+        let second = *chunk.get(1).unwrap_or(&0) as u32;
+        let third = *chunk.get(2).unwrap_or(&0) as u32;
+        let combined = (first << 16) | (second << 8) | third;
+
+        out.push(TABLE[(combined >> 18) as usize & 63] as char);
+        out.push(TABLE[(combined >> 12) as usize & 63] as char);
+        out.push(if chunk.len() > 1 {
+            TABLE[(combined >> 6) as usize & 63] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            TABLE[combined as usize & 63] as char
+        } else {
+            '='
+        });
+    }
+    out
+}
+
 #[tauri::command]
 fn default_workspace() -> String {
     std::env::var("HOME").unwrap_or_else(|_| ".".to_string())
@@ -557,6 +603,7 @@ pub fn run() {
             open_workspace_in_editor,
             read_workspace_tree,
             read_text_file,
+            read_file_base64,
             default_workspace,
             engine::engine_set_config,
             engine::engine_configured,
@@ -615,5 +662,18 @@ mod tests {
                 candidate.id, candidate.label, candidate.source, candidate.exec
             );
         }
+    }
+
+    /// RFC 4648 test vectors — a hand-rolled encoder is exactly the place where an
+    /// off-by-one hides until a PDF fails to load.
+    #[test]
+    fn base64_matches_known_vectors() {
+        assert_eq!(base64_encode(b""), "");
+        assert_eq!(base64_encode(b"f"), "Zg==");
+        assert_eq!(base64_encode(b"fo"), "Zm8=");
+        assert_eq!(base64_encode(b"foo"), "Zm9v");
+        assert_eq!(base64_encode(b"foob"), "Zm9vYg==");
+        assert_eq!(base64_encode(b"fooba"), "Zm9vYmE=");
+        assert_eq!(base64_encode(b"foobar"), "Zm9vYmFy");
     }
 }

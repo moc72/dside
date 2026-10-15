@@ -1,7 +1,7 @@
 import DOMPurify from "dompurify";
 import { marked } from "marked";
 
-export type PreviewKind = "markdown" | "image" | "text";
+export type PreviewKind = "markdown" | "image" | "pdf" | "text";
 
 const markdownExtensions = new Set(["md", "markdown", "mdown", "mkd"]);
 const imageExtensions = new Set([
@@ -15,6 +15,7 @@ const imageExtensions = new Set([
   "avif",
   "ico",
 ]);
+const pdfExtensions = new Set(["pdf"]);
 
 export function extensionOf(path: string): string {
   const name = path.split("/").pop() ?? path;
@@ -25,6 +26,7 @@ export function previewKindFor(path: string): PreviewKind {
   const extension = extensionOf(path);
   if (markdownExtensions.has(extension)) return "markdown";
   if (imageExtensions.has(extension)) return "image";
+  if (pdfExtensions.has(extension)) return "pdf";
   return "text";
 }
 
