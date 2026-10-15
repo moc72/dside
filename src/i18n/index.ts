@@ -1,10 +1,14 @@
 import { computed, ref } from "vue";
 import { de, type Messages } from "./de";
 import { en } from "./en";
+import { zhHans } from "./zh-Hans";
+import { ru } from "./ru";
+import { fr } from "./fr";
+import { es } from "./es";
 import { loadJson, saveJson } from "../lib/persist";
 
 export type { Messages };
-export type Locale = "de" | "en";
+export type Locale = "de" | "en" | "zh-Hans" | "ru" | "fr" | "es";
 
 type Leaves<T, P extends string = ""> = {
   [K in keyof T & string]: T[K] extends string ? `${P}${K}` : Leaves<T[K], `${P}${K}.`>;
@@ -14,9 +18,23 @@ export type MessageKey = Leaves<Messages>;
 
 const STORAGE_KEY = "ds-ide.locale";
 
-const catalogs: Record<Locale, Messages> = { de, en };
+const catalogs: Record<Locale, Messages> = { de, en, "zh-Hans": zhHans, ru, fr, es };
 
-export const locales: readonly Locale[] = ["de", "en"];
+export const locales: readonly Locale[] = ["de", "en", "zh-Hans", "ru", "fr", "es"];
+
+/** Language names are their own labels — that is the convention users expect. */
+const languageNames: Record<Locale, string> = {
+  de: "Deutsch",
+  en: "English",
+  "zh-Hans": "简体中文",
+  ru: "Русский",
+  fr: "Français",
+  es: "Español",
+};
+
+export function localeLabel(locale: Locale): string {
+  return languageNames[locale] ?? locale;
+}
 
 function isLocale(value: unknown): value is Locale {
   return typeof value === "string" && (locales as readonly string[]).includes(value);
@@ -26,7 +44,10 @@ function detectLocale(): Locale {
   const stored = loadJson<unknown>(STORAGE_KEY, null);
   if (isLocale(stored)) return stored;
   const nav = typeof navigator === "undefined" ? "en" : navigator.language.toLowerCase();
-  return nav.startsWith("de") ? "de" : "en";
+  if (nav.startsWith("de")) return "de";
+  if (nav.startsWith("zh")) return "zh-Hans";
+  if (nav.startsWith("ru")) return "ru";
+  return "en";
 }
 
 export const locale = ref<Locale>(detectLocale());

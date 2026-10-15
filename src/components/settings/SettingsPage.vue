@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import Icon from "../Icon.vue";
 import ToggleRow from "./ToggleRow.vue";
-import { locale, locales, setLocale, t } from "../../i18n";
+import { locale, localeLabel, locales, setLocale, t } from "../../i18n";
 import type { Locale } from "../../i18n";
 import { links } from "../../engine/links";
 import { settings } from "../../stores/settings";
@@ -228,7 +228,7 @@ watch(activeItem, (value) => {
             </div>
             <select class="select" :value="locale" @change="changeLocale">
               <option v-for="code in locales" :key="code" :value="code">
-                {{ code.toUpperCase() }}
+                {{ localeLabel(code) }}
               </option>
             </select>
           </div>

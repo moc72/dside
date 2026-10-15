@@ -707,3 +707,44 @@ Module gegen die laufende Instanz prüfen.
 `rm -f verzeichnis/*-glob.png` bricht in zsh bei **leerem Glob** mit „no matches found" ab
 und reißt per `&&` die ganze Kette mit. In Skripten `find … -delete` verwenden oder
 `setopt null_glob`.
+
+## 18. Sprachen, Links, Walfisch-Marke (2026-10-15)
+
+### i18n auf sechs Sprachen
+Ausgelagert an **vier Hintergrund-Subagenten** (Vorschlag des Nutzers), je eine Datei:
+`zh-Hans` (Pflicht — Muttersprache des Betreibers), `fr`, `es`, `ru`. Registriert in
+`i18n/index.ts` samt lesbarer Sprachliste (Sprachnamen als eigene Labels: 简体中文,
+Русский, Français, Español). `detectLocale` erkennt jetzt auch `zh` und `ru`.
+
+**Lehre — die Selbstauskunft der Subagenten war nicht belastbar.** Drei von vier
+lieferten fehlerhafte Dateien, obwohl alle „KEY-SET IDENTISCH" meldeten:
+- `fr` und `es` hatten einen **Syntaxfehler**: deutsche Anführungszeichen `„…"` mitten in
+  einem doppelt gequoteten TS-String — das schließende `"` beendet den String.
+- `fr` fehlten am Ende **fünf Keys** (`save`, `clear`, `notSet`, `storedKeyring`,
+  `storedFile`).
+- `zh-Hans` und `ru` hatten **deutsche Reste** in den Werten.
+Was geholfen hat, sind zwei eigene Prüfungen (stehen als Rezept hier):
+1. **Keys:** `pnpm build` — `vue-tsc` erzwingt über den Typ `Messages` die exakte
+   Key-Gleichheit und nennt fehlende Felder beim Namen.
+2. **Werte:** identische `key: "value"`-Zeilen zwischen Quelle und Übersetzung zählen
+   (`comm -12`). Was übrig bleibt, ist entweder eine Marke (`DS.IDE`, `DeepSeek`, `Seeky`)
+   oder eine übersehene Stelle. So fielen `tagline`, `providerDesc`, `modeEverydayDesc`
+   und ein deutsches „OpenAI-kompatibel" in `es` auf.
+Merksatz: Subagenten erzeugen Text, aber **verifizieren muss man selbst** — ihre
+Bestätigung ist kein Nachweis.
+
+### Externe Adressen
+Alle in `src/engine/links.ts`: Konto → `platform.deepseek.com/profile`, Nutzung → `/usage`,
+Feedback → `github.com/moc72/dside/issues`, Kontakt → `mailto:me@modestcoders.eu`,
+Mehr erfahren → `modestcoders.eu`.
+
+### Oberfläche
+- Der Wal sitzt jetzt als **kleines animiertes Markenzeichen (26 px)** oben links in der
+  Leiste, wo „DS.IDE" stand; im Chat sind wieder die drei Punkte (er störte dort).
+  Der Splash beim Start bleibt.
+- Einstellungen ausgedünnt: **Connection**, **Code review** und **Worktree** entfernt
+  (MiniMax-Erbe ohne Substanz), **„Basis-URL" aus der Oberfläche** genommen.
+- **Modelle kommen von der API** (`GET /models`, Knopf am Modellfeld) statt geratener Namen.
+- **„Abmelden" ist jetzt zweistufig**: erst fragen (rot, ❌, „Entfernen"), dann löschen.
+  Auslöser war der Nutzer, der es ausprobierte und dabei seinen Key verlor — das Verhalten
+  war korrekt, aber zu scharf.
