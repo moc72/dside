@@ -612,6 +612,19 @@ fn show_main_window(app: &AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        // Size, position and maximised state of the main window survive a restart. Visibility
+        // is deliberately left out: the splash decides when the main window appears, and a
+        // restored "visible" flag would show it over the splash.
+        .plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::SIZE
+                        | tauri_plugin_window_state::StateFlags::POSITION
+                        | tauri_plugin_window_state::StateFlags::MAXIMIZED,
+                )
+                .with_denylist(&["splash"])
+                .build(),
+        )
         .manage(engine::EngineState::default())
         .setup(|app| {
             let directory = app.path().app_data_dir()?;
