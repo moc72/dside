@@ -450,6 +450,8 @@ Key aus dem OS-Schlüsselbund).
    - `db.rs`: `insert_memory`, `list_memories`, `memory_context` (sortiert nach
      `importance`, dann `last_used_at`, dann Alter), `touch_memories`, `delete_memory`;
      Kommandos `memories_list`, `memory_delete`.
+     *Überholt (Abschnitt 21):* `memory_delete` gibt es nicht mehr, Löschen heißt jetzt
+     Stilllegen (`memory_retire`/`memory_restore`), und Einträge tragen `origin` und `edited_at`.
    - Tool **`memory`**: `action` add|list|forget, `kind` fact|preference|event|project|news,
      `scope` user|agent|session. Ausführung liegt bewusst in `engine/mod.rs` (`memory_tool`),
      damit `tools.rs` speicherfrei bleibt.
@@ -457,6 +459,8 @@ Key aus dem OS-Schlüsselbund).
      (bis 40 Einträge) an den Systemprompt und stempelt `last_used_at`.
    - **UI:** neuer Work-Area-Tab **„Gedächtnis"** (`MemoryTab.vue`, Toolbar-Button mit
      Sparkle-Icon) — Einträge mit Scope/Kind/Datum und Entfernen-Knopf.
+     *Überholt (Abschnitt 21):* der Tab ist weg, die Einsicht sitzt in Einstellungen →
+     Personalisierung (`MemoryPanel.vue`).
    - Rationale: `kind`/`scope` statt Freitext, damit die Kuration (Punkt 6) etwas zu
      greifen hat.
    - Evidenz: `cargo test` → `db::tests::memories_round_trip` ok (insert/list/context/
@@ -467,6 +471,7 @@ Key aus dem OS-Schlüsselbund).
      stale }`. Duplikate = gleicher Text nach Normalisierung (Whitespace + Groß/Klein);
      behalten wird der älteste Eintrag. `stale` = **nie benutzt** und älter als die Frist
      (30 Tage). Kommandos `memory_report`, `memory_prune(ids)`.
+     *Überholt (Abschnitt 21):* `memory_prune` löscht nichts mehr, es legt still.
    - Tool `memory` hat jetzt `action: "curate"` — der Partner kann den Bericht selbst
      anfordern und dann **gezielt** mergen oder vergessen.
    - UI: im Gedächtnis-Tab ein **Prüfen**-Knopf (Sparkle). Der Bericht erscheint als Karte
@@ -827,3 +832,95 @@ Sitzung/Tabs/Datei: gehören in die `settings`-Tabelle bzw. in eine kleine
    - Löschen als **Stilllegen**, nicht physisch entfernen.
    - Gedächtnis-Einsicht wandert dafür aus dem Work-Area-Tab nach
      Einstellungen → „Konto & Modell" bzw. „Personalisierung".
+
+→ Punkte 1–4 sind in Abschnitt 21 abgearbeitet.
+
+## 21. Persistenz, Vorschauen, Gedächtnis (2026-10-16)
+
+Fünf Commits, einer pro Punkt, in der Reihenfolge der Liste aus §20: `05a5165`
+(Fenster), `de8b120` (UI-Zustand), `b5b9552` (Folien), `0769925` (SheetJS),
+`92bfc5f` (Gedächtnis).
+
+### Was jetzt persistiert wird (Stand nach dieser Runde)
+| Zustand | gespeichert? | wo |
+|---|---|---|
+| Panel-Breiten (links/rechts), Seitenleiste eingeklappt | **ja** | `localStorage` `ds-ide.ui.v2` |
+| Work-Area sichtbar, offene Tabs, aktiver Tab, zuletzt geöffnete Datei | **ja** | `settings`-Tabelle, Schlüssel `ui.workarea` |
+| Aktive Sitzung | **ja** | `settings`-Tabelle, Schlüssel `ui.activeSession` |
+| Fenstergröße/-position/maximiert | **ja** | `.window-state.json` im Konfigverzeichnis |
+| Arbeitsverzeichnis, Anzeigename, Modell, Toggles, Sprache | **ja** | `settings`-Tabelle |
+
+- **Fenster**: `tauri-plugin-window-state`, aber mit Absicht nur
+  `SIZE | POSITION | MAXIMIZED`. `VISIBLE` fehlt, weil sonst die Fensterlage vor dem
+  Splash entscheidet, wann das Hauptfenster erscheint; das Splash-Fenster steht auf
+  der Denylist, damit sein Rechteck nicht in die Datei wandert.
+- **Sitzung/Tabs/Datei**: `src/lib/uiState.ts` schreibt `ui.*`-Schlüssel, entprellt
+  und fehlertolerant — ein gemerkter Tab darf keinen Klick aufhalten. Der alte
+  localStorage-Schlüssel `ds-ide.workarea` wird einmal importiert und gelöscht.
+  Wiederherstellen repariert statt zu scheitern: unbekannte Tab-Arten, Duplikate
+  und ein veralteter aktiver Tab werden verworfen, und der bereinigte Zustand wird
+  zurückgeschrieben.
+
+### Verifikation (nicht nur Build)
+- Fenster: auf 1100×650 bei 200,180 gezogen, beendet, neu gestartet — kam genau dort
+  zurück (X11-Lauf, `xdotool getwindowgeometry`).
+- UI-Zustand: eine absichtlich falsche Sitzungs-ID wurde beim Start durch die echte
+  neueste ersetzt (also schreibt die App wirklich), der alte localStorage-Schlüssel
+  verschwand und wurde als `ui.workarea` in die Datenbank übernommen, und eine
+  kaputte Tab-Liste kam als „progress + memory" mit repariertem aktivem Tab zurück.
+- `cargo test`: 17 grün, 9 ignoriert. Neu: Stilllegen/Zurückholen-Runde, der
+  `origin`-Marker, der Recall-Text und die Migration einer alten `memories`-Tabelle.
+
+### Vorschauen
+- **`pptx` ist jetzt lesbar**: `jszip` entpackt, `ppt/slides/slideN.xml` liefert
+  Absätze; jede Folie wird eine Karte mit Titel und Text, numerisch sortiert,
+  Folien ohne Text fallen weg. Ehrlich Text, kein Layout — es sieht aus wie eine
+  Folienliste, weil es eine ist. Geprüft mit einem künstlichen Deck (escapte
+  `<script>`-Tags, Emoji, textlose Folie, Folie 10 nach Folie 3) und mit einem
+  echten 12-Folien-Canva-Export.
+- **`xlsx` läuft auf dem offiziellen SheetJS-Build** (0.20.3 vom cdn, nicht npm).
+  `pnpm audit`: vorher 5 Verwundbarkeiten (2 low, 1 moderate, 2 high — beide hoch
+  betrafen `xlsx`), nachher 3 (2 low, 1 moderate). Die Tabelle rendert unverändert;
+  geprüft mit einem echten Bewertungsraster. Upgrades kommen künftig von
+  `cdn.sheetjs.com`, nicht aus der npm-Registry.
+- **`doc`/`ppt`/`odp`** bleiben draußen — klare Meldung, kein Buchstabensalat.
+
+### Companion-System
+- Die Gedächtnis-Einsicht ist aus dem Work-Area-Tab nach **Einstellungen →
+  Personalisierung** gewandert; Tab, Toolbar-Knopf und `MemoryTab.vue` sind weg.
+- `memories` hat `origin` (`seeky` | `user`), `edited_at` und `retired_at`.
+  Schreibt der Nutzer im Panel einen Eintrag um, wird er markiert; im Recall steht
+  dann `(changed by the user)`, und die Persona erklärt, dass das die Worte des
+  Nutzers sind. Korrigiert Seeky sich selbst, fällt der Marker wieder weg — er
+  hängt am Text, nicht an der Zeile.
+- **Nichts wird mehr gelöscht**: Stilllegen setzt `retired_at`, der Eintrag
+  verschwindet aus Recall und Liste und liegt im Panel unter „Stillgelegt", von wo
+  er zurückgeholt werden kann. Auch der Kurations-Lauf legt nur still.
+- Persona und Recall sagen jetzt *Partner* und nennen die Bereiche in Worten
+  (`[you]` / `[user]` / `[session]`) statt der Rohwerte aus der Datenbank.
+- Geprüft: an der echten Datenbank kamen alte Zeilen als `seeky`-Einträge zurück,
+  ein umgeschriebener Eintrag erschien als „von dir geändert" neben „Stillgelegt (1)",
+  und die Schreibwege liefen über genau die `invoke`-Aufrufe des Panels.
+
+### Lernnotiz: synthetische Eingaben erreichen diese App nicht
+Der Rechner hier ist KDE Plasma auf Wayland. XWayland lässt den Zeiger nicht
+bewegen (`xdotool mousemove` bleibt bei 1920,0 stehen), und `xdotool key` kommt
+auch nach `windowfocus` nicht in der Webview an. Klicks und Tasten sind von außen
+also nicht zu setzen. Konsequenz für Prüfungen: Zustand über die Datenbank setzen
+und das Ergebnis im Screenshot ansehen, oder die Aufrufe des Panels aus der App
+selbst auslösen (temporär, danach zurückgenommen). Die Knöpfe des Gedächtnis-Panels
+sind deshalb *nicht* mit der Maus durchgeklickt — gesagt, damit es niemand für
+erledigt hält, der es nicht ist.
+
+### Offene Punkte
+1. **`doc`/`ppt`/`odp`** brauchen einen Konverter; `odp` wäre am ehesten machbar
+   (ebenfalls ein Zip, `content.xml` mit `draw:page`).
+2. Tabellen zeigen nur das **erste** Blatt, ohne Formeln und Formatierung.
+3. Zwei Advisory-Reste außerhalb des Themas: `dompurify` in `monaco-editor` (low,
+   gepatchte Version wäre ≥ 3.4.16) und ein transitives `sprintf-js` (moderate).
+4. Gedächtnis: der Nutzer kann Einträge **bearbeiten und stilllegen, aber noch
+   keinen neuen anlegen** — der Weg „Nutzer schreibt eine Notiz" fehlt.
+5. Gedächtnis-Einsicht sitzt unter *Personalisierung*; „Konto & Modell" ist
+   unberührt geblieben.
+6. Folien: reiner Text. Bilder, Notizen und Reihenfolge der Formen bleiben außen vor.
+
