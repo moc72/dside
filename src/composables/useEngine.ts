@@ -274,7 +274,7 @@ export async function loadSessions(): Promise<void> {
 
 export async function loadHistory(sessionId: string): Promise<void> {
   const rows = await invoke<DbHistoryRow[]>("session_history", { sessionId });
-  messagesBySession[sessionId] = rows.map((row) => {
+  messagesBySession[sessionId] = rows.filter(hasSomethingToSay).map((row) => {
     const tools = row.tools.map(
       (tool): ToolActivity => ({
         id: tool.id,
@@ -293,6 +293,19 @@ export async function loadHistory(sessionId: string): Promise<void> {
       parts: timelineFor(row, tools),
     };
   });
+}
+
+/**
+ * A turn that was cut off — the app closed while the model was still answering — leaves an
+ * assistant row that was created but never filled. Reloading showed it as an empty bubble.
+ */
+function hasSomethingToSay(row: DbHistoryRow): boolean {
+  if (row.role === "user") return true;
+  if (row.text.trim().length > 0) return true;
+  if (row.tools.length > 0) return true;
+  // An empty timeline is `[]`, which is as good as none.
+  const parts = row.parts?.trim();
+  return Boolean(parts && parts !== "[]");
 }
 
 /**
