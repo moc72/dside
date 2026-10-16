@@ -245,9 +245,9 @@ export const fr: Messages = {
     general: {
       mode: "Mode",
       modeCodingTitle: "Pour la programmation",
-      modeCodingDesc: "Plus de détails et d'outils de développement",
+      modeCodingDesc: "L'ensemble complet : shell, revue de code, sous-agents, panneaux plan et compétences, code dans l'éditeur.",
       modeEverydayTitle: "Pour le quotidien",
-      modeEverydayDesc: "Même performance, affichage plus simple",
+      modeEverydayDesc: "Pour les documents et le web : pas de shell ni de panneaux de code, fichiers en texte brut.",
       application: "Application",
       appearance: "Apparence",
       appearanceDesc: "Choisissez le thème d'affichage de l'application",

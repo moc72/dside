@@ -244,9 +244,9 @@ export const de = {
     general: {
       mode: "Modus",
       modeCodingTitle: "Für Programmierung",
-      modeCodingDesc: "Mehr Details und Entwicklerwerkzeuge",
+      modeCodingDesc: "Voller Werkzeugsatz: Shell, Code-Review, Sub-Agenten, Plan- und Skill-Panels, Quelltext im Code-Editor.",
       modeEverydayTitle: "Für den Alltag",
-      modeEverydayDesc: "Gleiche Leistung, einfachere Ansicht",
+      modeEverydayDesc: "Für Dokumente und Web: keine Shell und keine Code-Panels für den Begleiter, Dateien als schlichter Text.",
       application: "Anwendung",
       appearance: "Erscheinungsbild",
       appearanceDesc: "Wähle das Anzeigethema der Anwendung",

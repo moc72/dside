@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import Icon from "../Icon.vue";
 import FileTree from "../FileTree.vue";
 import MonacoEditor from "../MonacoEditor.vue";
+import { everydayMode } from "../../engine/mode";
 import PdfView from "./PdfView.vue";
 import { t } from "../../i18n";
 import type { FileNode } from "../../types";
@@ -189,6 +190,9 @@ async function toggle(node: FileNode) {
           <p>{{ t("viewFile.unsupported") }}</p>
         </div>
 
+        <!-- Everyday mode shows the text itself: no code editor, no syntax machinery. -->
+        <pre v-else-if="everydayMode" class="plain">{{ content }}</pre>
+
         <MonacoEditor
           v-else
           :path="selectedPath"
@@ -260,6 +264,19 @@ async function toggle(node: FileNode) {
   background: var(--bg);
   display: flex;
   flex-direction: column;
+}
+
+.plain {
+  margin: 0;
+  padding: 14px 16px;
+  overflow: auto;
+  height: 100%;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .viewer > .monaco-editor {

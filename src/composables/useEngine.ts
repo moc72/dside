@@ -20,6 +20,7 @@ import {
 import { defaultModelFor, settings } from "../stores/settings";
 import { ensureWorkspace } from "./useWorkspace";
 import { buildPersona } from "../engine/persona";
+import { EVERYDAY_DISABLED_TOOLS, everydayMode } from "../engine/mode";
 import { partnerName, refreshPartnerName } from "../stores/partner";
 import { loadModels } from "../stores/models";
 import { saveUiState } from "../lib/uiState";
@@ -129,6 +130,8 @@ export async function configureEngine(): Promise<void> {
       fullAuthorization: settings.fullAuthorization,
       maxTurns: 24,
       reasoningEffort: settings.reasoningEffort || null,
+      // Everyday mode takes the shell, code review and sub-agents away from the partner.
+      disabledTools: everydayMode.value ? [...EVERYDAY_DISABLED_TOOLS] : [],
     },
   });
   await refreshSecret();

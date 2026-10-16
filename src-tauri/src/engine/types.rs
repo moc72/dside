@@ -24,6 +24,10 @@ pub struct EngineConfig {
     /// "whatever the provider does by default", which is the honest default for us too.
     #[serde(default)]
     pub reasoning_effort: Option<String>,
+    /// Tools the mode takes away. They are not offered to the model, and a call that arrives
+    /// anyway is refused instead of quietly running.
+    #[serde(default)]
+    pub disabled_tools: Vec<String>,
 }
 
 fn default_base_url() -> String {

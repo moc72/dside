@@ -243,9 +243,9 @@ export const zhHans: Messages = {
     general: {
       mode: "模式",
       modeCodingTitle: "用于编程",
-      modeCodingDesc: " mehr Details und Entwicklerwerkzeuge",
+      modeCodingDesc: "完整工具集：Shell、代码评审、子代理、计划与技能面板、代码编辑器。",
       modeEverydayTitle: "用于 den Alltag",
-      modeEverydayDesc: "同等性能，更简洁的视图",
+      modeEverydayDesc: "面向文档与网页：伙伴不使用 Shell 与代码面板，文件以纯文本显示。",
       application: "应用程序",
       appearance: "外观",
       appearanceDesc: "选择应用的显示主题",

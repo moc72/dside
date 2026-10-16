@@ -7,6 +7,7 @@ import { settings } from "../stores/settings";
 import { openTab, toggleWorkArea } from "../stores/workArea";
 import { toggleWeb } from "../stores/ui";
 import { activeEditor, detectEditors, detecting, editors, useEditors } from "../composables/useEditors";
+import { everydayMode } from "../engine/mode";
 
 const EDITOR_DOWNLOAD_URL = "https://code.visualstudio.com/download";
 
@@ -33,7 +34,8 @@ async function openDownload() {
 
 <template>
   <div class="toolbar">
-    <div class="editor-wrap">
+    <!-- Everyday mode has no code editor to hand things to, so the picker goes away. -->
+    <div v-if="!everydayMode" class="editor-wrap">
       <button class="editor" type="button" @click="menuOpen = !menuOpen">
         <span class="logo">&lt;/&gt;</span>
         <span class="label">

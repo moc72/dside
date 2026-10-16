@@ -243,9 +243,9 @@ export const ru: Messages = {
     general: {
       mode: "Режим",
       modeCodingTitle: "Для программирования",
-      modeCodingDesc: "Больше деталей и инструменты для разработки",
+      modeCodingDesc: "Полный набор: оболочка, code review, подагенты, панели плана и навыков, исходники в редакторе.",
       modeEverydayTitle: "Для ежедневного использования",
-      modeEverydayDesc: "То же функционал, более простой интерфейс",
+      modeEverydayDesc: "Для документов и веба: без оболочки и код-панелей, файлы как простой текст.",
       application: "Приложение",
       appearance: "Внешний вид",
       appearanceDesc: "Выберите тему отображения приложения",

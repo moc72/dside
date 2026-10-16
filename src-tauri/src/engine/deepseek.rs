@@ -212,6 +212,7 @@ mod live {
             full_authorization: true,
             max_turns: 2,
             reasoning_effort: None,
+            disabled_tools: Vec::new(),
         })
     }
 

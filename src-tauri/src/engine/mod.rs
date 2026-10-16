@@ -686,6 +686,7 @@ mod tests {
             full_authorization: true,
             max_turns: 4,
             reasoning_effort: None,
+            disabled_tools: Vec::new(),
         })
     }
 
@@ -878,15 +879,23 @@ async fn run_turn(
         .try_state::<Db>()
         .and_then(|db| db.partner_name().ok().flatten())
         .is_some();
+    let disabled: Vec<String> = config
+        .disabled_tools
+        .iter()
+        .map(|name| name.trim().to_lowercase())
+        .collect();
     let definitions: Vec<Value> = tools::definitions()
         .into_iter()
         .filter(|definition| {
-            let is_name_tool = definition
+            let name = definition
                 .get("function")
                 .and_then(|function| function.get("name"))
-                .and_then(Value::as_str)
-                == Some("choose_name");
-            named || !is_name_tool
+                .and_then(Value::as_str);
+            // The name can only be chosen once, and the mode decides what else is on offer.
+            if name == Some("choose_name") && named {
+                return false;
+            }
+            !name.map(|name| disabled.contains(&name.to_lowercase())).unwrap_or(false)
         })
         .collect();
     let mut todos: Vec<Value> = Vec::new();
@@ -1033,7 +1042,17 @@ async fn run_turn(
             emit(app, start);
 
             let started = std::time::Instant::now();
-            let tool_outcome = if call.function.name == "memory" {
+            let tool_outcome = if config
+                .disabled_tools
+                .iter()
+                .any(|name| name.eq_ignore_ascii_case(&call.function.name))
+            {
+                // Not offered in this mode — and if a model asks anyway, it is told so.
+                tools::ToolOutcome::err(format!(
+                    "{} is not available in this mode",
+                    call.function.name
+                ))
+            } else if call.function.name == "memory" {
                 memory_tool(app, &arguments)
             } else if call.function.name == "name_ideas" {
                 let ideas = crate::search_names(

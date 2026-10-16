@@ -5,6 +5,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import Icon from "./Icon.vue";
 import { t } from "../i18n";
 import { deepSeekMark } from "./deepseek-mark";
+import { everydayMode } from "../engine/mode";
 import { links } from "../engine/links";
 import type { Session, SessionGroup } from "../types";
 import { activeSessionId, sessions } from "../stores/sessions";
@@ -111,12 +112,19 @@ async function archiveSession(session: Session) {
   await loadSessions();
 }
 
-const primaryItems = [
+const ALL_PRIMARY_ITEMS = [
   { icon: "plus", key: "nav.newTask", soon: false },
   { icon: "search", key: "nav.search", soon: false },
   { icon: "grid", key: "nav.skills", soon: false },
   { icon: "clock", key: "nav.scheduled", soon: false },
 ] as const;
+
+/** Everyday mode leaves out the skills and schedules entries. */
+const primaryItems = computed(() =>
+  everydayMode.value
+    ? ALL_PRIMARY_ITEMS.filter((item) => item.key === "nav.newTask" || item.key === "nav.search")
+    : ALL_PRIMARY_ITEMS,
+);
 
 const sectionOrder: SessionGroup[] = ["pinned", "scheduled", "project", "team"];
 

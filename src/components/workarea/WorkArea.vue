@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, watch } from "vue";
 import Icon from "../Icon.vue";
 import { t } from "../../i18n";
 import type { WorkAreaTabKind } from "../../types";
@@ -7,6 +8,7 @@ import ProgressTab from "./ProgressTab.vue";
 import ViewFileTab from "./ViewFileTab.vue";
 import SkillsTab from "./SkillsTab.vue";
 import SchedulesTab from "./SchedulesTab.vue";
+import { EVERYDAY_HIDDEN_TABS, everydayMode } from "../../engine/mode";
 
 const labels: Record<
   WorkAreaTabKind,
@@ -20,13 +22,33 @@ const labels: Record<
   skills: "workArea.tabSkills",
   schedules: "workArea.tabSchedules",
 };
+
+/** Everyday mode keeps the plan, skill and schedule panels out of the way. */
+const shownTabs = computed(() =>
+  everydayMode.value
+    ? tabs.value.filter((tab) => !EVERYDAY_HIDDEN_TABS.includes(tab.kind as never))
+    : tabs.value,
+);
+
+// If the open tab is one this mode hides, move to the file tab rather than showing nothing.
+watch(
+  [everydayMode, () => activeTab.value?.kind],
+  () => {
+    const kind = activeTab.value?.kind;
+    if (!kind) return;
+    if (everydayMode.value && EVERYDAY_HIDDEN_TABS.includes(kind as never)) {
+      activateTab("file");
+    }
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
   <aside class="work">
     <div class="tabbar">
       <button
-        v-for="tab in tabs"
+        v-for="tab in shownTabs"
         :key="tab.id"
         class="tab"
         :class="{ active: tab.id === activeTab?.id }"
