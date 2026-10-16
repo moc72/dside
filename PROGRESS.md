@@ -1115,3 +1115,52 @@ Werkzeugaufruf durch, ohne dass jemand tippen musste. Wichtig dabei: den Auftrag
 **ohne Backticks** in die Datenbank schreiben — die Shell frisst sie sonst als
 Befehlssubstitution und der Prompt kommt verstümmelt an (was der erste Testlauf
 prompt auch getan hat; das Modell hat es bemerkt und angesagt).
+
+## 25. Optik-Runde: Werkzeugzeilen, Kontext, Markdown (2026-10-16, fünfte Runde)
+
+Commit `ddf70e0`. Alles hier kam aus den Screenshots und Beobachtungen des Nutzers.
+
+### Antworten auf seine zwei Fragen
+1. **Gab es eine Kontext-Anzeige?** Nein. Die `usage`-Events kommen aus dem Rust-Kern
+   (`prompt_tokens`, `completion_tokens`, `total_tokens` pro Runde), das Frontend hat sie
+   aber nie gelesen — sie fielen im `handleEvent` in den `default`-Zweig. Und **eine
+   Kompression gibt es gar nicht**: der Verlauf wird bei jeder Anfrage vollständig
+   mitgeschickt, nichts wird zusammengefasst. Anklicken konnte man also nie etwas.
+2. **Der Chevron im Titel?** Tote Dekoration aus dem MiniMax-Layout, ohne Handler. Das
+   hat er richtig gespürt.
+
+### Was jetzt da ist
+- **Werkzeugzeilen sind aufklappbar.** Zugeklappt: Name, Status, Dauer. Aufgeklappt: der
+  Befehl, seine Ausgabe, und — wenn „Volle Berechtigung" an ist — der Satz „Ohne
+  Rückfrage ausgeführt". Genau der Verdacht („bash-Zugriff ohne Kontrolle?!") wird damit
+  beantwortet statt verdeckt. Vorlage war Kilos Darstellung.
+- **Eine Spalte, 980 px.** Der Chat ist zentriert und begrenzt, die Eingabe wächst auf bis
+  zu zehn Zeilen (vorher eine), der Nutzer bekommt 75 % der Spalte, die Antwort alles.
+- **Antworten werden als Markdown gerendert** (über `renderMarkdown`, also durch
+  DOMPurify; einfache Zeilenumbrüche zählen). Das war der Nebenfund: In seinem Screenshot
+  stand wörtlich `**25 Dateien**` und ein sichtbarer ```sh-Block. Die Worte des Nutzers
+  bleiben unverändert stehen.
+- **Sitzungstitel** in der Seitenleiste enden mit „…" statt auszulaufen.
+- **Der Titel ist jetzt der Sitzungswechsler**: Klick öffnet die Liste, Klick wechselt.
+  Wichtig, wenn die Seitenleiste eingeklappt ist — dann gab es vorher gar keinen Weg.
+- **Kontext-Ring** im Composer: Anteil, den die letzte Anfrage vom Kontextfenster belegt
+  (`prompt_tokens` aus dem Anbietersignal, Fenstergröße aus der Modellliste). Mouseover
+  nennt Token und Prozent, der Wert überlebt einen Neustart (`ui.lastUsage`). **Klickbar
+  ist er nicht** — er würde eine Kompression auslösen, die es nicht gibt (§25.1).
+
+### Offene Punkte
+1. **Kompression** (manuell per Klick auf den Ring, oder automatisch ab einem Schwellwert)
+   — eigenes Vorhaben: Verlauf zusammenfassen, Zusammenfassung speichern und statt der
+   alten Nachrichten mitschicken. Der Ring ist die Anzeige dafür.
+2. **Bildanhänge**: Der Composer hat einen Anhang-Knopf ohne Funktion. Gewünschte Form
+   steht fest (Anhänge **über** der Textarea, Textarea wächst darunter auf zehn Zeilen).
+3. „Alltag"-Modus: Werkzeugliste weiterhin unbestätigt.
+4. Ein abgebrochener Turn hinterlässt eine leere Blase (§24).
+5. Zwischenablage des Nutzers: Klipper/Wayland nach dem CachyOS-Update, vermutlich auch
+   Flameshot beteiligt — Systemthema, nicht DS.IDE. Bilder kamen zeitweise an.
+
+### Lernnotiz
+Aufklappbare Oberflächen lassen sich ohne Maus prüfen, wenn man `isOpen()` kurz auf `true`
+stellt, fotografiert und zurücknimmt — im Baum bleibt nichts zurück (geprüft mit
+`grep TEMP-VERIFY`). Und: Aufträge für den Scheduler **ohne Backticks** in die Datenbank
+schreiben, die Shell frisst sie als Befehlssubstitution.
