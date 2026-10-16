@@ -1054,3 +1054,64 @@ davon nichts übrig (`git status` sauber).
 5. Zweite Runde Prozess-Aufräumen: `background_process stop` beendet nicht immer
    den ganzen Baum (`tauri dev` → vite + App blieben stehen) und blockierte
    danach Port 1420. Seitdem: PIDs explizit sammeln und `kill -9`.
+
+## 24. Eine Antwort ist eine Zeitleiste (2026-10-16, vierte Runde)
+
+Commit `35ac5c0`.
+
+### Der Bericht des Nutzers, in seiner Reihenfolge
+1. bash-Aufrufe zuerst sichtbar.
+2. dann die Antwort **über** der Anzeige der bash-Aufrufe.
+3. danach eine Antwortenauswahl (`ask_user`), User-Prompt deaktiviert.
+4. Eingabe der freien Antwort im Frage-Menü.
+5. danach hängen sich neue bash-Aufrufe **unter** die bestehenden, und die
+   Textantwort hängt sich an die bestehende Antwort an, statt eine neue zu sein.
+
+### Ursache: das Datenmodell, nicht der Renderer
+`ChatMessage` hatte `text` (String), `reasoning` (String) und `tools` (Array) —
+drei getrennte Felder ohne Reihenfolge. Die Liste zeichnete immer DENKEN → Text →
+Werkzeuge. Alles, was später kam, landete dadurch falsch: späterer Text über den
+früheren Werkzeugen, und eine zweite Runde wuchs in denselben String.
+
+Jetzt ist eine Antwort eine **geordnete Liste von Teilen**
+(`MessagePart`: `reasoning` | `text` | `tool`), gefüllt in der Reihenfolge der
+Ereignisse, und die Liste rendert genau diese Liste. Geprüft live in einer
+frischen Sitzung mit einem echten Turn:
+`DENKEN → ✔ bash fertig 1773ms → DENKEN → Text` — dieselbe Reihenfolge, die in
+der Datenbank steht.
+
+### Zwei weitere Fehler, die beim Prüfen auffielen
+- **Turns außerhalb des Composers waren unsichtbar.** Ein geplanter Auftrag
+  schreibt direkt über `send_prompt`; geöffnet wird eine Antwort aber nur im
+  Frontend-Pfad (`beginAssistantMessage`). Die Ereignisse des Laufs kamen also
+  an, fielen aber weg — die Antwort war erst nach einem Neustart zu sehen. Jetzt
+  öffnet das erste Ereignis eines Turns die Antwort (`ensureAssistantMessage`).
+- **Der Verlauf hatte mehr Blasen als die Live-Ansicht**, weil die Datenbank pro
+  Runde eine Assistentenzeile schrieb. Jetzt ist ein Turn eine Zeile, vorab
+  angelegt und beim Wachsen aktualisiert (`messages.parts`). Alte Zeilen haben
+  keine Zeitleiste und fallen auf Text-dann-Werkzeuge zurück.
+
+### Was der Nutzer dazu wissen sollte
+Ein Turn, der auf `ask_user` wartet, ist **derselbe** Turn: die Antwort setzt
+ihn fort, deshalb läuft der Text nach der Auswahl in derselben Antwort weiter —
+nur jetzt an der richtigen Stelle in der Zeitleiste. Wenn daraus eine eigene
+Antwort werden soll, ist das eine bewusste Änderung am Ablauf, kein Fehler.
+
+### Offene Punkte
+1. Ein abgebrochener Turn (App beendet mitten im Lauf) hinterlässt eine leere
+   Assistentenzeile — sichtbar als leere Blase. Sollte beim Laden übersprungen
+   werden.
+2. Der Nutzer kann den Verlauf nicht durchsuchen/springen; bei langen Antworten
+   hilft nur Scrollen.
+3. Bildanhänge (offen aus §23) — die kaputte Zwischenablage im CachyOS des
+   Nutzers ist ein Systemthema (Klipper/Wayland nach dem Update), nicht DS.IDE.
+4. Konsole (offen aus §23).
+
+### Lernnotiz
+Verifikation ohne Tastatur: den echten Turn über die `schedules`-Tabelle
+auslösen (`next_run_at` in die nahe Zukunft, Sitzung = aktive Sitzung), die App
+starten und den Chat fotografieren. Damit lief ein vollständiger Turn mit
+Werkzeugaufruf durch, ohne dass jemand tippen musste. Wichtig dabei: den Auftrag
+**ohne Backticks** in die Datenbank schreiben — die Shell frisst sie sonst als
+Befehlssubstitution und der Prompt kommt verstümmelt an (was der erste Testlauf
+prompt auch getan hat; das Modell hat es bemerkt und angesagt).
