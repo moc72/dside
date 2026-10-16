@@ -1199,3 +1199,49 @@ Vorschlag ist und ein eigener Einfall ausdrücklich erlaubt bleibt.
 Unverändert §25 (Kompression hinter dem Ring, Bildanhänge, Alltagsmodus,
 leere Blase nach Abbruch). Neu: Wird irgendwann ein anderer Name gewünscht, ist
 das eine bewusste Datenbankänderung, kein Menüpunkt — so war es bestellt.
+
+## 27. Namen mit Bedeutung (2026-10-16, siebte Runde)
+
+Commit `f7478be`. Aus der Rückfrage des Nutzers: „nomen est omen" — Namen sind
+keine Bezeichnungen, sie haben eine Bedeutung, und eine Liste hübscher Silben
+macht die Wahl beliebig.
+
+### Was geändert wurde
+`src/engine/names.ts` ist aus einer Liste von Zeichenketten zu **Daten mit
+Bedeutung** geworden: `{ name, origin, de, en }`. 96 Einträge, jeder mit
+Herkunftssprache und einer kurzen Bedeutung auf Deutsch und Englisch (den zwei
+Sprachen, in denen dieses Projekt benutzt wird; die übrigen vier
+Sprachkataloge fallen auf Englisch zurück — bewusst, das wäre sonst 96 × 6).
+
+- Die **Persona** übergibt die Liste als `Name (Herkunft) — Bedeutung` und sagt
+  ausdrücklich: nach Bedeutung wählen, nicht nach Klang. Wo eine Etymologie
+  strittig ist, steht das dabei („unsicher", „origin disputed") statt erfundener
+  Sicherheit.
+- Die **Begleiterseite** zeigt die Bedeutung des gewählten Namens und auf jedem
+  Vorschlag die Bedeutung beim Überfahren.
+- **Ziggy** ist selbst ein Eintrag geworden: „Koseform von Siegfried/Sigmund:
+  Sieg und Schutz". Damit steht auch hinter dem gewählten Namen eine Bedeutung,
+  und die Liste markiert ihn als vergeben.
+
+### Warum die Daten NICHT von der Namensseite kommen
+Der Nutzer hat die Beispielseite verlinkt (und später eine Seite ihrer Daten
+eingefügt). Diese Tabellen sind eine **geschützte Sammlung** (FUNKE
+Mediengruppe) — sie zu übernehmen wäre das Kopieren einer Datenbank. Zweitens
+ist die Qualität durchwachsen, was die Seite selbst zeigt: leere
+Bedeutungsspalten, „Bedeutung nicht sicher", Varianten und Sonderzeichen. Eine
+Tatsache über einen Namen lässt sich in eigenen Worten sagen; 96 davon sind
+geschrieben, hunderttausend nicht.
+
+### Wenn es doch eine große Namensdatenbank werden soll
+Zwei Wege, beide ehrlich:
+1. **Lizenzierte Quelle** (Wiktionary/Wikipedia-Dumps unter CC BY-SA mit
+   Namensnennung, oder ein CC0/MIT-Datensatz von GitHub) — dann mit
+   Quellenangabe auf der Über-Seite.
+2. **Kuratiert bleiben** und nur wachsen, wenn ein Name wirklich zur Wahl steht.
+Für den Zweck, den die Liste hat (der Begleiter wählt **einen** Namen), ist (2)
+richtig. Für einen Namensgenerator für den Nutzer wäre (1) der Weg — das ist
+dann aber ein eigenes Vorhaben mit eigener Oberfläche.
+
+### Offene Punkte
+Unverändert §25/§26 (Kompression hinter dem Ring, Bildanhänge, Alltagsmodus,
+leere Blase nach Abbruch, vier Sprachkataloge ohne Namensbedeutungen).

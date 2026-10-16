@@ -1,6 +1,7 @@
 /**
- * Names the partner may pick from when it decides to stop being a placeholder — with what they
- * mean. A name is not a label: `nomen est omen`, and a list of pretty syllables would make the
+ * The pool of names for the partner — with what they mean. It includes the one it eventually
+ * took (Ziggy, which the user suggested on the first day), so the partner page can show what
+ * that name means and mark it as taken. A name is not a label: `nomen est omen`, and a list of pretty syllables would make the
  * choice arbitrary. Each entry carries the language it comes from and a short meaning, and says
  * so when the etymology is disputed instead of inventing certainty.
  *
@@ -116,5 +117,6 @@ export const PARTNER_NAME_CHOICES: readonly PartnerNameChoice[] = [
   { name: "Yara", origin: "Arabic", de: "der kleine Schmetterling", en: "the small butterfly" },
   { name: "Ylva", origin: "Old Norse", de: "die Wölfin", en: "the she-wolf" },
   { name: "Zeno", origin: "Greek", de: "der von Zeus Gegebene", en: "given by Zeus" },
+  { name: "Ziggy", origin: "Germanic", de: "Koseform von Siegfried/Sigmund: Sieg und Schutz", en: "pet form of Siegfried/Sigmund: victory and protection" },
   { name: "Zusa", origin: "German", de: "Koseform von Susanne: „die Lilie“", en: "pet form of Susanne: the lily" },
 ];
