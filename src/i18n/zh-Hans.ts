@@ -146,6 +146,8 @@ export const zhHans: Messages = {
     unsupported: "无法预览此格式。",
     slide: "第 {n} 张幻灯片",
     textOnly: "仅文本——缺少版式、图片与格式。",
+    values: "数值",
+    formulas: "公式",
     moreLines: "… 另有 {n} 行未显示",
     moreSheets: "… 另有 {n} 个工作表未显示",
     noText: "此文件中没有找到文本。",
@@ -298,6 +300,7 @@ export const zhHans: Messages = {
   partner: {
     hint: "你的伙伴，而不是工具：它记住什么、叫什么名字、你交给它哪些长期要求。",
     name: "名字",
+    meaningZiggy: "Siegfried／Sigmund 的昵称：胜利与守护",
     placeholder: "（占位名）",
     nameChosen: "这个名字是它自己选的——只有一次，且不再更改。",
     nameOpen: "你的伙伴还没有选名字。这由它独自决定，且不可更改——不接受外部建议。",

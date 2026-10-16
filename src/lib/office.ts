@@ -28,7 +28,48 @@ export async function renderDocx(base64: string): Promise<string> {
  * work is. The number of rows per sheet shrinks as the number of sheets grows, so a workbook
  * with forty sheets cannot flood the viewer.
  */
-export function renderSheet(base64: string): string {
+export type SheetView = "values" | "formulas";
+
+/** One sheet as rows of text: what the cell shows, or what was typed into it. */
+function sheetRows(
+  sheet: XLSX.WorkSheet,
+  view: SheetView,
+  rowsPerSheet: number,
+): string[][] {
+  if (view === "values") {
+    return XLSX.utils
+      .sheet_to_json<unknown[]>(sheet, { header: 1, blankrows: false, defval: "" })
+      .slice(0, rowsPerSheet)
+      .map((row) => row.slice(0, MAX_COLUMNS).map((value) => String(value ?? "")));
+  }
+
+  // Formulas are not in the value-only view: read the cells themselves.
+  const reference = sheet["!ref"];
+  if (!reference) return [];
+  const range = XLSX.utils.decode_range(reference);
+  const lastRow = Math.min(range.e.r, range.s.r + rowsPerSheet - 1);
+  const lastColumn = Math.min(range.e.c, range.s.c + MAX_COLUMNS - 1);
+  const rows: string[][] = [];
+
+  for (let row = range.s.r; row <= lastRow; row += 1) {
+    const cells: string[] = [];
+    for (let column = range.s.c; column <= lastColumn; column += 1) {
+      const cell = sheet[XLSX.utils.encode_cell({ r: row, c: column })] as
+        | (XLSX.CellObject & { f?: string })
+        | undefined;
+      if (!cell) {
+        cells.push("");
+        continue;
+      }
+      if (cell.f) cells.push(`=${cell.f}`);
+      else cells.push(String(cell.w ?? cell.v ?? ""));
+    }
+    rows.push(cells);
+  }
+  return rows;
+}
+
+export function renderSheet(base64: string, view: SheetView = "values"): string {
   const workbook = XLSX.read(base64ToArrayBuffer(base64), { type: "array" });
   const names = workbook.SheetNames.slice(0, MAX_SHEETS);
   if (names.length === 0) return "";
@@ -40,28 +81,25 @@ export function renderSheet(base64: string): string {
     const sheet = workbook.Sheets[name];
     if (!sheet) continue;
 
-    const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
-      header: 1,
-      blankrows: false,
-      defval: "",
-    });
+    const rows = sheetRows(sheet, view, rowsPerSheet + 1).filter((row) =>
+      row.some((cell) => cell.trim().length > 0),
+    );
     if (rows.length === 0) continue;
 
-    const body = rows
-      .slice(0, rowsPerSheet)
+    const shown = rows.slice(0, rowsPerSheet);
+    const body = shown
       .map(
         (row) =>
           `<tr>${row
-            .slice(0, MAX_COLUMNS)
-            .map((value) => `<td>${escapeHtml(String(value ?? ""))}</td>`)
+            .map((value) => `<td>${escapeHtml(value)}</td>`)
             .join("")}</tr>`,
       )
       .join("");
 
     const truncated =
-      rows.length > rowsPerSheet
+      rows.length > shown.length
         ? `<p class="truncated">${escapeHtml(
-            t("viewFile.moreRows", { n: rows.length - rowsPerSheet }),
+            t("viewFile.moreRows", { n: rows.length - shown.length }),
           )}</p>`
         : "";
     const heading =

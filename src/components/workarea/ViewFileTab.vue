@@ -37,12 +37,23 @@ const editorTheme = computed(() => (resolvedTheme.value === "light" ? "vs" : "vs
 
 const kind = computed(() => (props.path ? previewKindFor(props.path) : "text"));
 const markdownMode = ref<"preview" | "source">("preview");
+
+/** Spreadsheets: the value a cell shows, or the formula that produced it. */
+const sheetView = ref<"values" | "formulas">("values");
+/** The file as it was read, so switching the view does not read it again. */
+const officeSource = ref<string | null>(null);
 const imageSrc = ref("");
 
 /**
  * Images come through Rust as base64 rather than through the asset protocol: the webview
  * blocks `asset://` requests from the dev-server origin ("protocols must match").
  */
+watch(sheetView, () => {
+  if (kind.value === "sheet" && officeSource.value) {
+    officeHtml.value = renderSheet(officeSource.value, sheetView.value);
+  }
+});
+
 watch(
   [() => props.path, kind],
   async ([path, currentKind]) => {
@@ -69,6 +80,12 @@ const officeHtml = ref("");
 /** The office family: each format has its own reader, none of them is plain text. */
 const OFFICE_KINDS = ["docx", "doc", "odt", "sheet", "rtf", "slides", "ppt", "odp"];
 
+watch(sheetView, () => {
+  if (kind.value === "sheet" && officeSource.value) {
+    officeHtml.value = renderSheet(officeSource.value, sheetView.value);
+  }
+});
+
 watch(
   [() => props.path, kind],
   async ([path, currentKind]) => {
@@ -78,10 +95,11 @@ watch(
     error.value = null;
     try {
       const base64 = await invoke<string>("read_file_base64", { path });
+      officeSource.value = currentKind === "sheet" ? base64 : null;
       if (currentKind === "docx") officeHtml.value = await renderDocx(base64);
       else if (currentKind === "doc") officeHtml.value = await renderLegacyWord(base64);
       else if (currentKind === "odt") officeHtml.value = await renderOdfText(base64);
-      else if (currentKind === "sheet") officeHtml.value = renderSheet(base64);
+      else if (currentKind === "sheet") officeHtml.value = renderSheet(base64, sheetView.value);
       else if (currentKind === "slides") officeHtml.value = await renderSlides(base64);
       else if (currentKind === "ppt") officeHtml.value = renderLegacySlides(base64);
       else if (currentKind === "odp") officeHtml.value = await renderOdfSlides(base64);

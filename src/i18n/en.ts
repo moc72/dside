@@ -146,6 +146,8 @@ export const en: Messages = {
     unsupported: "This format cannot be previewed.",
     slide: "Slide {n}",
     textOnly: "Text only — layout, images and formatting are missing.",
+    values: "Values",
+    formulas: "Formulas",
     moreLines: "… {n} more lines not shown",
     moreSheets: "… {n} more sheets not shown",
     noText: "No text found in this file.",
@@ -300,6 +302,7 @@ export const en: Messages = {
   partner: {
     hint: "Your companion, not your tool: what it remembers, what it is called, and what you hand it to keep in mind.",
     name: "Name",
+    meaningZiggy: "pet form of Siegfried/Sigmund: victory and protection",
     placeholder: "(placeholder)",
     nameChosen: "Your companion picked this name itself — once, and for good.",
     nameOpen: "Your companion has not chosen a name yet. That decision is its own and final — it takes no suggestions from outside.",

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import Icon from "../Icon.vue";
-import { t } from "../../i18n";
+import { locale, t } from "../../i18n";
+import type { MessageKey } from "../../i18n";
 import { PARTNER_NAME_CHOICES, PARTNER_NAME_PLACEHOLDER } from "../../engine/names";
-import { locale } from "../../i18n";
 import { partnerDisplayName, partnerName } from "../../stores/partner";
 import { settings } from "../../stores/settings";
 
@@ -14,10 +14,20 @@ import { settings } from "../../stores/settings";
 const chosen = computed(() => partnerName.value?.trim() ?? "");
 
 /**
- * What the chosen name means, when we know it. The pool itself is the partner's own reference
- * (`name_ideas`) and is deliberately not shown here — the name is its decision, not a vote.
+ * What the chosen name means. The pool itself is the partner's own reference (`name_ideas`) and
+ * is deliberately not shown here — the name is its decision, not a vote.
+ *
+ * A chosen name gets its meaning from the language files, so it reads in every language the
+ * app speaks. Names we do not have a translation for fall back to what the pool says (German
+ * and English), which is better than showing nothing.
  */
+const MEANING_KEYS: Record<string, MessageKey> = {
+  ziggy: "partner.meaningZiggy",
+};
+
 const chosenMeaning = computed(() => {
+  const key = MEANING_KEYS[chosen.value.toLowerCase()];
+  if (key) return t(key);
   const choice = PARTNER_NAME_CHOICES.find(
     (entry) => entry.name.toLowerCase() === chosen.value.toLowerCase(),
   );

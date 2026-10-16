@@ -144,6 +144,8 @@ export const de = {
     unsupported: "Dieses Format kann nicht angezeigt werden.",
     slide: "Folie {n}",
     textOnly: "Nur Text — Layout, Bilder und Formatierung fehlen.",
+    values: "Werte",
+    formulas: "Formeln",
     moreLines: "… {n} weitere Zeilen nicht angezeigt",
     moreSheets: "… {n} weitere Blätter nicht angezeigt",
     noText: "In dieser Datei wurde kein Text gefunden.",
@@ -299,6 +301,7 @@ export const de = {
   partner: {
     hint: "Dein Begleiter, nicht dein Werkzeug: was er sich merkt, wie er heißt und was du ihm mitgibst.",
     name: "Name",
+    meaningZiggy: "Koseform von Siegfried/Sigmund: Sieg und Schutz",
     placeholder: "(Platzhalter)",
     nameChosen: "Diesen Namen hat sich dein Begleiter selbst ausgesucht — einmalig und endgültig.",
     nameOpen: "Dein Begleiter hat noch keinen Namen gewählt. Das entscheidet er allein und endgültig — ohne Vorschläge von außen.",

@@ -145,6 +145,8 @@ export const fr: Messages = {
     unsupported: "Ce format ne peut pas être prévisualisé.",
     slide: "Diapositive {n}",
     textOnly: "Texte seul — la mise en page, les images et le formatage manquent.",
+    values: "Valeurs",
+    formulas: "Formules",
     moreLines: "… {n} lignes supplémentaires non affichées",
     moreSheets: "… {n} feuilles supplémentaires non affichées",
     noText: "Aucun texte trouvé dans ce fichier.",
@@ -299,6 +301,7 @@ export const fr: Messages = {
   partner: {
     hint: "Ton compagnon, pas ton outil : ce qu'il retient, comment il s'appelle et ce que tu lui confies durablement.",
     name: "Nom",
+    meaningZiggy: "diminutif de Siegfried/Sigmund : victoire et protection",
     placeholder: "(provisoire)",
     nameChosen: "Ton compagnon a choisi ce nom lui-même — une fois, définitivement.",
     nameOpen: "Ton compagnon n'a pas encore choisi de nom. Cette décision lui appartient et elle est définitive — sans suggestions extérieures.",
