@@ -178,6 +178,8 @@ Echte Fenster-Transluzenz wäre Tauri `windowEffects` (auf Linux/GTK nur eingesc
 
 ### Was die Quellen sind
 - `minimax-jarvis/` (lokal, **MIT**) = **Definitionsebene, kein Runtime**.
+  *Hinweis (§30):* nichts im Baum lädt daraus; unsere Werkzeuge und Verträge sind eigene
+  Umsetzungen. Das Vorbild ist jetzt auf der Über-Seite genannt, damit der Ordner gehen kann.
   `agents/` stammt aus `MiniMax-AI/minimax-code` → `packages/local-runtime-v2/assets/agents/`.
   Inhalt: `builtin-agents.json` = `["mavis","explore","worker","verifier"]`; je Agent
   `PERSONA.md` / `PERSONA-zh.md` / `system-prompt.md.hbs`;

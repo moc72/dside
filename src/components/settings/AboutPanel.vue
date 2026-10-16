@@ -62,6 +62,18 @@ onMounted(async () => {
         <div class="desc">{{ authors.join(" · ") }}</div>
       </div>
     </div>
+    <div class="row">
+      <div class="text">
+        <div class="label">{{ t("about.blueprint") }}</div>
+        <div class="desc">{{ t("about.blueprintValue") }}</div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="text">
+        <div class="label">{{ t("about.fonts") }}</div>
+        <div class="desc">{{ t("about.fontsValue") }}</div>
+      </div>
+    </div>
   </div>
 
   <h2 class="section">{{ t("about.links") }}</h2>
