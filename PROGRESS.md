@@ -1503,3 +1503,45 @@ die Updates liegen. Beides gibt es nicht (kein Server, kein Schlüssel) — desh
 nicht eingebaut, statt einen Knopf zu bauen, der ins Nichts zeigt. Offen bleibt außerdem
 das Frontend-Bundle: `index-*.js` ist 5,4 MB (Monaco + pdf.js), der Build warnt zu Recht
 über die Chunk-Größe; Aufteilen wäre eine eigene Runde.
+
+## 33. Die Optik-Fehlersuche des Nutzers (2026-10-16, dreizehnte Runde)
+
+Commit `4a21df2`. Der Nutzer hat selbst am CSS gearbeitet (Bubble-Ränder, 70 %
+Breite, `pre-wrap` entfernt, `word-break` ergänzt, Avatare auskommentiert) und
+vier Probleme gemeldet, die er nicht lösen konnte. Seine Änderungen bleiben, wie
+er sie wollte; hier stehen nur die Korrekturen.
+
+### 1. Werkzeug-Abstände („2×10px")
+Kein Fehler im CSS: **innerhalb** einer Antwort sind zwei Chips genau 10 px
+auseinander. Die 20 px, die er sah, waren **zwei verschiedene Antworten** (10 px
+Chip + 10 px Blase). Was es wirklich gab: je Werkzeug steckte ein zusätzlicher
+Wrapper-Div mit eigenem `margin-top`. Der ist raus — jetzt trägt jeder Chip seinen
+einen Abstand, und die Staffelung zwischen Antworten bleibt bewusst größer.
+Gemessen am Pixelverlauf: 10 px zwischen Chips, 20 px zwischen Antworten.
+
+### 2. „tool-name/state/time ans Ende des Buttons"
+Ging nicht, weil der Chip sich auf Inhaltsbreite zusammenzog (`width: auto` in
+einem Block-Container). Der Chip füllt jetzt die Spalte: Symbole links, Name,
+Zustand und Dauer **rechts außen** — wie gewünscht.
+
+### 3. Composer ohne Hintergrund / „röntgt durch"
+Der Composer hatte dieselbe Fläche wie die Werkzeug-Chips (`--bg-panel`), wurde
+also optisch eins mit dem, was dahinter scrollt. Jetzt: eigene Fläche
+(`--bg-app`), **Trennkante** darüber und ein dunkleres Eingabefeld (`--bg`).
+
+### 4. Gleiche Breite, sichtbar verschieden
+Zwei Ursachen, beide behoben:
+- Die Spalte ist ein Flex-Kind mit `flex: 1` gewesen — die Basis schlägt die
+  Breite, also dehnte sich die „70 %"-Spalte still über das ganze Panel aus.
+  Jetzt sitzt die Breite auf dem Scrollbereich selbst (mit dünner Scrollbar).
+- Die Scrollbar fraß 6 px **innerhalb** der Nachrichtenspalte, der Composer
+  nicht. Der Composer spiegelt diese 6 px (`calc(70% - 6px)` und 3 px Versatz),
+  damit beide Kanten wirklich übereinander liegen. Geprüft mit Debug-Umrissen um
+  beide Bereiche: sie überlappen exakt (grün + rot = gelb).
+
+### Verifikation
+Da die Dev-Instanz des Nutzers Port 1420 hält, wurde alles am **Release-Binary**
+geprüft (Frontend eingebettet, kein Vite): `pnpm build` → `cargo build --release`
+→ Start unter X11 → Screenshot, Kanten am Pixelverlauf gemessen. 24 Rust-Tests
+grün, Baum sauber. Debug-Umrisse und Testcode sind restlos entfernt
+(`grep TEMP-VERIFY` leer), der Fensterzustand zurückgesetzt.
