@@ -146,8 +146,8 @@ export function mimeFor(path: string): string {
  * Markdown to HTML, then through DOMPurify. Rendering foreign text as HTML without
  * sanitising it would hand any document in the workspace script access to the app.
  */
-export function renderMarkdown(source: string): string {
-  const html = marked.parse(source, { async: false, gfm: true }) as string;
+export function renderMarkdown(source: string, breaks = false): string {
+  const html = marked.parse(source, { async: false, gfm: true, breaks }) as string;
   return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
 }
 

@@ -21,11 +21,17 @@ export const en: Messages = {
     agentTeam: "Agent Team",
     noTasks: "No tasks",
   },
+  titlebar: {
+    switch: "Switch session",
+  },
+
   session: {
     pin: "Pin",
     unpin: "Unpin",
     rename: "Rename",
     archive: "Archive",
+    titlePlaceholder: "New task",
+    empty: "No session yet.",
   },
   archived: {
     title: "Archived tasks",
@@ -156,9 +162,14 @@ export const en: Messages = {
     scrollToBottom: "Scroll to bottom",
     attach: "Attach",
     model: "Model",
+    contextHint: "{used} of {total} tokens in context ({percent}%)",
+    contextUnknown: "No request has run yet.",
+    tokens: "{used} tokens",
     disclaimer: "The agent is AI and can make mistakes.",
   },
   message: {
+    autoApproved: "Ran without asking — full authorisation is turned on.",
+    raw: "Stored as markdown",
     notWired: "Not wired up yet: no model backend is connected.",
     reasoning: "Reasoning",
   },

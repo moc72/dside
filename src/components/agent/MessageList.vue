@@ -1,11 +1,34 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import Icon from "../Icon.vue";
 import { t } from "../../i18n";
+import { settings } from "../../stores/settings";
+import { escapeHtml, renderMarkdown } from "../../lib/preview";
 import type { ChatMessage } from "../../types";
 
 defineProps<{
   messages: ChatMessage[];
 }>();
+
+/**
+ * Tool rows open on demand. The chip alone says "bash ran" — which is exactly what makes
+ * someone suspicious. The command and its output belong behind one click, and so does the
+ * reason it ran without asking.
+ */
+const open = ref<Record<string, boolean>>({});
+
+function isOpen(id: string): boolean {
+  return open.value[id] === true;
+}
+
+function toggle(id: string): void {
+  open.value[id] = !open.value[id];
+}
+
+/** The user's text stays exactly as typed; only the answer is rendered as markdown. */
+function escape(text: string): string {
+  return escapeHtml(text).replace(/\n/g, "<br />");
+}
 </script>
 
 <template>
@@ -29,16 +52,20 @@ defineProps<{
             v-else-if="part.kind === 'text'"
             class="text"
             :class="{ streaming: message.streaming }"
-          >
-            {{ part.text }}
-          </div>
+            :title="message.role === 'user' ? undefined : t('message.raw')"
+            v-html="
+              message.role === 'user' ? escape(part.text) : renderMarkdown(part.text, true)
+            "
+          ></div>
 
           <div v-else class="tools">
-            <div
+            <button
               class="tool"
               :class="{ error: part.tool.isError, running: part.tool.running }"
-              :title="part.tool.output ?? part.tool.arguments ?? ''"
+              type="button"
+              @click="toggle(part.tool.id)"
             >
+              <Icon :name="isOpen(part.tool.id) ? 'chevron-down' : 'chevron-right'" :size="12" />
               <Icon
                 :name="part.tool.running ? 'reload' : part.tool.isError ? 'x' : 'check'"
                 :size="12"
@@ -54,8 +81,17 @@ defineProps<{
                 }}
               </span>
               <span v-if="part.tool.durationMs" class="tool-time">{{ part.tool.durationMs }}ms</span>
+            </button>
+
+            <div v-if="isOpen(part.tool.id)" class="tool-detail">
+              <div v-if="part.tool.arguments" class="tool-command">{{ part.tool.arguments }}</div>
+              <pre v-if="part.tool.output" class="tool-output">{{ part.tool.output }}</pre>
+              <p v-if="settings.fullAuthorization" class="tool-note">
+                {{ t("message.autoApproved") }}
+              </p>
             </div>
           </div>
+
         </template>
 
         <div v-if="message.streaming && !(message.parts ?? []).length" class="pending">
@@ -73,6 +109,8 @@ defineProps<{
   display: flex;
   flex-direction: column;
   gap: 18px;
+  max-width: 980px;
+  margin: 0 auto;
   padding: 20px 6px;
 }
 
@@ -94,8 +132,14 @@ defineProps<{
   justify-content: flex-end;
 }
 
+/* A whole conversation is easier to read in one column, and a question is never as long as
+   an answer: the assistant gets the column, the user 75% of it. */
 .bubble {
-  max-width: 82%;
+  max-width: 100%;
+}
+
+.row.user .bubble {
+  max-width: 75%;
 }
 
 .text {
@@ -181,6 +225,40 @@ defineProps<{
   }
 }
 
+.tool-detail {
+  margin: 6px 0 0 18px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.tool-command {
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  word-break: break-word;
+}
+
+.tool-output {
+  margin: 6px 0 0;
+  max-height: 260px;
+  overflow: auto;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tool-note {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
 .tools {
   display: flex;
   flex-direction: column;
@@ -197,8 +275,15 @@ defineProps<{
   border-radius: var(--radius-sm);
   background: var(--bg-panel);
   color: var(--text-muted);
+  font-family: inherit;
   font-size: 12px;
   width: fit-content;
+  cursor: pointer;
+}
+
+.tool:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
 }
 
 .tool.running {

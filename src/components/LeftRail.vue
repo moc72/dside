@@ -220,7 +220,7 @@ function accountSettings() {
             @keydown.esc.prevent="renamingId = null"
             @blur="commitRename"
           />
-          <span v-else>{{ session.title }}</span>
+          <span v-else class="session-title">{{ session.title }}</span>
         </button>
       </section>
     </div>
@@ -334,6 +334,14 @@ function accountSettings() {
   background: transparent;
   color: var(--text);
   text-align: left;
+  white-space: nowrap;
+}
+
+/* Long titles are cut with an ellipsis instead of running out of the rail. */
+.session-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

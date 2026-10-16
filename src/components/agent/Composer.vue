@@ -1,12 +1,35 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import Icon from "../Icon.vue";
+import ContextRing from "./ContextRing.vue";
 import { t } from "../../i18n";
 import { settings } from "../../stores/settings";
 import { modelChoices, modelLabel } from "../../stores/models";
 import { abortTurn, engineReady, running, sendPrompt } from "../../composables/useEngine";
 
 const text = ref("");
+
+/**
+ * The field grows with what is typed and stops at ten lines — long enough for a real prompt,
+ * short enough that the conversation stays on screen. Beyond that it scrolls.
+ */
+const MAX_ROWS = 10;
+const LINE_HEIGHT = 19.5;
+const box = ref<HTMLTextAreaElement | null>(null);
+
+function autoGrow(): void {
+  const element = box.value;
+  if (!element) return;
+  element.style.height = "auto";
+  element.style.height = `${Math.min(element.scrollHeight, MAX_ROWS * LINE_HEIGHT)}px`;
+}
+
+function reset(): void {
+  text.value = "";
+  void nextTick(() => {
+    if (box.value) box.value.style.height = "auto";
+  });
+}
 const model = ref(settings.model);
 
 const canSend = computed(() => text.value.trim().length > 0 && !running.value);
@@ -18,7 +41,7 @@ watch(model, (value) => {
 function submit() {
   const value = text.value.trim();
   if (!value || running.value) return;
-  text.value = "";
+  reset();
   void sendPrompt(value);
 }
 
@@ -31,11 +54,13 @@ function toggleAuthorization() {
   <div class="composer-wrap">
     <form class="composer" @submit.prevent="submit">
       <textarea
+        ref="box"
         v-model="text"
         class="input"
         rows="1"
         :placeholder="t('composer.placeholder')"
         @keydown.enter.exact.prevent="submit"
+        @input="autoGrow"
       ></textarea>
 
       <div class="row">
@@ -56,6 +81,7 @@ function toggleAuthorization() {
         </div>
 
         <div class="right">
+          <ContextRing />
           <select v-model="model" class="model" :title="`${t('composer.model')}: ${modelLabel(model)} (${model})`">
             <option
               v-if="!modelChoices().some((entry) => entry.id === model)"
@@ -98,6 +124,8 @@ function toggleAuthorization() {
 
 <style scoped>
 .composer-wrap {
+  max-width: 980px;
+  margin: 0 auto;
   padding: 0 6px 10px;
 }
 
@@ -111,7 +139,8 @@ function toggleAuthorization() {
 .input {
   width: 100%;
   min-height: 42px;
-  max-height: 180px;
+  max-height: 195px;
+  overflow-y: auto;
   resize: none;
   border: none;
   outline: none;

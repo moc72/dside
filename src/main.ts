@@ -5,6 +5,7 @@ import { initReadingSize, initSettings, initTheme } from "./stores/settings";
 import { loadUiState } from "./lib/uiState";
 import { initWorkArea } from "./stores/workArea";
 import { initSessionSelection } from "./stores/sessions";
+import { initLastUsage } from "./composables/useEngine";
 import { locale } from "./i18n";
 
 initTheme();
@@ -18,6 +19,7 @@ async function boot(): Promise<void> {
   const ui = await loadUiState();
   initWorkArea(ui.workarea);
   initSessionSelection(ui.activeSession);
+  initLastUsage(ui.lastUsage);
 }
 
 void boot().finally(() => {

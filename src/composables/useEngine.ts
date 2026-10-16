@@ -22,6 +22,7 @@ import { ensureWorkspace } from "./useWorkspace";
 import { buildPersona } from "../engine/persona";
 import { partnerName, refreshPartnerName } from "../stores/partner";
 import { loadModels } from "../stores/models";
+import { saveUiState } from "../lib/uiState";
 import { t } from "../i18n";
 
 interface DbSessionRow {
@@ -60,6 +61,12 @@ export const todosRevision = ref(0);
 
 /** Set while a turn is blocked on the user (`ask_user`). Cleared by answering. */
 export const pendingAction = ref<EngineEvent["action"] | null>(null);
+
+/**
+ * What the provider reported about the last request. `promptTokens` is the whole conversation
+ * that was sent, which is what "how full is the context" actually means.
+ */
+export const lastUsage = ref<{ promptTokens: number; totalTokens: number } | null>(null);
 
 type SecretStatus = { present: boolean; backend: string };
 
@@ -185,6 +192,18 @@ function handleEvent(event: EngineEvent): void {
       if (session && event.text) session.title = event.text;
       break;
     }
+    case "usage":
+      if (event.usage) {
+        lastUsage.value = {
+          promptTokens: event.usage.promptTokens,
+          totalTokens: event.usage.totalTokens,
+        };
+        // Remembered across restarts: the conversation it describes is reloaded too, so the
+        // ring should not read "nothing has run yet" after every start.
+        saveUiState("lastUsage", lastUsage.value);
+      }
+      break;
+
     case "turn_end":
       endAssistantMessage(event.stopReason);
       pendingAction.value = null;
@@ -195,6 +214,18 @@ function handleEvent(event: EngineEvent): void {
       break;
     default:
       break;
+  }
+}
+
+/** Restores the last usage report so the context ring has a value before the first turn. */
+export function initLastUsage(stored: unknown): void {
+  if (!stored || typeof stored !== "object") return;
+  const value = stored as { promptTokens?: unknown; totalTokens?: unknown };
+  if (typeof value.promptTokens === "number") {
+    lastUsage.value = {
+      promptTokens: value.promptTokens,
+      totalTokens: typeof value.totalTokens === "number" ? value.totalTokens : value.promptTokens,
+    };
   }
 }
 

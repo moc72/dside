@@ -19,11 +19,17 @@ export const de = {
     agentTeam: "Agent-Team",
     noTasks: "Keine Aufgaben",
   },
+  titlebar: {
+    switch: "Sitzung wechseln",
+  },
+
   session: {
     pin: "Anheften",
     unpin: "Abheften",
     rename: "Umbenennen",
     archive: "Archivieren",
+    titlePlaceholder: "Neue Aufgabe",
+    empty: "Noch keine Sitzung.",
   },
   archived: {
     title: "Archivierte Aufgaben",
@@ -154,9 +160,14 @@ export const de = {
     scrollToBottom: "Nach unten",
     attach: "Anhang",
     model: "Modell",
+    contextHint: "{used} von {total} Token im Kontext ({percent} %)",
+    contextUnknown: "Noch keine Anfrage gelaufen.",
+    tokens: "{used} Token",
     disclaimer: "Der Agent ist KI und kann Fehler machen.",
   },
   message: {
+    autoApproved: "Ohne Rückfrage ausgeführt — „Volle Berechtigung“ ist eingeschaltet.",
+    raw: "Als Markdown gespeichert",
     notWired: "Noch nicht angebunden: Es ist kein Modell-Backend verbunden.",
     reasoning: "Denken",
   },

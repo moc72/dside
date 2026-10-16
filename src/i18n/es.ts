@@ -20,11 +20,17 @@ export const es: Messages = {
     agentTeam: "Equipo de agentes",
     noTasks: "Sin tareas",
   },
+  titlebar: {
+    switch: "Cambiar de sesión",
+  },
+
   session: {
     pin: "Fijar",
     unpin: "Desfijar",
     rename: "Renombrar",
     archive: "Archivar",
+    titlePlaceholder: "Nueva tarea",
+    empty: "Todavía no hay sesión.",
   },
   archived: {
     title: "Tareas archivadas",
@@ -155,9 +161,14 @@ export const es: Messages = {
     scrollToBottom: "Desplazar al final",
     attach: "Adjunto",
     model: "Modelo",
+    contextHint: "{used} de {total} tokens en contexto ({percent} %)",
+    contextUnknown: "Todavía no se ha ejecutado ninguna consulta.",
+    tokens: "{used} tokens",
     disclaimer: "El agente es IA y puede tener errores.",
   },
   message: {
+    autoApproved: "Ejecutado sin preguntar — la autorización total está activada.",
+    raw: "Guardado como markdown",
     notWired: "No conectado aún: no hay backend de modelo conectado.",
     reasoning: "Razonando",
   },

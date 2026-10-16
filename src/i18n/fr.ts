@@ -20,11 +20,17 @@ export const fr: Messages = {
     agentTeam: "Équipe d'agents",
     noTasks: "Aucune tâche",
   },
+  titlebar: {
+    switch: "Changer de session",
+  },
+
   session: {
     pin: "Épingler",
     unpin: "Dépingler",
     rename: "Renommer",
     archive: "Archiver",
+    titlePlaceholder: "Nouvelle tâche",
+    empty: "Aucune session pour l'instant.",
   },
   archived: {
     title: "Tâches archivées",
@@ -155,9 +161,14 @@ export const fr: Messages = {
     scrollToBottom: "Défilement vers le bas",
     attach: "Pièce jointe",
     model: "Modèle",
+    contextHint: "{used} sur {total} jetons en contexte ({percent} %)",
+    contextUnknown: "Aucune requête pour l'instant.",
+    tokens: "{used} jetons",
     disclaimer: "L'agent est IA et peut faire des erreurs.",
   },
   message: {
+    autoApproved: "Exécuté sans demande — l'autorisation complète est activée.",
+    raw: "Stocké en markdown",
     notWired: "Non connecté : aucun backend de modèle connecté.",
     reasoning: "Réflexion",
   },

@@ -21,11 +21,17 @@ export const ru: Messages = {
     agentTeam: "Агентская команда",
     noTasks: "Нет задач",
   },
+  titlebar: {
+    switch: "Сменить сессию",
+  },
+
   session: {
     pin: "Закрепить",
     unpin: "Открепить",
     rename: "Переименовать",
     archive: "Архивировать",
+    titlePlaceholder: "Новая задача",
+    empty: "Пока нет сессий.",
   },
   archived: {
     title: "Архивированные задачи",
@@ -156,9 +162,14 @@ export const ru: Messages = {
     scrollToBottom: "Вниз",
     attach: "Вложение",
     model: "Модель",
+    contextHint: "{used} из {total} токенов в контексте ({percent} %)",
+    contextUnknown: "Запросов ещё не было.",
+    tokens: "{used} токенов",
     disclaimer: "Агент является ИИ и может ошибаться.",
   },
   message: {
+    autoApproved: "Выполнено без запроса — включено «полное разрешение».",
+    raw: "Хранится как markdown",
     notWired: "Не подключено: нет подключенного бэкенда модели.",
     reasoning: "Думание",
   },

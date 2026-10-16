@@ -21,11 +21,17 @@ export const zhHans: Messages = {
     agentTeam: "代理团队",
     noTasks: "无任务",
   },
+  titlebar: {
+    switch: "切换会话",
+  },
+
   session: {
     pin: "固定",
     unpin: "取消固定",
     rename: "重命名",
     archive: "归档",
+    titlePlaceholder: "新任务",
+    empty: "还没有会话。",
   },
   archived: {
     title: "已存档任务",
@@ -156,9 +162,14 @@ export const zhHans: Messages = {
     scrollToBottom: "向下滚动",
     attach: "附件",
     model: "模型",
+    contextHint: "上下文中已用 {used} / {total} 词元（{percent}%）",
+    contextUnknown: "尚未发起请求。",
+    tokens: "{used} 词元",
     disclaimer: "代理是 AI 并可能出现错误。",
   },
   message: {
+    autoApproved: "未询问即执行——已开启「完全授权」。",
+    raw: "以 Markdown 存储",
     notWired: "未连接: 未连接模型后端。",
     reasoning: "思考",
   },

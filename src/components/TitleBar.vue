@@ -1,9 +1,24 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import Icon from "./Icon.vue";
 import ToolbarActions from "./ToolbarActions.vue";
 import { t } from "../i18n";
-import { activeSession } from "../stores/sessions";
+import { activeSession, sessions } from "../stores/sessions";
 import { toggleRail } from "../stores/ui";
+import { openSession } from "../composables/useEngine";
+
+/**
+ * The title is also the session switcher. The chevron used to be decoration: it promised a
+ * menu that did not exist. With the rail collapsed there was no way to change session at all,
+ * so this is where the list belongs.
+ */
+const open = ref(false);
+
+async function pick(id: string): Promise<void> {
+  open.value = false;
+  if (id === activeSession.value?.id) return;
+  await openSession(id);
+}
 </script>
 
 <template>
@@ -15,8 +30,26 @@ import { toggleRail } from "../stores/ui";
     </div>
 
     <div class="center">
-      <span class="session">{{ activeSession?.title ?? "" }}</span>
-      <Icon name="chevron-down" :size="14" />
+      <button class="title" type="button" :title="t('titlebar.switch')" @click="open = !open">
+        <span class="session">{{ activeSession?.title ?? "" }}</span>
+        <Icon :name="open ? 'chevron-up' : 'chevron-down'" :size="14" />
+      </button>
+
+      <div v-if="open" class="backdrop" @click="open = false"></div>
+      <div v-if="open" class="picker card">
+        <button
+          v-for="session in sessions"
+          :key="session.id"
+          class="pick"
+          :class="{ active: session.id === activeSession?.id }"
+          type="button"
+          @click="pick(session.id)"
+        >
+          <span class="pick-title">{{ session.title || t("session.titlePlaceholder") }}</span>
+          <Icon v-if="session.id === activeSession?.id" name="check" :size="12" />
+        </button>
+        <p v-if="sessions.length === 0" class="empty">{{ t("session.empty") }}</p>
+      </div>
     </div>
 
     <div class="side right">
@@ -46,13 +79,94 @@ import { toggleRail } from "../stores/ui";
 }
 
 .center {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
   color: var(--text-strong);
   font-size: 14px;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 420px;
+  padding: 5px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.title:hover {
+  background: var(--bg-hover);
+}
+
+.session {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+}
+
+.picker {
+  position: absolute;
+  top: 38px;
+  left: 0;
+  right: 0;
+  z-index: 21;
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 6px;
+  text-align: left;
+}
+
+.pick {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 9px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pick:hover {
+  background: var(--bg-hover);
+}
+
+.pick.active {
+  color: var(--text-strong);
+}
+
+.pick-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty {
+  margin: 6px 9px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 400;
 }
 
 .ghost {
