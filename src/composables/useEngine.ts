@@ -19,6 +19,7 @@ import {
 import { settings } from "../stores/settings";
 import { ensureWorkspace } from "./useWorkspace";
 import { buildPersona } from "../engine/persona";
+import { partnerName, refreshPartnerName } from "../stores/partner";
 import { t } from "../i18n";
 
 interface DbSessionRow {
@@ -108,7 +109,11 @@ export async function configureEngine(): Promise<void> {
     config: {
       baseUrl: settings.baseUrl || "https://api.deepseek.com",
       model: settings.model || "deepseek-chat",
-      systemPrompt: buildPersona("Seeky", settings.workspace),
+      systemPrompt: buildPersona({
+        name: partnerName.value,
+        workspace: settings.workspace,
+        userPrompt: settings.partnerPrompt,
+      }),
       workspace: settings.workspace,
       fullAuthorization: settings.fullAuthorization,
       maxTurns: 24,
@@ -168,6 +173,9 @@ function handleEvent(event: EngineEvent): void {
       endAssistantMessage(event.stopReason);
       pendingAction.value = null;
       running.value = false;
+      // The partner may have chosen its name during this turn. Reading it is enough: the
+      // next turn configures the engine again anyway (see `sendPrompt`).
+      void refreshPartnerName();
       break;
     default:
       break;
@@ -180,6 +188,7 @@ export async function initEngine(): Promise<void> {
   }
   extractLegacyKey();
   await ensureWorkspace();
+  await refreshPartnerName();
   await configureEngine();
   await loadSessions();
   await loadHistory(activeSessionId.value);

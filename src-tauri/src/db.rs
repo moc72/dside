@@ -955,6 +955,39 @@ impl Db {
         Ok(retired)
     }
 
+    /// The partner's own name. `None` means it has not chosen one yet and is still going by
+    /// the placeholder.
+    pub fn partner_name(&self) -> Result<Option<String>, String> {
+        let conn = self.lock()?;
+        let raw = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'partnerName'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?;
+        Ok(raw.and_then(|value| serde_json::from_str(&value).ok()))
+    }
+
+    /// Choosing the name is a one-time act — the partner decides it, and nothing changes it
+    /// afterwards. That is why this refuses to overwrite an existing name.
+    pub fn set_partner_name(&self, name: &str) -> Result<(), String> {
+        let name = name.split_whitespace().collect::<Vec<_>>().join(" ");
+        if name.chars().count() < 2 || name.chars().count() > 40 {
+            return Err("a name has 2 to 40 characters".to_string());
+        }
+        if name.chars().any(char::is_control) {
+            return Err("that is not a name".to_string());
+        }
+        if self.partner_name()?.is_some() {
+            return Err("the name is already chosen and cannot be changed".to_string());
+        }
+
+        let value = serde_json::to_string(&name).map_err(|error| error.to_string())?;
+        self.set_setting("partnerName", &value)
+    }
+
     /// The mechanical half of curation: what is provably redundant, and what has gone
     /// unused for a long time. Judgement about *meaning* stays with the model or the user —
     /// this only proposes, it never touches a memory on its own. Retired entries are out of
@@ -1078,6 +1111,17 @@ pub fn settings_all(db: tauri::State<'_, Db>) -> Result<HashMap<String, String>,
 #[tauri::command]
 pub fn settings_set(db: tauri::State<'_, Db>, key: String, value: String) -> Result<(), String> {
     db.set_setting(&key, &value)
+}
+
+/// The name the partner chose for itself, if it has.
+#[tauri::command]
+pub fn partner_name(db: tauri::State<'_, Db>) -> Result<Option<String>, String> {
+    db.partner_name()
+}
+
+#[tauri::command]
+pub fn partner_name_set(db: tauri::State<'_, Db>, name: String) -> Result<(), String> {
+    db.set_partner_name(&name)
 }
 
 /// The OS user's name, used until the user sets a display name of their own.
@@ -1428,6 +1472,31 @@ mod tests {
 
         db.delete_schedule(id).unwrap();
         assert!(db.list_schedules().unwrap().is_empty());
+
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    /// The name is the partner's own, it is chosen once, and the database is what enforces
+    /// that — not the UI that happens not to offer an edit field.
+    #[test]
+    fn the_partner_name_is_chosen_once() {
+        let directory = std::env::temp_dir().join(format!("ds-ide-name-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let db = Db::open(&directory.join("n.sqlite3")).unwrap();
+
+        assert!(db.partner_name().unwrap().is_none(), "unnamed at first");
+        assert!(db.set_partner_name("x").is_err(), "one letter is not a name");
+        assert!(db.partner_name().unwrap().is_none(), "a refused name is not stored");
+
+        db.set_partner_name("  Njord  ").unwrap();
+        assert_eq!(db.partner_name().unwrap().as_deref(), Some("Njord"));
+
+        assert!(
+            db.set_partner_name("Anders").is_err(),
+            "a second choice is refused"
+        );
+        assert_eq!(db.partner_name().unwrap().as_deref(), Some("Njord"));
 
         let _ = std::fs::remove_dir_all(&directory);
     }

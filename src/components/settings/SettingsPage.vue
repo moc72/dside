@@ -5,12 +5,15 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import Icon from "../Icon.vue";
 import ToggleRow from "./ToggleRow.vue";
 import MemoryPanel from "./MemoryPanel.vue";
+import PartnerPanel from "./PartnerPanel.vue";
+import AboutPanel from "./AboutPanel.vue";
 import { locale, localeLabel, locales, setLocale, t } from "../../i18n";
-import type { Locale } from "../../i18n";
+import type { Locale, MessageKey } from "../../i18n";
 import { links } from "../../engine/links";
 import { settings } from "../../stores/settings";
 import { knownModels, loadBalance, loadModels, modelsError, balance, balanceError } from "../../stores/models";
 import { settingsItem } from "../../stores/ui";
+import { partnerDisplayName } from "../../stores/partner";
 import { reloadTree } from "../../composables/useWorkspace";
 import {
   clearApiKey,
@@ -25,32 +28,58 @@ const emit = defineEmits<{ close: [] }>();
 const query = ref("");
 const activeItem = ref<string>(settingsItem.value ?? "general");
 
-const groups = [
+interface NavItem {
+  id: string;
+  label: MessageKey;
+  icon: string;
+}
+
+interface NavGroup {
+  key: MessageKey;
+  title?: string;
+  items: NavItem[];
+}
+
+/**
+ * The partner gets its own group instead of living under "Personalisation": that word means
+ * look and feel to most people, while this is the page where the user changes what their
+ * partner knows and is called.
+ */
+const groups = computed<NavGroup[]>(() => [
   {
     key: "settings.groups.preferences",
     items: [
       { id: "general", label: "settings.items.general", icon: "gear" },
       { id: "keyboard", label: "settings.items.keyboardShortcuts", icon: "grid" },
-      { id: "personalization", label: "settings.items.personalization", icon: "sparkle" },
+    ],
+  },
+  {
+    key: "settings.groups.partner",
+    title: partnerDisplayName.value.toUpperCase(),
+    items: [
+      { id: "memories", label: "settings.items.memories", icon: "sparkle" },
+      { id: "partner", label: "settings.items.partner", icon: "user" },
     ],
   },
   {
     key: "settings.groups.management",
     items: [
       { id: "account", label: "settings.items.account", icon: "user" },
+      { id: "about", label: "settings.items.about", icon: "doc" },
     ],
   },
   {
     key: "settings.groups.archived",
     items: [{ id: "archived", label: "settings.items.archivedTasks", icon: "clock" }],
   },
-] as const;
+]);
 
 const filteredGroups = computed(() => {
   const needle = query.value.trim().toLowerCase();
-  return groups
+  return groups.value
     .map((group) => ({
       key: group.key,
+      title: group.title,
       items: group.items.filter((item) => t(item.label).toLowerCase().includes(needle)),
     }))
     .filter((group) => group.items.length > 0);
@@ -166,7 +195,7 @@ watch(activeItem, (value) => {
 
       <div class="nav-scroll">
         <section v-for="group in filteredGroups" :key="group.key" class="nav-group">
-          <div class="nav-group-title">{{ t(group.key) }}</div>
+          <div class="nav-group-title">{{ group.title ?? t(group.key) }}</div>
           <button
             v-for="item in group.items"
             :key="item.id"
@@ -383,11 +412,17 @@ watch(activeItem, (value) => {
         <p v-if="balanceError" class="hint warn">{{ balanceError }}</p>
       </template>
 
-      <template v-else-if="activeItem === 'personalization'">
-        <h1 class="title">{{ t("settings.items.personalization") }}</h1>
-
-        <h2 class="section">{{ t("memory.title") }}</h2>
+      <template v-else-if="activeItem === 'memories'">
+        <h1 class="title">{{ t("settings.items.memories") }}</h1>
         <MemoryPanel />
+      </template>
+
+      <template v-else-if="activeItem === 'partner'">
+        <PartnerPanel />
+      </template>
+
+      <template v-else-if="activeItem === 'about'">
+        <AboutPanel />
       </template>
 
       <template v-else-if="activeItem === 'archived'">

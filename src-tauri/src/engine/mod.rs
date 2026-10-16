@@ -348,6 +348,29 @@ fn recall_block(rows: &[crate::db::MemoryRow]) -> String {
     block
 }
 
+/// The partner's own name: chosen once, by the model itself, and never changed again.
+fn choose_name_tool(app: &AppHandle, args: &Value) -> tools::ToolOutcome {
+    let Some(db) = app.try_state::<Db>() else {
+        return tools::ToolOutcome::err("choose_name: database unavailable");
+    };
+    let name = args
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if name.is_empty() {
+        return tools::ToolOutcome::err("choose_name: 'name' is required");
+    }
+
+    match db.set_partner_name(&name) {
+        Ok(()) => tools::ToolOutcome::ok(format!(
+            "From now on your name is {name}. The user sees it in the settings; use it for yourself."
+        )),
+        Err(error) => tools::ToolOutcome::err(format!("choose_name: {error}")),
+    }
+}
+
 /// Long-term memory lives in the database, so it is handled here rather than in
 /// `tools::execute`, which stays storage-free.
 fn memory_tool(app: &AppHandle, args: &Value) -> tools::ToolOutcome {
@@ -791,7 +814,23 @@ async fn run_turn(
         full_authorization: config.full_authorization,
         skills_root: crate::skills::skills_root(),
     };
-    let definitions = tools::definitions();
+    // The name can only be chosen once, so the tool disappears from the list afterwards —
+    // no point tempting the model with a door that is already closed.
+    let named = app
+        .try_state::<Db>()
+        .and_then(|db| db.partner_name().ok().flatten())
+        .is_some();
+    let definitions: Vec<Value> = tools::definitions()
+        .into_iter()
+        .filter(|definition| {
+            let is_name_tool = definition
+                .get("function")
+                .and_then(|function| function.get("name"))
+                .and_then(Value::as_str)
+                == Some("choose_name");
+            named || !is_name_tool
+        })
+        .collect();
     let mut todos: Vec<Value> = Vec::new();
 
     let mut system_prompt = if config.system_prompt.trim().is_empty() {
@@ -933,6 +972,8 @@ async fn run_turn(
             let started = std::time::Instant::now();
             let tool_outcome = if call.function.name == "memory" {
                 memory_tool(app, &arguments)
+            } else if call.function.name == "choose_name" {
+                choose_name_tool(app, &arguments)
             } else if call.function.name == "ask_user" {
                 ask_user(app, session_id, &arguments, &mut seq).await
             } else if call.function.name == "task" {

@@ -570,6 +570,107 @@ fn default_workspace() -> String {
     std::env::var("HOME").unwrap_or_else(|_| ".".to_string())
 }
 
+/// What the About page shows: the version and the packages the app is actually built from.
+///
+/// Both manifests are embedded at compile time, so the list cannot go stale the way a
+/// hand-maintained one would — and there is no build step to forget.
+#[derive(serde::Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct AboutPackage {
+    name: String,
+    version: String,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AboutInfo {
+    version: String,
+    frontend: Vec<AboutPackage>,
+    backend: Vec<AboutPackage>,
+}
+
+#[tauri::command]
+fn about_info() -> AboutInfo {
+    AboutInfo {
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        frontend: frontend_packages(include_str!("../../package.json")),
+        backend: backend_packages(include_str!("../Cargo.toml")),
+    }
+}
+
+fn tidy_version(version: &str) -> String {
+    version.trim().trim_start_matches(['^', '~', '=']).to_string()
+}
+
+fn frontend_packages(manifest: &str) -> Vec<AboutPackage> {
+    let parsed: serde_json::Value = match serde_json::from_str(manifest) {
+        Ok(value) => value,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut packages: Vec<AboutPackage> = parsed
+        .get("dependencies")
+        .and_then(|value| value.as_object())
+        .map(|dependencies| {
+            dependencies
+                .iter()
+                .map(|(name, version)| AboutPackage {
+                    name: name.clone(),
+                    version: tidy_version(version.as_str().unwrap_or("")),
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    packages.sort_by(|a, b| a.name.cmp(&b.name));
+    packages
+}
+
+/// Reads the `[dependencies]` block of the crate manifest. Enough TOML for our own file, and
+/// it names the crates the way a reader expects them rather than by their full spec.
+fn backend_packages(manifest: &str) -> Vec<AboutPackage> {
+    let mut packages = Vec::new();
+    let mut section = String::new();
+
+    for line in manifest.lines() {
+        let line = line.trim();
+        if line.starts_with('[') && line.ends_with(']') {
+            section = line.trim_matches(['[', ']']).to_string();
+            continue;
+        }
+        if section != "dependencies" || line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let Some((name, value)) = line.split_once('=') else {
+            continue;
+        };
+
+        // Either `crate = "1"` or `crate = { version = "1", features = [...] }`.
+        let value = value.trim();
+        let version = if value.starts_with('"') {
+            value.split('"').nth(1).unwrap_or("").to_string()
+        } else {
+            value
+                .split_once("version")
+                .map(|(_, tail)| tail)
+                .and_then(|tail| tail.split('"').nth(1))
+                .unwrap_or("")
+                .to_string()
+        };
+
+        packages.push(AboutPackage {
+            name: name.trim().trim_matches('"').to_string(),
+            version: if version.is_empty() {
+                "—".to_string()
+            } else {
+                tidy_version(&version)
+            },
+        });
+    }
+
+    packages.sort_by(|a, b| a.name.cmp(&b.name));
+    packages
+}
+
 /// A channel for the frontend to write into the same log. A desktop app without a console
 /// needs one, and "the UI did nothing" is otherwise indistinguishable from "the UI never ran".
 #[tauri::command]
@@ -690,6 +791,9 @@ pub fn run() {
             db::session_todos,
             db::settings_all,
             db::settings_set,
+            db::partner_name,
+            db::partner_name_set,
+            about_info,
             db::default_display_name,
             db::memories_list,
             db::memories_retired,
@@ -716,6 +820,35 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The About page reads the manifests, so a broken parser would show an empty list and
+    /// nobody would notice until someone opened it.
+    #[test]
+    fn about_reads_both_manifests() {
+        let frontend = frontend_packages(include_str!("../../package.json"));
+        assert!(
+            frontend.iter().any(|entry| entry.name == "vue" && !entry.version.is_empty()),
+            "frontend packages: {frontend:?}"
+        );
+        assert!(
+            frontend.iter().all(|entry| !entry.version.starts_with('^')),
+            "versions are shown without the range prefix: {frontend:?}"
+        );
+
+        let backend = backend_packages(include_str!("../Cargo.toml"));
+        assert!(
+            backend.iter().any(|entry| entry.name == "tauri" && entry.version == "2"),
+            "tauri version: {backend:?}"
+        );
+        assert!(
+            backend.iter().any(|entry| entry.name == "rusqlite" && !entry.version.is_empty()),
+            "named dependency with a version table: {backend:?}"
+        );
+        assert!(
+            !backend.iter().any(|entry| entry.name.contains("dependencies")),
+            "sections are not packages: {backend:?}"
+        );
+    }
 
     #[test]
     fn detect_editors_smoke() {

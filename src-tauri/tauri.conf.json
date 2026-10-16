@@ -25,15 +25,17 @@
       {
         "label": "splash",
         "url": "index.html",
-        "width": 440,
-        "height": 330,
+        "width": 360,
+        "height": 360,
         "resizable": false,
         "decorations": false,
         "center": true,
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "visible": false,
-        "backgroundColor": "#141414"
+        "backgroundColor": "#00000000",
+        "transparent": true,
+        "shadow": false
       }
     ],
     "security": {

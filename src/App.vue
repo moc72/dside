@@ -148,9 +148,11 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
 
 <template>
   <div v-if="isSplash" class="splash-window">
-    <img src="/whale-splash.webp" alt="" />
-    <span class="splash-mark" v-html="deepSeekMark"></span>
-    <div class="splash-bar"><span></span></div>
+    <div class="splash-disc">
+      <img src="/whale-splash.webp" alt="" />
+      <span class="splash-mark" v-html="deepSeekMark"></span>
+      <div class="splash-bar"><span></span></div>
+    </div>
   </div>
 
   <template v-else>
@@ -211,18 +213,34 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
 }
 
 /* The splash window is chrome-less: it shows the brand and nothing else. */
+/**
+ * The splash draws a disc on a transparent window, so what appears is a circle rather than a
+ * rectangle sitting in the middle of the screen. If the compositor refuses transparency the
+ * disc still reads as a disc — a dark square behind it is the worst case.
+ */
 .splash-window {
+  display: grid;
+  place-items: center;
+  height: 100vh;
+  background: transparent;
+}
+
+.splash-disc {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
-  height: 100vh;
+  gap: 14px;
+  width: 300px;
+  height: 300px;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
   background: var(--bg-app);
+  box-shadow: 0 18px 60px rgb(0 0 0 / 45%);
 }
 
-.splash-window img {
-  width: 190px;
+.splash-disc img {
+  width: 150px;
   height: auto;
 }
 
@@ -238,7 +256,7 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
 }
 
 .splash-bar {
-  width: 190px;
+  width: 170px;
   height: 3px;
   border-radius: 999px;
   background: var(--bg-elevated);
