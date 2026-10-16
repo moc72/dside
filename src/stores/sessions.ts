@@ -1,4 +1,5 @@
-import { computed, reactive, ref } from "vue";
+import { computed, reactive, ref, watch } from "vue";
+import { saveUiState } from "../lib/uiState";
 import type { ChatMessage, Session, ToolActivity } from "../types";
 
 export const sessions = ref<Session[]>([]);
@@ -93,4 +94,13 @@ export function clearConversation(): void {
 export function selectSession(id: string): void {
   activeSessionId.value = id;
   currentAssistantId = null;
+}
+
+/**
+ * Remembers which conversation was open. Called before the first session list is loaded, so
+ * a stale id (deleted, archived) is simply replaced by the newest session at that point.
+ */
+export function initSessionSelection(stored: unknown): void {
+  if (typeof stored === "string" && stored) activeSessionId.value = stored;
+  watch(activeSessionId, (id) => saveUiState("activeSession", id));
 }
