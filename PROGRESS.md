@@ -1461,3 +1461,45 @@ dann wird **sie** verschickt statt der Nachrichten, die sie abdeckt.
 Wie in §30 angekündigt, nach Abschluss der Kompression gelöscht — die Vorlage liegt unter
 <https://github.com/Kilo-Org/kilocode>. Der Eintrag in `.gitignore` bleibt, damit nichts
 davon versehentlich wieder eingecheckt wird, falls es nochmal lokal landet.
+
+## 32. Fertig gestellt: Reste und ein Release (2026-10-16, zwölfte Runde)
+
+Commit `4f04087`. Der Nutzer fragte, ob ich „das" heute noch fertig stellen will —
+gemeint war der Kleinkram aus §31 und ein Release.
+
+### Die beiden Reste
+- **Namensbedeutung in allen Sprachen:** Die Bedeutung des *gewählten* Namens kam aus
+  dem Namenspool, den es nur auf Deutsch und Englisch gibt — in vier Sprachen sprang
+  also Englisch ein. Für Namen, die tatsächlich geführt werden, kommt sie jetzt aus den
+  Sprachdateien (`partner.meaningZiggy` in sechs Sprachen); der Pool bleibt der
+  Rückfall für Namen ohne Übersetzung. Neue Namen kosten damit einen Schlüssel statt
+  sechs Datenfelder.
+- **Formeln in Tabellen:** Der Betrachter zeigte nur den *Wert* einer Zelle, nie die
+  Formel dahinter. Jetzt gibt es den Umschalter **Werte / Formeln**, an derselben Stelle
+  wie beim Markdown „Vorschau / Quelltext"; das Umschalten liest die Datei nicht neu.
+  Gegen eine Arbeitsmappe mit `SUM` und abgeleiteter Zelle geprüft: 1580/790 bzw.
+  `=SUM(B2:B3)` / `=B4*0.5`.
+  (Nebenbei: Das erste Fixture war falsch — die Formeln lagen außerhalb des
+  angegebenen `!ref`-Bereichs. Der Fehler lag im Test, nicht im Code.)
+
+### Release — es gibt jetzt Artefakte
+`pnpm tauri build` (Release-Profil, 3m06s) erzeugt drei Pakete:
+
+| Paket | Größe |
+|---|---|
+| `DS.IDE_0.1.0_amd64.deb` | 10,95 MiB |
+| `DS.IDE-0.1.0-1.x86_64.rpm` | 10,95 MiB |
+| `DS.IDE_0.1.0_amd64.AppImage` | 117,31 MiB |
+
+Liegen in `src-tauri/target/release/bundle/` (gitignored). Das `.deb` ist geprüft:
+Paket `ds-ide` 0.1.0, `usr/bin/DSIDE`, hicolor-Icons, Abhängigkeiten
+`libwebkit2gtk-4.1-0, libgtk-3-0` — also die üblichen Laufzeitbibliotheken.
+Das **Release-Binary wurde gestartet**: es bootet mit eingebettetem Frontend (kein
+Vite), zeigt Wal-Icon, Seitenleiste und den geladenen Verlauf. Die App ist installierbar.
+
+### Was für „richtige" Updates noch fehlt
+`tauri-plugin-updater` braucht einen **Signaturschlüssel** und eine **Adresse**, unter der
+die Updates liegen. Beides gibt es nicht (kein Server, kein Schlüssel) — deshalb ist es
+nicht eingebaut, statt einen Knopf zu bauen, der ins Nichts zeigt. Offen bleibt außerdem
+das Frontend-Bundle: `index-*.js` ist 5,4 MB (Monaco + pdf.js), der Build warnt zu Recht
+über die Chunk-Größe; Aufteilen wäre eine eigene Runde.
