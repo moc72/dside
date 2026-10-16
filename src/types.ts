@@ -29,14 +29,28 @@ export interface Session {
   workspace: string;
 }
 
+/**
+ * One piece of an answer, in the order it happened. A turn is not "some text plus some tools":
+ * the model thinks, answers, runs something, answers again, and the reader needs exactly that
+ * order. Keeping text and tools in separate fields (and rendering text first) put every later
+ * answer above the tools that caused it.
+ */
+export type MessagePart =
+  | { kind: "text"; text: string }
+  | { kind: "reasoning"; text: string }
+  | { kind: "tool"; tool: ToolActivity };
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
+  /** Everything said, joined — for copying and for the plain-text view. */
   text: string;
   reasoning?: string;
   streaming?: boolean;
   error?: string;
   tools?: ToolActivity[];
+  /** The timeline. Empty for user messages. */
+  parts?: MessagePart[];
 }
 
 export interface ToolActivity {

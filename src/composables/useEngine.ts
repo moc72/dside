@@ -1,7 +1,7 @@
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { EngineEvent, Session, SessionGroup } from "../types";
+import type { EngineEvent, MessagePart, Session, SessionGroup, ToolActivity } from "../types";
 import {
   activeSessionId,
   appendAssistantDelta,
@@ -10,6 +10,7 @@ import {
   beginAssistantMessage,
   clearConversation,
   endAssistantMessage,
+  ensureAssistantMessage,
   failAssistantMessage,
   messagesBySession,
   selectSession,
@@ -45,6 +46,8 @@ interface DbHistoryRow {
   role: string;
   text: string;
   tools: DbToolRow[];
+  /** JSON timeline, as the engine wrote it. Null for anything from before that existed. */
+  parts: string | null;
 }
 
 export const running = ref(false);
@@ -126,6 +129,17 @@ export async function configureEngine(): Promise<void> {
 
 function handleEvent(event: EngineEvent): void {
   if (event.sessionId !== activeSessionId.value) return;
+
+  // Anything that belongs to an answer makes sure one is open first.
+  if (
+    event.kind === "stream" ||
+    event.kind === "reasoning" ||
+    event.kind === "tool_start" ||
+    event.kind === "tool_result"
+  ) {
+    ensureAssistantMessage();
+    running.value = true;
+  }
 
   switch (event.kind) {
     case "stream":
@@ -229,19 +243,45 @@ export async function loadSessions(): Promise<void> {
 
 export async function loadHistory(sessionId: string): Promise<void> {
   const rows = await invoke<DbHistoryRow[]>("session_history", { sessionId });
-  messagesBySession[sessionId] = rows.map((row) => ({
-    id: row.id,
-    role: row.role === "user" ? "user" : "assistant",
-    text: row.text,
-    tools: row.tools.map((tool) => ({
-      id: tool.id,
-      name: tool.name,
-      arguments: tool.arguments ?? undefined,
-      output: tool.output ?? undefined,
-      isError: tool.isError,
-      durationMs: tool.durationMs ?? undefined,
-    })),
-  }));
+  messagesBySession[sessionId] = rows.map((row) => {
+    const tools = row.tools.map(
+      (tool): ToolActivity => ({
+        id: tool.id,
+        name: tool.name,
+        arguments: tool.arguments ?? undefined,
+        output: tool.output ?? undefined,
+        isError: tool.isError,
+        durationMs: tool.durationMs ?? undefined,
+      }),
+    );
+    return {
+      id: row.id,
+      role: row.role === "user" ? "user" : "assistant",
+      text: row.text,
+      tools,
+      parts: timelineFor(row, tools),
+    };
+  });
+}
+
+/**
+ * The stored timeline, or one rebuilt from text and tools. Rows written before the timeline
+ * existed only have the two separate fields, and they used to be shown as text-then-tools —
+ * keeping that as the fallback means an old conversation still reads the way it did.
+ */
+function timelineFor(row: DbHistoryRow, tools: ToolActivity[]): MessagePart[] {
+  if (row.parts) {
+    try {
+      const parsed = JSON.parse(row.parts) as MessagePart[];
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch {
+      // fall through to the rebuilt version
+    }
+  }
+  const rebuilt: MessagePart[] = [];
+  if (row.text) rebuilt.push({ kind: "text", text: row.text });
+  for (const tool of tools) rebuilt.push({ kind: "tool", tool });
+  return rebuilt;
 }
 
 export async function openSession(sessionId: string): Promise<void> {

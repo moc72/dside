@@ -18,13 +18,16 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 
 CREATE TABLE IF NOT EXISTS messages (
+  -- parts holds the answer as a timeline (text, thinking, tool calls in the order they
+  -- happened); content stays the plain text for search. See PROGRESS.md section 24.
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   session_id  TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
   role        TEXT NOT NULL,
   content     TEXT,
   tool_calls  TEXT,
   tool_call_id TEXT,
-  created_at  INTEGER NOT NULL
+  created_at  INTEGER NOT NULL,
+  parts       TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, id);
 
@@ -210,6 +213,9 @@ pub struct HistoryMessage {
     pub role: String,
     pub text: String,
     pub tools: Vec<ToolRow>,
+    /// Raw JSON of the timeline; the frontend turns it into message parts. `None` for rows
+    /// written before this existed, and for user messages.
+    pub parts: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -310,6 +316,8 @@ impl Db {
         add_column(conn, "memories", "origin", "TEXT NOT NULL DEFAULT 'seeky'")?;
         add_column(conn, "memories", "edited_at", "INTEGER")?;
         add_column(conn, "memories", "retired_at", "INTEGER")?;
+        // The ordered timeline of an assistant answer.
+        add_column(conn, "messages", "parts", "TEXT")?;
         Ok(())
     }
 
@@ -459,6 +467,26 @@ impl Db {
         Ok(conn.last_insert_rowid())
     }
 
+    /// The assistant row is created before the first round and kept up to date, so one turn
+    /// is one message in the log — the same thing the user sees while it runs. The old code
+    /// wrote a row per round, which is why a reloaded conversation had more bubbles than the
+    /// live one.
+    pub fn update_message(
+        &self,
+        id: i64,
+        content: Option<&str>,
+        tool_calls: Option<&str>,
+        parts: Option<&str>,
+    ) -> Result<(), String> {
+        let conn = self.lock()?;
+        conn.execute(
+            "UPDATE messages SET content = ?2, tool_calls = ?3, parts = ?4 WHERE id = ?1",
+            params![id, content, tool_calls, parts],
+        )
+        .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
     pub fn insert_tool_call(
         &self,
         session_id: &str,
@@ -565,7 +593,7 @@ impl Db {
         let conn = self.lock()?;
         let mut statement = conn
             .prepare(
-                "SELECT id, role, content FROM messages
+                "SELECT id, role, content, parts FROM messages
                  WHERE session_id = ?1 AND role IN ('user', 'assistant')
                  ORDER BY id",
             )
@@ -576,18 +604,20 @@ impl Db {
                     row.get::<_, i64>(0)?,
                     row.get::<_, String>(1)?,
                     row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
                 ))
             })
             .map_err(|error| error.to_string())?;
 
         let mut history = Vec::new();
         for row in rows {
-            let (id, role, content) = row.map_err(|error| error.to_string())?;
+            let (id, role, content, parts) = row.map_err(|error| error.to_string())?;
             history.push(HistoryMessage {
                 id: format!("m{id}"),
                 role,
                 text: content.unwrap_or_default(),
                 tools: Self::tools_for(&conn, id)?,
+                parts,
             });
         }
         Ok(history)
@@ -1417,6 +1447,49 @@ mod tests {
         assert_eq!(rows[0].origin, "seeky", "old rows belong to Seeky");
         assert!(rows[0].edited_at.is_none());
         assert!(rows[0].retired_at.is_none());
+
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    /// One turn is one message: the row is created first and the timeline is filled in as the
+    /// answer grows. Reading it back has to give the same order it was written in.
+    #[test]
+    fn a_turn_is_stored_with_its_timeline() {
+        let directory = std::env::temp_dir().join(format!("ds-ide-parts-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let db = Db::open(&directory.join("p.sqlite3")).unwrap();
+
+        db.create_session("s1", "Test", "/tmp").unwrap();
+        db.insert_message("s1", "user", Some("Was liegt hier?"), None, None)
+            .unwrap();
+
+        let id = db
+            .insert_message("s1", "assistant", None, None, None)
+            .unwrap();
+        let timeline = r#"[{"kind":"tool","tool":{"id":"c1","name":"bash","output":"a.txt"}},
+                          {"kind":"text","text":"Eine Datei."}]"#;
+        db.update_message(id, Some("Eine Datei."), None, Some(timeline))
+            .unwrap();
+
+        let history = db.load_history("s1").unwrap();
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].role, "user");
+        assert!(history[0].parts.is_none(), "a user message has no timeline");
+
+        let answer = &history[1];
+        assert_eq!(answer.text, "Eine Datei.");
+        let parts = answer.parts.as_deref().expect("timeline is stored");
+        assert!(parts.starts_with(r#"[{"kind":"tool""#), "order is kept: {parts}");
+        assert!(parts.contains(r#""kind":"text""#));
+
+        // A message that predates the timeline still loads, just without parts.
+        db.insert_message("s1", "assistant", Some("Alt"), None, None)
+            .unwrap();
+        let history = db.load_history("s1").unwrap();
+        assert_eq!(history.len(), 3);
+        assert_eq!(history[2].text, "Alt");
+        assert!(history[2].parts.is_none());
 
         let _ = std::fs::remove_dir_all(&directory);
     }

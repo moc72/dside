@@ -14,42 +14,52 @@ defineProps<{
       <img v-if="message.role === 'assistant'" class="avatar" src="/whale.png" alt="" />
       <span v-else class="avatar spacer"></span>
       <div class="bubble">
-        <details v-if="message.reasoning" class="reasoning" :open="message.streaming && !message.text">
-          <summary>{{ t("message.reasoning") }}</summary>
-          <div class="reasoning-body">{{ message.reasoning }}</div>
-        </details>
-
-        <div v-if="message.text" class="text" :class="{ streaming: message.streaming }">
-          {{ message.text }}
-        </div>
-        <div v-else-if="message.streaming && !message.reasoning" class="pending">
-          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-        </div>
-
-        <div v-if="message.tools && message.tools.length" class="tools">
-          <div
-            v-for="tool in message.tools"
-            :key="tool.id"
-            class="tool"
-            :class="{ error: tool.isError, running: tool.running }"
-            :title="tool.output ?? tool.arguments ?? ''"
+        <!-- The answer as a timeline: what was said and what was run, in that order. -->
+        <template v-for="(part, index) in message.parts ?? []" :key="index">
+          <details
+            v-if="part.kind === 'reasoning'"
+            class="reasoning"
+            :open="message.streaming && index === (message.parts?.length ?? 0) - 1"
           >
-            <Icon
-              :name="tool.running ? 'reload' : tool.isError ? 'x' : 'check'"
-              :size="12"
-            />
-            <span class="tool-name">{{ tool.name }}</span>
-            <span class="tool-state">
-              {{
-                tool.running
-                  ? t("engine.running")
-                  : tool.isError
-                    ? t("engine.failed")
-                    : t("engine.done")
-              }}
-            </span>
-            <span v-if="tool.durationMs" class="tool-time">{{ tool.durationMs }}ms</span>
+            <summary>{{ t("message.reasoning") }}</summary>
+            <div class="reasoning-body">{{ part.text }}</div>
+          </details>
+
+          <div
+            v-else-if="part.kind === 'text'"
+            class="text"
+            :class="{ streaming: message.streaming }"
+          >
+            {{ part.text }}
           </div>
+
+          <div v-else class="tools">
+            <div
+              class="tool"
+              :class="{ error: part.tool.isError, running: part.tool.running }"
+              :title="part.tool.output ?? part.tool.arguments ?? ''"
+            >
+              <Icon
+                :name="part.tool.running ? 'reload' : part.tool.isError ? 'x' : 'check'"
+                :size="12"
+              />
+              <span class="tool-name">{{ part.tool.name }}</span>
+              <span class="tool-state">
+                {{
+                  part.tool.running
+                    ? t("engine.running")
+                    : part.tool.isError
+                      ? t("engine.failed")
+                      : t("engine.done")
+                }}
+              </span>
+              <span v-if="part.tool.durationMs" class="tool-time">{{ part.tool.durationMs }}ms</span>
+            </div>
+          </div>
+        </template>
+
+        <div v-if="message.streaming && !(message.parts ?? []).length" class="pending">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
         </div>
 
         <div v-if="message.error" class="error">{{ message.error }}</div>

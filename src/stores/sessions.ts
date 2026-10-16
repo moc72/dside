@@ -43,19 +43,48 @@ export function beginAssistantMessage(): void {
     text: "",
     streaming: true,
     tools: [],
+    parts: [],
   };
   bucket().push(message);
   currentAssistantId = message.id;
 }
 
+/**
+ * Appends to the last part of that kind, or starts a new one. That "or starts a new one" is
+ * the whole point: text that arrives after a tool call belongs below it, not merged into the
+ * text that came before.
+ */
+function appendToPart(message: ChatMessage, kind: "text" | "reasoning", chunk: string): void {
+  const parts = message.parts ?? (message.parts = []);
+  const last = parts[parts.length - 1];
+  if (last?.kind === kind) {
+    last.text += chunk;
+    return;
+  }
+  parts.push({ kind, text: chunk });
+}
+
+/**
+ * Starts an answer if none is open. A turn can also begin without the composer — a scheduled
+ * task, for one — and then nobody called `beginAssistantMessage`: its events arrived for the
+ * active session and were dropped, so the answer only appeared after a reload.
+ */
+export function ensureAssistantMessage(): void {
+  if (!currentAssistantId) beginAssistantMessage();
+}
+
 export function appendAssistantDelta(chunk: string): void {
   const message = currentAssistant();
-  if (message) message.text += chunk;
+  if (!message) return;
+  message.text += chunk;
+  appendToPart(message, "text", chunk);
 }
 
 export function appendAssistantReasoning(chunk: string): void {
   const message = currentAssistant();
-  if (message) message.reasoning = (message.reasoning ?? "") + chunk;
+  if (!message) return;
+  message.reasoning = (message.reasoning ?? "") + chunk;
+  appendToPart(message, "reasoning", chunk);
 }
 
 export function upsertToolActivity(activity: ToolActivity): void {
@@ -65,6 +94,15 @@ export function upsertToolActivity(activity: ToolActivity): void {
   const index = tools.findIndex((entry) => entry.id === activity.id);
   if (index >= 0) tools[index] = { ...tools[index], ...activity };
   else tools.push(activity);
+
+  // The part keeps its place in the timeline while the tool runs and finishes.
+  const parts = message.parts ?? (message.parts = []);
+  const existing = parts.find((part) => part.kind === "tool" && part.tool.id === activity.id);
+  if (existing && existing.kind === "tool") {
+    existing.tool = { ...existing.tool, ...activity };
+    return;
+  }
+  parts.push({ kind: "tool", tool: activity });
 }
 
 export function endAssistantMessage(stopReason?: string): void {

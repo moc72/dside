@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use serde_json::Value;
+use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::oneshot;
 
@@ -368,6 +368,22 @@ fn recall_block(rows: &[crate::db::MemoryRow]) -> String {
     block
 }
 
+/// Writes the turn's timeline onto its message row. Best effort: a log write must never take
+/// a running turn down.
+fn persist_turn(
+    app: &AppHandle,
+    message_id: Option<i64>,
+    said: &str,
+    tool_calls_json: Option<&str>,
+    parts: &[Value],
+) {
+    let Some(id) = message_id else { return };
+    let Some(db) = app.try_state::<Db>() else { return };
+    let content = if said.is_empty() { None } else { Some(said) };
+    let timeline = serde_json::to_string(parts).ok();
+    let _ = db.update_message(id, content, tool_calls_json, timeline.as_deref());
+}
+
 /// The partner's own name: chosen once, by the model itself, and never changed again.
 fn choose_name_tool(app: &AppHandle, args: &Value) -> tools::ToolOutcome {
     let Some(db) = app.try_state::<Db>() else {
@@ -713,7 +729,7 @@ mod tests {
         };
         let outcome = task_tool(
             &config,
-            &serde_json::json!({ "prompt": "Antworte mit genau einem Wort: BEREIT" }),
+            &json!({ "prompt": "Antworte mit genau einem Wort: BEREIT" }),
         )
         .await;
 
@@ -734,7 +750,7 @@ mod tests {
         };
         let outcome = task_tool(
             &config,
-            &serde_json::json!({
+            &json!({
                 "prompt": "Zähle mit dem Tool glob (pattern '*') die Einträge im aktuellen Verzeichnis und nenne mir die Anzahl als Zahl."
             }),
         )
@@ -882,6 +898,14 @@ async fn run_turn(
     let max_turns = config.max_turns.clamp(1, 100);
     let mut outcome_result: Result<(), String> = Ok(());
 
+    // One assistant row for the whole turn, created up front. The timeline is written into it
+    // as the answer grows, so the log and the live view agree on what one answer is.
+    let turn_message_id = app
+        .try_state::<Db>()
+        .and_then(|db| db.insert_message(session_id, "assistant", None, None, None).ok());
+    let mut parts: Vec<Value> = Vec::new();
+    let mut said = String::new();
+
     for _turn in 0..max_turns {
         if cancel.load(Ordering::SeqCst) {
             seq += 1;
@@ -929,22 +953,19 @@ async fn run_turn(
         } else {
             None
         };
-        let content = if outcome.content.is_empty() {
-            None
-        } else {
-            Some(outcome.content.clone())
-        };
+        if !outcome.reasoning.is_empty() {
+            parts.push(json!({ "kind": "reasoning", "text": outcome.reasoning }));
+        }
+        if !outcome.content.is_empty() {
+            parts.push(json!({ "kind": "text", "text": outcome.content }));
+            if !said.is_empty() {
+                said.push('\n');
+            }
+            said.push_str(&outcome.content);
+        }
 
-        let message_id = app.try_state::<Db>().and_then(|db| {
-            db.insert_message(
-                session_id,
-                "assistant",
-                content.as_deref(),
-                tool_calls_json.as_deref(),
-                None,
-            )
-            .ok()
-        });
+        let message_id = turn_message_id;
+        persist_turn(app, message_id, &said, tool_calls_json.as_deref(), &parts);
 
         messages.push(ChatMessage {
             role: "assistant".to_string(),
@@ -1043,6 +1064,19 @@ async fn run_turn(
                     let _ = db.replace_todos(session_id, &todos);
                 }
             }
+
+            parts.push(json!({
+                "kind": "tool",
+                "tool": {
+                    "id": call.id,
+                    "name": call.function.name,
+                    "arguments": call.function.arguments,
+                    "output": tool_outcome.content,
+                    "isError": tool_outcome.is_error,
+                    "durationMs": duration_ms,
+                }
+            }));
+            persist_turn(app, message_id, &said, tool_calls_json.as_deref(), &parts);
 
             messages.push(ChatMessage::tool(call.id.clone(), tool_outcome.content));
         }
