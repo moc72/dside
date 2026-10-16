@@ -850,6 +850,8 @@ pub fn run() {
             db::schedule_toggle,
             skills::skills_list,
             skills::skills_root_path,
+            skills::skill_read,
+            skills::skill_write,
             secret::secret_status,
             secret::secret_set,
             secret::secret_clear,
