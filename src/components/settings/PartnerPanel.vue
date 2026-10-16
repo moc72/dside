@@ -3,6 +3,8 @@ import { computed } from "vue";
 import Icon from "../Icon.vue";
 import { t } from "../../i18n";
 import { PARTNER_NAME_CHOICES, PARTNER_NAME_PLACEHOLDER } from "../../engine/names";
+import type { PartnerNameChoice } from "../../engine/names";
+import { locale } from "../../i18n";
 import { partnerDisplayName, partnerName } from "../../stores/partner";
 import { settings } from "../../stores/settings";
 
@@ -11,6 +13,19 @@ import { settings } from "../../stores/settings";
  * editable here: the partner chooses it itself, once, and that is the point of it.
  */
 const chosen = computed(() => partnerName.value?.trim() ?? "");
+
+/** The meanings exist in the two languages this project is used in. */
+function meaningOf(choice: PartnerNameChoice): string {
+  return locale.value === "de" ? choice.de : choice.en;
+}
+
+/** What the chosen name means, if it happens to be one of the suggestions. */
+const chosenMeaning = computed(() => {
+  const choice = PARTNER_NAME_CHOICES.find(
+    (entry) => entry.name.toLowerCase() === chosen.value.toLowerCase(),
+  );
+  return choice ? meaningOf(choice) : "";
+});
 </script>
 
 <template>
@@ -26,6 +41,7 @@ const chosen = computed(() => partnerName.value?.trim() ?? "");
           <template v-else>{{ PARTNER_NAME_PLACEHOLDER }} <span class="soft">{{ t("partner.placeholder") }}</span></template>
         </div>
         <div class="desc">{{ chosen ? t("partner.nameChosen") : t("partner.nameOpen") }}</div>
+        <div v-if="chosenMeaning" class="desc mean">{{ chosenMeaning }}</div>
       </div>
       <Icon name="sparkle" :size="16" />
     </div>
@@ -41,12 +57,13 @@ const chosen = computed(() => partnerName.value?.trim() ?? "");
            what was on offer instead of having to trust the prompt. -->
       <div class="choices">
         <span
-          v-for="name in PARTNER_NAME_CHOICES"
-          :key="name"
+          v-for="choice in PARTNER_NAME_CHOICES"
+          :key="choice.name"
           class="choice"
-          :class="{ taken: name.toLowerCase() === chosen.toLowerCase() }"
+          :class="{ taken: choice.name.toLowerCase() === chosen.toLowerCase() }"
+          :title="`${choice.origin} — ${meaningOf(choice)}`"
         >
-          {{ name }}
+          {{ choice.name }}
         </span>
       </div>
     </div>
@@ -81,6 +98,11 @@ const chosen = computed(() => partnerName.value?.trim() ?? "");
   border-radius: 999px;
   color: var(--text-muted);
   font-size: 11px;
+}
+
+.mean {
+  margin-top: 2px;
+  color: var(--text);
 }
 
 .choice.taken {
