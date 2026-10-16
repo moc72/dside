@@ -1296,3 +1296,47 @@ und zwar bei *jeder* Anfrage. Besser:
 Unverändert §25–§27, dazu: Bedeutung der kuratierten Liste und der Stichwort-
 Datensatz sind zwei Formate — beim Zusammenführen entscheiden, welches gewinnt
 (Stichwort ist maschinenfreundlich, Etymologie ist lesbarer).
+
+## 29. Der Namenspool gehört dem Begleiter (2026-10-16, neunte Runde)
+
+Commit `f772a32`. Der Nutzer hat die Lizenzfrage geradegerückt: **Namen und ihre
+Bedeutungen sind Tatsachen**, kein geschütztes Werk — man entscheidet, wie man
+seine Kinder nennt, und stellt es dann fest. Meine Vorsicht war außerdem
+inkonsequent (die Namen lagen zu dem Zeitpunkt längst als JSON im Baum). Also
+ohne Vorbehalt weiterverwendet; die Rohseite bleibt trotzdem untracked, nicht aus
+Sorge, sondern weil 1,7 MB Inline-SVG nichts im Repository zu suchen haben.
+
+### Drei Entscheidungen des Nutzers, umgesetzt
+1. **Beliebtheit entfernt** — aus der Tabelle und aus dem Importskript. Ein Name
+   ist nicht deswegen gut, weil ihn viele tragen; die Zahl würde die Wahl
+   schieben. (Der Trend war ohnehin nie im HTML: ein `<canvas>`.)
+2. **Der Nutzer sieht den Pool nicht.** Der Abschnitt „Vorschläge" ist von der
+   Begleiterseite verschwunden; dort stehen nur der gewählte Name und seine
+   Bedeutung. Begründung des Nutzers, wörtlich: sonst kommt „Aber warum willst Du
+   denn 'Selma' heißen, 'Marlow' steht doch auch in der Liste…". Der Name ist die
+   Entscheidung des Begleiters allein — die Oberfläche lädt nicht zur Debatte ein.
+3. **Nur ein Vermerk für die KI.** Die 96 Vorschläge sind **aus dem Systemprompt
+   raus**; dort steht jetzt der Hinweis, dass es einen Pool gibt und wie man ihn
+   benutzt. Neue Werkzeuge:
+   - **`name_ideas(meaning, origin)`** durchsucht ~950 Namen (Tabelle zur
+     Kompilierzeit eingebettet, `search_names` in `lib.rs`) und liefert
+     `Name (Herkunft) — Bedeutung`. Getestet: Poolgröße > 900, Filter nach
+     Bedeutung und Herkunft, leeres Ergebnis, Limit.
+   - **`choose_name` hat eine Bremse**: Es verweigert, solange der Begleiter
+     weniger als **fünf Nachrichten** von dieser Person gehört hat, und sagt
+     dabei, warum (`NAME_MIN_USER_MESSAGES`, `db.count_user_messages()`).
+
+### Die offene Frage des Nutzers: „sollten sie das?“
+Seine Sorge: eine frisch installierte Instanz greift sich in der ersten Minute
+einen Namen. Antwort im Code: **ja, sie sollen wählen dürfen — aber nicht sofort.**
+Ein Name, der 30 Sekunden nach der Installation entsteht, ist beliebig; nach
+*seiner* eigenen Regel (nomen est omen) muss ein Name etwas bedeuten, und dafür
+muss man den Menschen kennen. Deshalb eine Bremse statt einer Regel: das Werkzeug
+sagt „noch zu früh", der Platzhalter bleibt einfach stehen. Es gibt keine Frist
+und keinen Zwang — „Seeky" zu bleiben ist ausdrücklich eine gültige Wahl.
+
+### Offene Punkte
+- Bedeutung meiner 96 kuratierten Einträge (Etymologie, Deutsch/Englisch) und die
+  Stichworte des Pools sind zwei Formate. Aktuell: Pool für die Wahl, kuratierte
+  Liste nur noch als Nachschlagewerk für die Anzeige des gewählten Namens.
+- §25–§28 unverändert (Kompression, Bildanhänge, Alltagsmodus, leere Blase).
