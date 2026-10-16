@@ -70,6 +70,12 @@
   --accent-contrast: #ffffff;
   --danger: #f14c4c;
 
+  /* Message bubbles. Assistant and user get their own tone so the two sides of a
+     conversation stay tellable apart, in both themes. */
+  --bubble-bg: #2c2c2cad;
+  --bubble-user-bg: #282828ad;
+  --bubble-border: #ffffff20;
+
   --radius: 6px;
   --radius-sm: 4px;
   --font: "Ubuntu", "Segoe UI", Inter, Avenir, Helvetica, Arial, sans-serif;
@@ -79,7 +85,11 @@
      value to turn if the mark should be stronger or softer. */
   --watermark: url("/deepseek-mark-white.png");
   --watermark-opacity: 0.06;
-  --watermark-size: 340px;
+  --watermark-size: 75%;
+
+  /* Reading size for the conversation and the previews. The user sets this in settings;
+     the default is what it always was. */
+  --reading-font-size: 13.5px;
 }
 
 [data-theme="light"] {
@@ -107,6 +117,10 @@
   --danger: #c62828;
 
   --watermark: url("/deepseek-mark-blue.png");
+
+  --bubble-bg: #f4f4f4;
+  --bubble-user-bg: #e6e6e6;
+  --bubble-border: #0000001f;
 }
 
 * {

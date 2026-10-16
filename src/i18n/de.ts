@@ -223,6 +223,8 @@ export const de = {
       appearanceLight: "Hell",
       appearanceDark: "Dunkel",
       appearanceSystem: "System",
+    readingSize: "Schriftgröße",
+    readingSizeDesc: "Größe für Gespräch und Vorschau",
       language: "Sprache",
       languageDesc: "Sprache der Benutzeroberfläche",
       workspace: "Arbeitsverzeichnis",

@@ -16,6 +16,7 @@ export interface SettingsState {
   baseUrl: string;
   model: string;
   displayName: string;
+  fontSize: number;
 }
 
 /** The API key is deliberately NOT here: it lives in the OS keyring (see secret.rs). */
@@ -32,6 +33,7 @@ const PERSISTED_KEYS: (keyof SettingsState)[] = [
   "baseUrl",
   "model",
   "displayName",
+  "fontSize",
 ];
 
 const LEGACY_KEY = "ds-ide.settings";
@@ -49,6 +51,7 @@ const defaults: SettingsState = {
   baseUrl: "https://api.deepseek.com",
   model: "deepseek-chat",
   displayName: "",
+  fontSize: 14,
 };
 
 export const settings = reactive<SettingsState>({ ...defaults });
@@ -146,6 +149,18 @@ export function initTheme(): void {
   applyTheme();
   watch(resolvedTheme, applyTheme);
   media?.addEventListener("change", applyTheme);
+}
+
+/**
+ * Reading size for the conversation and the previews. Applied as a CSS variable so a
+ * single value reaches every place that shows prose.
+ */
+export function initReadingSize(): void {
+  const apply = () => {
+    document.documentElement.style.setProperty("--reading-font-size", `${settings.fontSize}px`);
+  };
+  apply();
+  watch(() => settings.fontSize, apply);
 }
 
 export function update<K extends keyof SettingsState>(key: K, value: SettingsState[K]): void {

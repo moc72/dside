@@ -12,6 +12,7 @@ defineProps<{
   <div class="messages">
     <div v-for="message in messages" :key="message.id" class="row" :class="message.role">
       <img v-if="message.role === 'assistant'" class="avatar" src="/whale.png" alt="" />
+      <span v-else class="avatar spacer"></span>
       <div class="bubble">
         <details v-if="message.reasoning" class="reasoning" :open="message.streaming && !message.text">
           <summary>{{ t("message.reasoning") }}</summary>
@@ -88,14 +89,25 @@ defineProps<{
 }
 
 .text {
-  line-height: 1.6;
+  line-height: 1.4;
+  padding: 6px 8px;
   white-space: pre-wrap;
+  border: 1px solid var(--bubble-border);
+  border-radius: var(--radius);
+  background-color: var(--bubble-bg);
+  font-size: var(--reading-font-size);
 }
 
 .row.user .text {
-  padding: 12px 16px;
+  padding: 6px 8px;
+  border: 1px solid var(--bubble-border);
   border-radius: var(--radius);
-  background: var(--bg-elevated);
+  background: var(--bubble-user-bg);
+}
+
+/* Empty seat for the whale: user messages line up with the partner's. */
+.avatar.spacer {
+  background: none;
 }
 
 .pending {
@@ -125,7 +137,7 @@ defineProps<{
 .reasoning-body {
   margin-top: 8px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: max(11px, calc(var(--reading-font-size) - 2px));
   font-style: italic;
   line-height: 1.55;
   white-space: pre-wrap;

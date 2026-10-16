@@ -222,6 +222,8 @@ export const ru: Messages = {
       appearanceLight: "Светлая",
       appearanceDark: "Темная",
       appearanceSystem: "Система",
+    readingSize: "Размер шрифта",
+    readingSizeDesc: "Размер для диалога и предпросмотра",
       language: "Язык",
       languageDesc: "Язык пользовательского интерфейса",
       workspace: "Рабочая директория",

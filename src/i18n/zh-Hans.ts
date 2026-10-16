@@ -222,6 +222,8 @@ export const zhHans: Messages = {
       appearanceLight: "亮色",
       appearanceDark: "暗色",
       appearanceSystem: "系统",
+    readingSize: "字号",
+    readingSizeDesc: "对话和预览的字号",
       language: "语言",
       languageDesc: "用户界面语言",
       workspace: "工作目录",

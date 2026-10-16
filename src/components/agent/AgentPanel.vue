@@ -186,11 +186,12 @@ onBeforeUnmount(() => {
 }
 
 .question {
-  margin: 0 6px 10px;
+  margin: 0 14px 12px;
   padding: 12px 14px;
   border: 1px solid var(--accent-strong);
   border-radius: 12px;
   background: var(--bg-elevated);
+  font-size: var(--reading-font-size);
 }
 
 .question-head {

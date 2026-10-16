@@ -221,6 +221,8 @@ export const es: Messages = {
       appearanceLight: "Claro",
       appearanceDark: "Oscuro",
       appearanceSystem: "Sistema",
+    readingSize: "Tamaño de letra",
+    readingSizeDesc: "Tamaño para la conversación y las vistas previas",
       language: "Idioma",
       languageDesc: "Idioma de la interfaz de usuario",
       workspace: "Directorio de trabajo",

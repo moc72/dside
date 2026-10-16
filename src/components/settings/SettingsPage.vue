@@ -228,6 +228,17 @@ watch(activeItem, (value) => {
 
           <div class="row">
             <div class="text">
+              <div class="label">{{ t("settings.general.readingSize") }}</div>
+              <div class="desc">{{ t("settings.general.readingSizeDesc") }}</div>
+            </div>
+            <div class="sizer">
+              <input v-model.number="settings.fontSize" type="range" min="11" max="20" step="1" />
+              <span class="value">{{ settings.fontSize }} px</span>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="text">
               <div class="label">{{ t("settings.general.language") }}</div>
               <div class="desc">{{ t("settings.general.languageDesc") }}</div>
             </div>
@@ -674,6 +685,25 @@ watch(activeItem, (value) => {
 .value {
   color: var(--text);
   font-size: 13px;
+}
+
+.sizer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 220px;
+}
+
+.sizer input {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+.sizer .value {
+  width: 52px;
+  text-align: right;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .hint {

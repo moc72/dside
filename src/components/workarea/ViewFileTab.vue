@@ -306,7 +306,7 @@ async function toggle(node: FileNode) {
   overflow-y: auto;
   padding: 24px 28px;
   color: var(--text);
-  font-size: 13.5px;
+  font-size: var(--reading-font-size);
   line-height: 1.65;
 }
 

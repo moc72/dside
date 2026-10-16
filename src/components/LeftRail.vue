@@ -295,13 +295,15 @@ function accountSettings() {
 .rail-head {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
   height: 44px;
   padding: 0 14px;
+  margin-top: 10px;
 }
 
 .brand-mark {
-  height: 26px;
+  height: 30px;
   width: auto;
   object-fit: contain;
 }

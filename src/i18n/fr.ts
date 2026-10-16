@@ -224,6 +224,8 @@ export const fr: Messages = {
       appearanceLight: "Clair",
       appearanceDark: "Sombre",
       appearanceSystem: "Système",
+    readingSize: "Taille du texte",
+    readingSizeDesc: "Taille de la conversation et des aperçus",
       language: "Langue",
       languageDesc: "Langue de l'interface utilisateur",
       workspace: "Répertoire de travail",
