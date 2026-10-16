@@ -1413,5 +1413,30 @@ und samt Frontmatter wieder einliest. 23 Rust-Tests.
   (`lib/index.js`) lädt sie nie, und im gebauten Bundle steht kein argparse-Code.
   Bleibt also im Baum, ist aber nicht ausgeliefert.
 
-### 5. Bildanhänge — offen
-### 6. Kompression — offen (danach wird `kilocode-main` gelöscht)
+### 5. Bildanhänge — `cbd1f26`
+Einfügen oder Auswählen im Composer, Anhänge **über** der Eingabe (wie gewünscht),
+jeweils mit Entfernen-Knopf.
+
+- **Der Request-Vertrag wurde vorher geprüft, nicht geraten:** Der Anbieter ignoriert die
+  OpenAI-`image_url`-Inhaltsteile. Er nimmt ein eigenes Feld `image` mit Data-URLs neben
+  dem Text. (Der erste Fehlversuch lag nur daran, dass ein 1×1-Pixel-Bild als
+  „unsupported image" abgelehnt wird — die Form war richtig.)
+- **Ablage:** `attachment_save` schreibt die Datei nach `<app-data>/attachments/` und gibt
+  den Pfad zurück; die Endung kommt aus dem **MIME-Typ**, nicht aus dem Dateinamen. Der
+  Verlauf speichert den Pfad, nicht die Bytes — ein Chatprotokoll darf nicht pro Bild um
+  Megabyte wachsen.
+- **Anzeige:** eine verkleinerte Kopie (Canvas, max. 480 px, JPEG) reist als `preview` mit
+  der Nachricht mit; die Chat-Ansicht zeigt sie, das Modell bekommt das Original.
+- **Zeitleiste:** Bilder sind Teile der Nachricht (`kind: "image"`), neben Text und
+  Werkzeugen — sie überleben das Neuladen, sitzen an der richtigen Stelle und gehen bei
+  späteren Turns wieder mit, weil der Verlauf aus der Datenbank kommt. Eine gelöschte
+  Datei wird übersprungen statt den Turn zu brechen.
+- **Verifiziert:** neuer Live-Test `live_deepseek_takes_an_image` baut ein PNG im Test,
+  schickt es durch unseren eigenen Pfad und bekommt „BILD" zurück (5 Live-Tests grün).
+
+### 6. Kompression — offen
+Nächster Schritt. Plan: `EngineConfig.context_window` (die Oberfläche kennt das Fenster aus
+der Modellliste), eine Tabelle für die Zusammenfassung je Sitzung, Verdichten vor dem Turn
+ab einem Schwellwert (ältere Nachrichten zusammenfassen, Zusammenfassung speichern, nur
+noch Zusammenfassung + jüngste Nachrichten senden) und `session_compact` für den Klick auf
+den Kontext-Ring. Danach wird `kilocode-main/` gelöscht.
