@@ -3,22 +3,11 @@ import { computed, ref, watch } from "vue";
 import Icon from "../Icon.vue";
 import { t } from "../../i18n";
 import { settings } from "../../stores/settings";
-import { knownModels } from "../../stores/models";
-import type { ModelInfo } from "../../stores/models";
+import { modelChoices, modelLabel } from "../../stores/models";
 import { abortTurn, engineReady, running, sendPrompt } from "../../composables/useEngine";
 
 const text = ref("");
 const model = ref(settings.model);
-
-/**
- * Only for the moment before the provider answers: the real list comes from `/models`.
- * These are DeepSeek's actual ids — the previous ones here (`deepseek-flash`, `deepseek-v4-pro`)
- * never existed, and a stored value like that made every request fail with "model not found".
- */
-const fallbackModels: ModelInfo[] = [
-  { id: "deepseek-chat", name: "DeepSeek Chat" },
-  { id: "deepseek-reasoner", name: "DeepSeek Reasoner" },
-];
 
 const canSend = computed(() => text.value.trim().length > 0 && !running.value);
 
@@ -67,16 +56,17 @@ function toggleAuthorization() {
         </div>
 
         <div class="right">
-          <input v-model="model" class="model" list="ds-models" :title="t('composer.model')" />
-          <datalist id="ds-models">
+          <select v-model="model" class="model" :title="`${t('composer.model')}: ${modelLabel(model)} (${model})`">
             <option
-              v-for="entry in knownModels.length ? knownModels : fallbackModels"
-              :key="entry.id"
-              :value="entry.id"
+              v-if="!modelChoices().some((entry) => entry.id === model)"
+              :value="model"
             >
+              {{ model }}
+            </option>
+            <option v-for="entry in modelChoices()" :key="entry.id" :value="entry.id">
               {{ entry.name }}
             </option>
-          </datalist>
+          </select>
 
           <button
             v-if="running"

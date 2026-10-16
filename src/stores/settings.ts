@@ -22,17 +22,17 @@ export interface SettingsState {
 }
 
 /**
- * Which model a mode starts with — both are real DeepSeek ids. Everyday work gets the
- * thinking model, coding the faster one. Changing these two lines changes the pre-selection
- * for both modes; a model the user picks by hand is never overwritten.
+ * Which model a mode starts with — both ids are the ones the provider reports. Everyday work
+ * gets the Pro model, coding the faster Flash one. Changing these two lines changes the
+ * pre-selection for both modes; a model the user picks by hand is never overwritten.
  */
 const MODEL_BY_MODE: Record<AppMode, string> = {
-  everyday: "deepseek-reasoner",
-  coding: "deepseek-chat",
+  everyday: "deepseek-v4-pro",
+  coding: "deepseek-flash",
 };
 
 export function defaultModelFor(mode: AppMode): string {
-  return MODEL_BY_MODE[mode] ?? "deepseek-chat";
+  return MODEL_BY_MODE[mode] ?? MODEL_BY_MODE.coding;
 }
 
 /** The API key is deliberately NOT here: it lives in the OS keyring (see secret.rs). */

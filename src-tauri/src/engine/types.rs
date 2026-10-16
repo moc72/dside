@@ -27,7 +27,7 @@ fn default_base_url() -> String {
 }
 
 fn default_model() -> String {
-    "deepseek-chat".to_string()
+    "deepseek-flash".to_string()
 }
 
 fn default_max_turns() -> u32 {

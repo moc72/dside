@@ -16,10 +16,11 @@ import {
   sessions,
   upsertToolActivity,
 } from "../stores/sessions";
-import { settings } from "../stores/settings";
+import { defaultModelFor, settings } from "../stores/settings";
 import { ensureWorkspace } from "./useWorkspace";
 import { buildPersona } from "../engine/persona";
 import { partnerName, refreshPartnerName } from "../stores/partner";
+import { loadModels } from "../stores/models";
 import { t } from "../i18n";
 
 interface DbSessionRow {
@@ -108,7 +109,7 @@ export async function configureEngine(): Promise<void> {
   await invoke("engine_set_config", {
     config: {
       baseUrl: settings.baseUrl || "https://api.deepseek.com",
-      model: settings.model || "deepseek-chat",
+      model: settings.model || defaultModelFor(settings.mode),
       systemPrompt: buildPersona({
         name: partnerName.value,
         workspace: settings.workspace,
@@ -188,7 +189,11 @@ export async function initEngine(): Promise<void> {
   }
   extractLegacyKey();
   await ensureWorkspace();
+  await refreshSecret();
   await refreshPartnerName();
+  // Ask the provider which models exist before the first turn: an id it does not know would
+  // fail every request, and the field would look fine while doing it.
+  await loadModels();
   await configureEngine();
   await loadSessions();
   await loadHistory(activeSessionId.value);

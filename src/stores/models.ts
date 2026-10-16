@@ -18,11 +18,30 @@ export interface BalanceInfo {
 }
 
 /**
- * Model ids the provider reports for the stored key. The API sends ids only — no display
- * names — so the id is what we show and what we send.
+ * Model ids the provider reports for the stored key. We send the id and show the name the
+ * provider gives it ("DeepSeek-V4.1-Flash" for `deepseek-flash`) — the id alone is what made
+ * the field look like it held a wrong value.
  */
 export const knownModels = ref<ModelInfo[]>([]);
 export const modelsError = ref<string | null>(null);
+
+/**
+ * Until `/models` answers. These are the two ids this provider actually has, with the names
+ * it gives them — a wrong id here would mean a field that looks fine and fails every request.
+ */
+const fallbackModels: ModelInfo[] = [
+  { id: "deepseek-flash", name: "DeepSeek-V4.1-Flash" },
+  { id: "deepseek-v4-pro", name: "DeepSeek-V4-Pro" },
+];
+
+export function modelChoices(): ModelInfo[] {
+  return knownModels.value.length > 0 ? knownModels.value : fallbackModels;
+}
+
+/** The provider's name for a model, or the id itself when it is not in the list. */
+export function modelLabel(id: string): string {
+  return modelChoices().find((entry) => entry.id === id)?.name ?? id;
+}
 
 export const balance = ref<BalanceInfo | null>(null);
 export const balanceError = ref<string | null>(null);

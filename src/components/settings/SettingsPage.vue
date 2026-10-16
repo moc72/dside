@@ -11,7 +11,15 @@ import { locale, localeLabel, locales, setLocale, t } from "../../i18n";
 import type { Locale, MessageKey } from "../../i18n";
 import { links } from "../../engine/links";
 import { settings } from "../../stores/settings";
-import { knownModels, loadBalance, loadModels, modelsError, balance, balanceError } from "../../stores/models";
+import {
+  balance,
+  balanceError,
+  knownModels,
+  loadBalance,
+  loadModels,
+  modelLabel,
+  modelsError,
+} from "../../stores/models";
 import { settingsItem } from "../../stores/ui";
 import { partnerDisplayName } from "../../stores/partner";
 import { reloadTree } from "../../composables/useWorkspace";
@@ -380,7 +388,7 @@ watch(activeItem, (value) => {
           <div class="row">
             <div class="text">
               <div class="label">{{ t("model.model") }}</div>
-              <div class="desc">{{ t("model.modelDesc") }}</div>
+              <div class="desc">{{ modelLabel(settings.model) }}</div>
             </div>
             <div class="model-field">
               <input v-model="settings.model" class="input" list="ds-models" />

@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 
 use super::types::{ChatMessage, EngineConfig, OutgoingFunction, OutgoingToolCall};
 
-/// Which stream a delta belongs to. Reasoning models (`deepseek-reasoner`) send their
+/// Which stream a delta belongs to. A model that thinks sends its
 /// thinking on `reasoning_content` before the answer.
 #[derive(Clone, Copy)]
 pub enum DeltaKind {
@@ -198,7 +198,7 @@ mod live {
             api_key,
             base_url: std::env::var("DS_IDE_BASE_URL")
                 .unwrap_or_else(|_| "https://api.deepseek.com".to_string()),
-            model: std::env::var("DS_IDE_MODEL").unwrap_or_else(|_| "deepseek-chat".to_string()),
+            model: std::env::var("DS_IDE_MODEL").unwrap_or_else(|_| "deepseek-flash".to_string()),
             system_prompt: "You are a terse test assistant. Follow instructions exactly."
                 .to_string(),
             workspace: "/tmp".to_string(),
@@ -272,7 +272,7 @@ mod live {
             eprintln!("skipped: DS_IDE_API_KEY not set");
             return;
         };
-        config.model = "deepseek-reasoner".to_string();
+        config.model = "deepseek-v4-pro".to_string();
 
         let messages = vec![ChatMessage::user("Was ist 17 * 23? Denke kurz nach.")];
         let mut text = String::new();
@@ -291,7 +291,7 @@ mod live {
                 println!("answer: {:?}", outcome.content);
                 assert!(
                     !outcome.reasoning.is_empty(),
-                    "expected reasoning_content from deepseek-reasoner"
+                    "expected reasoning_content from the provider's thinking model"
                 );
                 assert!(!outcome.content.is_empty(), "expected a final answer");
             }

@@ -628,7 +628,7 @@ mod tests {
             api_key,
             base_url: std::env::var("DS_IDE_BASE_URL")
                 .unwrap_or_else(|_| "https://api.deepseek.com".to_string()),
-            model: std::env::var("DS_IDE_MODEL").unwrap_or_else(|_| "deepseek-chat".to_string()),
+            model: std::env::var("DS_IDE_MODEL").unwrap_or_else(|_| "deepseek-flash".to_string()),
             system_prompt: String::new(),
             workspace: std::env::temp_dir().to_string_lossy().to_string(),
             full_authorization: true,
