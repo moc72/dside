@@ -156,12 +156,35 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   display: flex;
+  justify-content: center;
 }
 
+/* The scrolling column *is* the column the composer uses, so both have the same edges.
+   Before, the scrollbar ate into the messages and made them a scrollbar narrower. */
 .scroll {
-  flex: 1;
+  /* No `flex: 1` here: as a flex item its basis would win over the width, and the column
+     would quietly stretch to the whole panel. */
   min-height: 0;
+  width: 70%;
+  margin: 0 auto;
+  padding: 0 6px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-gutter: stable;
+}
+
+.scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scroll::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+
+.scroll::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .jump {

@@ -34,8 +34,8 @@ function escape(text: string): string {
 <template>
   <div class="messages">
     <div v-for="message in messages" :key="message.id" class="row" :class="message.role">
-      <img v-if="message.role === 'assistant'" class="avatar" src="/whale.png" alt="" />
-      <span v-else class="avatar spacer"></span>
+      <!-- <img v-if="message.role === 'assistant'" class="avatar" src="/whale.png" alt="" />
+      <span v-else class="avatar spacer"></span> -->
       <div class="bubble">
         <!-- The answer as a timeline: what was said and what was run, in that order. -->
         <template v-for="(part, index) in message.parts ?? []" :key="index">
@@ -69,7 +69,9 @@ function escape(text: string): string {
             "
           ></div>
 
-          <div v-else class="tools">
+          <!-- No wrapper per tool: one margin on the chip itself, so two chips in a row are
+               exactly one gap apart instead of one per wrapper plus one per element. -->
+          <template v-else>
             <button
               class="tool"
               :class="{ error: part.tool.isError, running: part.tool.running }"
@@ -101,7 +103,7 @@ function escape(text: string): string {
                 {{ t("message.autoApproved") }}
               </p>
             </div>
-          </div>
+          </template>
 
         </template>
 
@@ -119,16 +121,12 @@ function escape(text: string): string {
 .messages {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  max-width: 980px;
-  margin: 0 auto;
   padding: 20px 6px;
 }
 
 .row {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
 }
 
 .avatar {
@@ -146,21 +144,23 @@ function escape(text: string): string {
 /* A whole conversation is easier to read in one column, and a question is never as long as
    an answer: the assistant gets the column, the user 75% of it. */
 .bubble {
-  max-width: 100%;
+  width: 100%;
+  margin-top: 10px;
 }
 
 .row.user .bubble {
-  max-width: 75%;
+  max-width: 70%;
 }
 
 .text {
   line-height: 1.4;
   padding: 6px 8px;
-  white-space: pre-wrap;
+  /* white-space: pre-wrap; */
   border: 1px solid var(--bubble-border);
   border-radius: var(--radius);
   background-color: var(--bubble-bg);
   font-size: var(--reading-font-size);
+  word-break: break-word;
 }
 
 .row.user .text {
@@ -253,12 +253,13 @@ function escape(text: string): string {
 }
 
 .tool-detail {
-  margin: 6px 0 0 18px;
+  margin-top: 6px;
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-left: 2px solid var(--accent);
   border-radius: var(--radius-sm);
   background: var(--bg);
+  align-items: end;
 }
 
 .tool-command {
@@ -286,17 +287,13 @@ function escape(text: string): string {
   font-size: 11px;
 }
 
-.tools {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 10px;
-}
-
 .tool {
   display: flex;
   align-items: center;
   gap: 8px;
+  /* Full width, so the row reads as a row: icons left, what it did at the right end. */
+  width: 100%;
+  margin-top: 10px;
   padding: 5px 9px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -304,7 +301,6 @@ function escape(text: string): string {
   color: var(--text-muted);
   font-family: inherit;
   font-size: 12px;
-  width: fit-content;
   cursor: pointer;
 }
 
@@ -322,7 +318,9 @@ function escape(text: string): string {
   border-color: var(--danger);
 }
 
+/* Name, state and duration sit at the right end of the row; the two icons stay left. */
 .tool-name {
+  margin-left: auto;
   color: var(--text);
   font-family: var(--mono);
 }

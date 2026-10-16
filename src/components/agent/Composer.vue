@@ -235,10 +235,16 @@ function toggleAuthorization() {
 </template>
 
 <style scoped>
+/* Its own surface, so the message that scrolls up behind it is not "cut through" it, and
+   the same 70% column as the list above. */
 .composer-wrap {
-  max-width: 980px;
-  margin: 0 auto;
-  padding: 0 6px 10px;
+  /* The message column reserves 6px for its scrollbar, so this box mirrors that: both have
+     the same visible left and right edge instead of being "the same width" in numbers only. */
+  width: calc(70% - 6px);
+  margin-left: calc(15% + 3px);
+  padding: 8px 6px 10px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-app);
 }
 
 .note {
@@ -290,9 +296,9 @@ function toggleAuthorization() {
 }
 
 .composer {
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: 12px;
-  background: var(--bg-panel);
+  background: var(--bg);
   padding: 10px 12px 8px;
 }
 
