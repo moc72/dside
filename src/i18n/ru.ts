@@ -169,6 +169,7 @@ export const ru: Messages = {
     fullAuthorization: "Полные права",
     scrollToBottom: "Вниз",
     attach: "Вложение",
+    removeAttachment: "Убрать вложение",
     model: "Модель",
     contextHint: "{used} из {total} токенов в контексте ({percent} %)",
     contextUnknown: "Запросов ещё не было.",

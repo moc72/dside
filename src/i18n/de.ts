@@ -167,6 +167,7 @@ export const de = {
     fullAuthorization: "Volle Berechtigung",
     scrollToBottom: "Nach unten",
     attach: "Anhang",
+    removeAttachment: "Anhang entfernen",
     model: "Modell",
     contextHint: "{used} von {total} Token im Kontext ({percent} %)",
     contextUnknown: "Noch keine Anfrage gelaufen.",

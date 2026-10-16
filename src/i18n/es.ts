@@ -168,6 +168,7 @@ export const es: Messages = {
     fullAuthorization: "Plenos permisos",
     scrollToBottom: "Desplazar al final",
     attach: "Adjunto",
+    removeAttachment: "Quitar adjunto",
     model: "Modelo",
     contextHint: "{used} de {total} tokens en contexto ({percent} %)",
     contextUnknown: "Todavía no se ha ejecutado ninguna consulta.",

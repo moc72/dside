@@ -54,6 +54,9 @@ pub struct ChatMessage {
     pub role: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
+    /// Data URLs. Only the user sends these, and only when something was attached.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<OutgoingToolCall>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -65,6 +68,7 @@ impl ChatMessage {
         Self {
             role: "system".to_string(),
             content: Some(content.into()),
+            image: None,
             tool_calls: None,
             tool_call_id: None,
         }
@@ -74,15 +78,18 @@ impl ChatMessage {
         Self {
             role: "user".to_string(),
             content: Some(content.into()),
+            image: None,
             tool_calls: None,
             tool_call_id: None,
         }
     }
 
+
     pub fn tool(tool_call_id: impl Into<String>, content: impl Into<String>) -> Self {
         Self {
             role: "tool".to_string(),
             content: Some(content.into()),
+            image: None,
             tool_calls: None,
             tool_call_id: Some(tool_call_id.into()),
         }

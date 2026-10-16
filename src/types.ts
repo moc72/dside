@@ -38,7 +38,9 @@ export interface Session {
 export type MessagePart =
   | { kind: "text"; text: string }
   | { kind: "reasoning"; text: string }
-  | { kind: "tool"; tool: ToolActivity };
+  | { kind: "tool"; tool: ToolActivity }
+  /** A picture the user attached. `preview` is the small copy the chat shows. */
+  | { kind: "image"; text: string; path: string; name: string; mime: string; preview: string };
 
 export interface ChatMessage {
   id: string;

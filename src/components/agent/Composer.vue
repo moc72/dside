@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
+import { invoke } from "@tauri-apps/api/core";
 import Icon from "../Icon.vue";
 import ContextRing from "./ContextRing.vue";
 import { t } from "../../i18n";
@@ -8,6 +9,81 @@ import { modelChoices, modelLabel } from "../../stores/models";
 import { abortTurn, engineReady, running, sendPrompt } from "../../composables/useEngine";
 
 const text = ref("");
+
+interface PendingAttachment {
+  path: string;
+  name: string;
+  mime: string;
+  /** A small copy for the chat, so a conversation does not reload full pictures. */
+  preview: string;
+}
+
+const attachments = ref<PendingAttachment[]>([]);
+const fileInput = ref<HTMLInputElement | null>(null);
+
+/** Scales the picture down and re-encodes it: the chat shows this, the model gets the original. */
+function makePreview(source: string): Promise<string> {
+  return new Promise<string>((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const scale = Math.min(1, 480 / Math.max(image.width, image.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.width * scale));
+      canvas.height = Math.max(1, Math.round(image.height * scale));
+      const context = canvas.getContext("2d");
+      if (!context) return resolve(source);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.72));
+    };
+    image.onerror = () => resolve(source);
+    image.src = source;
+  });
+}
+
+async function addImages(files: File[]): Promise<void> {
+  for (const file of files) {
+    if (!file.type.startsWith("image/")) continue;
+    const dataUrl = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ""));
+      reader.readAsDataURL(file);
+    });
+    if (!dataUrl.includes(",")) continue;
+    const preview = await makePreview(dataUrl);
+    try {
+      const path = await invoke<string>("attachment_save", {
+        name: file.name || "image",
+        mime: file.type,
+        dataBase64: dataUrl.slice(dataUrl.indexOf(",") + 1),
+      });
+      attachments.value.push({
+        path,
+        name: file.name || "image",
+        mime: file.type,
+        preview,
+      });
+    } catch {
+      // A file that could not be stored is not worth breaking the message over.
+    }
+  }
+}
+
+function onPaste(event: ClipboardEvent): void {
+  const files = Array.from(event.clipboardData?.files ?? []);
+  if (files.length === 0) return;
+  event.preventDefault();
+  void addImages(files);
+}
+
+function onFiles(event: Event): void {
+  const input = event.target as HTMLInputElement;
+  void addImages(Array.from(input.files ?? []));
+  input.value = "";
+}
+
+function removeAttachment(index: number): void {
+  attachments.value.splice(index, 1);
+}
 
 /**
  * The field grows with what is typed and stops at ten lines — long enough for a real prompt,
@@ -53,6 +129,21 @@ function toggleAuthorization() {
 <template>
   <div class="composer-wrap">
     <form class="composer" @submit.prevent="submit">
+      <!-- Attachments sit above the field, where they were added. -->
+      <div v-if="attachments.length" class="attachments">
+        <div v-for="(item, index) in attachments" :key="item.path" class="attachment">
+          <img :src="item.preview" :alt="item.name" :title="item.name" />
+          <button
+            class="remove"
+            type="button"
+            :title="t('composer.removeAttachment')"
+            @click="removeAttachment(index)"
+          >
+            <Icon name="x" :size="11" />
+          </button>
+        </div>
+      </div>
+
       <textarea
         ref="box"
         v-model="text"
@@ -61,13 +152,22 @@ function toggleAuthorization() {
         :placeholder="t('composer.placeholder')"
         @keydown.enter.exact.prevent="submit"
         @input="autoGrow"
+        @paste="onPaste"
       ></textarea>
 
       <div class="row">
         <div class="left">
-          <button class="chip" type="button" :title="t('composer.attach')">
+          <button class="chip" type="button" :title="t('composer.attach')" @click="fileInput?.click()">
             <Icon name="plus" :size="14" />
           </button>
+          <input
+            ref="fileInput"
+            class="file-input"
+            type="file"
+            accept="image/*"
+            multiple
+            @change="onFiles"
+          />
           <button
             class="chip"
             :class="{ on: settings.fullAuthorization }"
@@ -127,6 +227,48 @@ function toggleAuthorization() {
   max-width: 980px;
   margin: 0 auto;
   padding: 0 6px 10px;
+}
+
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.attachment {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.attachment img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.remove {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 65%);
+  color: #fff;
+  cursor: pointer;
+}
+
+.file-input {
+  display: none;
 }
 
 .composer {

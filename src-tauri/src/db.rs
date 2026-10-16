@@ -125,6 +125,33 @@ fn row_to_memory(row: &rusqlite::Row<'_>) -> rusqlite::Result<MemoryRow> {
     })
 }
 
+/// Reads the image parts of a stored message back into the data URLs the provider wants.
+/// Missing files are skipped — a deleted picture must not break the conversation.
+fn images_from_parts(parts: Option<&str>) -> Option<Vec<String>> {
+    let parsed: Vec<serde_json::Value> = serde_json::from_str(parts?).ok()?;
+    let images: Vec<String> = parsed
+        .iter()
+        .filter(|part| part.get("kind").and_then(|kind| kind.as_str()) == Some("image"))
+        .filter_map(|part| {
+            let path = part.get("path")?.as_str()?;
+            let mime = part
+                .get("mime")
+                .and_then(|value| value.as_str())
+                .unwrap_or("image/png");
+            let bytes = std::fs::read(path).ok()?;
+            Some(format!(
+                "data:{mime};base64,{}",
+                crate::base64_encode(&bytes)
+            ))
+        })
+        .collect();
+    if images.is_empty() {
+        None
+    } else {
+        Some(images)
+    }
+}
+
 /// Adds a column to an existing table when an older database does not have it yet.
 fn add_column(
     conn: &Connection,
@@ -630,7 +657,7 @@ impl Db {
         let conn = self.lock()?;
         let mut statement = conn
             .prepare(
-                "SELECT role, content, tool_calls, tool_call_id FROM messages
+                "SELECT role, content, tool_calls, tool_call_id, parts FROM messages
                  WHERE session_id = ?1 ORDER BY id",
             )
             .map_err(|error| error.to_string())?;
@@ -641,19 +668,29 @@ impl Db {
                     row.get::<_, Option<String>>(1)?,
                     row.get::<_, Option<String>>(2)?,
                     row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Option<String>>(4)?,
                 ))
             })
             .map_err(|error| error.to_string())?;
 
         let mut messages = Vec::new();
         for row in rows {
-            let (role, content, tool_calls, tool_call_id) = row.map_err(|error| error.to_string())?;
+            let (role, content, tool_calls, tool_call_id, parts) =
+                row.map_err(|error| error.to_string())?;
             let parsed_calls = tool_calls
                 .as_deref()
                 .and_then(|raw| serde_json::from_str::<Vec<crate::engine::types::OutgoingToolCall>>(raw).ok());
+            // A question that came with pictures sends them again: the earlier turn is still
+            // part of the conversation the model is answering.
+            let images = if role == "user" {
+                images_from_parts(parts.as_deref())
+            } else {
+                None
+            };
             messages.push(crate::engine::types::ChatMessage {
                 role,
                 content,
+                image: images,
                 tool_calls: parsed_calls,
                 tool_call_id,
             });
@@ -983,6 +1020,18 @@ impl Db {
             }
         }
         Ok(retired)
+    }
+
+    /// The row just written for a session. Used when a message is created and then filled in
+    /// (the timeline of an answer, or the images of a question).
+    pub fn last_message_id(&self, session_id: &str) -> Result<Option<i64>, String> {
+        let conn = self.lock()?;
+        conn.query_row(
+            "SELECT MAX(id) FROM messages WHERE session_id = ?1",
+            params![session_id],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())
     }
 
     /// How many messages the user has written in total, across sessions. Used as the honest

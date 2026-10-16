@@ -344,7 +344,17 @@ export async function createSession(): Promise<void> {
   clearConversation();
 }
 
-export async function sendPrompt(text: string): Promise<void> {
+export interface OutgoingAttachment {
+  path: string;
+  name: string;
+  mime: string;
+  preview: string;
+}
+
+export async function sendPrompt(
+  text: string,
+  attachments: OutgoingAttachment[] = [],
+): Promise<void> {
   if (running.value) return;
   lastError.value = null;
 
@@ -354,12 +364,16 @@ export async function sendPrompt(text: string): Promise<void> {
     return;
   }
 
-  appendUserMessage(text);
+  appendUserMessage(text, attachments);
   beginAssistantMessage();
   running.value = true;
 
   try {
-    await invoke("engine_send", { sessionId: activeSessionId.value, prompt: text });
+    await invoke("engine_send", {
+      sessionId: activeSessionId.value,
+      prompt: text,
+      attachments,
+    });
   } catch (error) {
     running.value = false;
     lastError.value = String(error);

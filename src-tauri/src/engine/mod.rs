@@ -81,8 +81,13 @@ pub fn engine_abort(app: AppHandle, session_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn engine_send(app: AppHandle, session_id: String, prompt: String) -> Result<(), String> {
-    send_prompt(&app, &session_id, &prompt)
+pub fn engine_send(
+    app: AppHandle,
+    session_id: String,
+    prompt: String,
+    attachments: Option<Vec<AttachmentRef>>,
+) -> Result<(), String> {
+    send_prompt(&app, &session_id, &prompt, &attachments.unwrap_or_default())
 }
 
 /// What the provider reports for one model. The API knows friendlier names than the id,
@@ -245,7 +250,24 @@ pub fn engine_answer(app: AppHandle, action_id: String, answer: String) -> Resul
 
 /// Starts one turn. Shared by the `engine_send` command and the scheduler, so a timed run
 /// goes through exactly the same path (persistence, tools, events) as a typed one.
-pub fn send_prompt(app: &AppHandle, session_id: &str, prompt: &str) -> Result<(), String> {
+/// One attached file, as the webview knows it: where the bytes are, what it is, and a small
+/// preview the conversation can show without loading the original again.
+#[derive(Clone, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AttachmentRef {
+    pub path: String,
+    pub name: String,
+    pub mime: String,
+    #[serde(default)]
+    pub preview: Option<String>,
+}
+
+pub fn send_prompt(
+    app: &AppHandle,
+    session_id: &str,
+    prompt: &str,
+    attachments: &[AttachmentRef],
+) -> Result<(), String> {
     let mut config = {
         let state = app.state::<EngineState>();
         let slot = state.config.lock().map_err(|error| error.to_string())?;
@@ -266,7 +288,28 @@ pub fn send_prompt(app: &AppHandle, session_id: &str, prompt: &str) -> Result<()
     let messages = match app.try_state::<Db>() {
         Some(db) => {
             db.ensure_session(session_id, "", "project", &config.workspace)?;
+            // The images belong to this message, so they are stored with it — as a timeline,
+            // exactly like an answer (see §24).
+            let mut parts: Vec<Value> = attachments
+                .iter()
+                .map(|attachment| {
+                    json!({
+                        "kind": "image",
+                        "path": attachment.path,
+                        "name": attachment.name,
+                        "mime": attachment.mime,
+                        "preview": attachment.preview,
+                    })
+                })
+                .collect();
+            if !prompt.is_empty() {
+                parts.push(json!({ "kind": "text", "text": prompt }));
+            }
+            let timeline = serde_json::to_string(&parts).ok();
             db.insert_message(session_id, "user", Some(prompt), None, None)?;
+            if let (Some(timeline), Some(id)) = (timeline.as_deref(), db.last_message_id(session_id).ok().flatten()) {
+                let _ = db.update_message(id, Some(prompt), None, Some(timeline));
+            }
             db.touch_session(session_id)?;
             db.load_llm_messages(session_id)?
         }
@@ -330,7 +373,7 @@ pub fn run_due_schedules(app: &AppHandle) {
 
     for schedule in due {
         let _ = db.mark_schedule_run(schedule.id, now + schedule.interval_seconds);
-        if let Err(error) = send_prompt(app, &schedule.session_id, &schedule.prompt) {
+        if let Err(error) = send_prompt(app, &schedule.session_id, &schedule.prompt, &[]) {
             eprintln!("scheduler: schedule {} failed: {error}", schedule.id);
         }
     }
@@ -632,6 +675,7 @@ pub async fn task_tool(config: &EngineConfig, args: &Value) -> tools::ToolOutcom
         let has_tool_calls = !outcome.tool_calls.is_empty();
         messages.push(ChatMessage {
             role: "assistant".to_string(),
+            image: None,
             content: if outcome.content.is_empty() {
                 None
             } else {
@@ -994,6 +1038,7 @@ async fn run_turn(
 
         messages.push(ChatMessage {
             role: "assistant".to_string(),
+            image: None,
             content: outcome.content.clone().into(),
             tool_calls: if has_tool_calls {
                 Some(outcome.tool_calls.clone())

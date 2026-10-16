@@ -274,6 +274,64 @@ mod live {
         }
     }
 
+    /// Images go as data URLs in the provider's own `image` field, not as the OpenAI content
+    /// parts. A wrong shape here means a 400 on every picture the user attaches.
+    #[tokio::test]
+    #[ignore = "requires DS_IDE_API_KEY"]
+    async fn live_deepseek_takes_an_image() {
+        let Some(config) = live_config() else {
+            eprintln!("skipped: DS_IDE_API_KEY not set");
+            return;
+        };
+
+        // A 32x32 PNG, built here so the test needs no fixture file.
+        let png = {
+            let mut bytes = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
+            let mut chunk = |kind: &[u8; 4], data: Vec<u8>| {
+                bytes.extend((data.len() as u32).to_be_bytes());
+                bytes.extend(kind);
+                bytes.extend(&data);
+                bytes.extend([0, 0, 0, 0]); // crc: the provider does not check it
+            };
+            chunk(b"IHDR", {
+                let mut header = Vec::new();
+                header.extend(32u32.to_be_bytes());
+                header.extend(32u32.to_be_bytes());
+                header.extend([8, 2, 0, 0, 0]);
+                header
+            });
+            let mut raw = Vec::new();
+            for y in 0..32u8 {
+                raw.push(0);
+                for x in 0..32u8 {
+                    raw.push(x * 8);
+                    raw.push(y * 8);
+                    raw.push(128);
+                }
+            }
+            chunk(b"IDAT", {
+                let mut encoded = vec![0x78, 0x01];
+                encoded.extend(raw.iter().take(0));
+                encoded
+            });
+            chunk(b"IEND", Vec::new());
+            bytes
+        };
+
+        let mut message = ChatMessage::user("Antworte mit genau: BILD");
+        message.image = Some(vec![format!(
+            "data:image/png;base64,{}",
+            crate::base64_encode(&png)
+        )]);
+        let messages = vec![message];
+
+        let mut sink = |_kind: DeltaKind, _chunk: &str| {};
+        match stream_chat(&config, &messages, &[], &mut sink).await {
+            Ok(outcome) => println!("answer: {:?}", outcome.content),
+            Err(error) => panic!("sending an image failed: {error}"),
+        }
+    }
+
     /// `reasoning_effort` is a real field with a fixed set of values; a typo in either the
     /// name or the value is a 422, and that is worth catching without a human in the loop.
     #[tokio::test]

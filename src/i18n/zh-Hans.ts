@@ -169,6 +169,7 @@ export const zhHans: Messages = {
     fullAuthorization: "完全权限",
     scrollToBottom: "向下滚动",
     attach: "附件",
+    removeAttachment: "移除附件",
     model: "模型",
     contextHint: "上下文中已用 {used} / {total} 词元（{percent}%）",
     contextUnknown: "尚未发起请求。",

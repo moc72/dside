@@ -48,6 +48,17 @@ function escape(text: string): string {
             <div class="reasoning-body">{{ part.text }}</div>
           </details>
 
+          <img
+            v-else-if="part.kind === 'image' && part.preview"
+            class="attachment"
+            :src="part.preview"
+            :alt="part.name"
+            :title="part.name"
+          />
+
+          <!-- A picture without a stored preview still says which file it was. -->
+          <div v-else-if="part.kind === 'image'" class="attachment-name">{{ part.name }}</div>
+
           <div
             v-else-if="part.kind === 'text'"
             class="text"
@@ -223,6 +234,22 @@ function escape(text: string): string {
   50% {
     opacity: 1;
   }
+}
+
+.attachment-name {
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.attachment {
+  display: block;
+  max-width: min(420px, 100%);
+  max-height: 320px;
+  margin: 0 0 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  object-fit: contain;
 }
 
 .tool-detail {

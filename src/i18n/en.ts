@@ -169,6 +169,7 @@ export const en: Messages = {
     fullAuthorization: "Full Authorization",
     scrollToBottom: "Scroll to bottom",
     attach: "Attach",
+    removeAttachment: "Remove attachment",
     model: "Model",
     contextHint: "{used} of {total} tokens in context ({percent}%)",
     contextUnknown: "No request has run yet.",

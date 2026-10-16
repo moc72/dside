@@ -1,6 +1,6 @@
 import { computed, reactive, ref, watch } from "vue";
 import { saveUiState } from "../lib/uiState";
-import type { ChatMessage, Session, ToolActivity } from "../types";
+import type { ChatMessage, MessagePart, Session, ToolActivity } from "../types";
 
 export const sessions = ref<Session[]>([]);
 
@@ -30,9 +30,22 @@ function currentAssistant(): ChatMessage | undefined {
   return bucket().find((message) => message.id === currentAssistantId);
 }
 
-export function appendUserMessage(text: string): void {
+export function appendUserMessage(
+  text: string,
+  attachments: { path: string; name: string; mime: string; preview: string }[] = [],
+): void {
   seq += 1;
-  bucket().push({ id: `u${seq}`, role: "user", text });
+  // The same shape the database stores, so a reloaded conversation looks identical.
+  const parts: MessagePart[] = attachments.map((attachment) => ({
+    kind: "image",
+    text: "",
+    path: attachment.path,
+    name: attachment.name,
+    mime: attachment.mime,
+    preview: attachment.preview,
+  }));
+  if (text) parts.push({ kind: "text", text });
+  bucket().push({ id: `u${seq}`, role: "user", text, parts });
 }
 
 export function beginAssistantMessage(): void {

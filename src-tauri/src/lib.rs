@@ -539,7 +539,7 @@ fn read_file_base64(path: String) -> Result<String, String> {
 }
 
 /// Hand-rolled to avoid another dependency; sixteen lines and easy to test.
-fn base64_encode(bytes: &[u8]) -> String {
+pub(crate) fn base64_encode(bytes: &[u8]) -> String {
     const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
 
@@ -604,6 +604,80 @@ fn search_names(needle: Option<&str>, origin: Option<&str>, limit: usize) -> Vec
 /// Names to choose from, by what they mean. Not a menu: a place to look when nothing comes
 /// to mind. Kept out of the system prompt on purpose — 947 entries would ride along in every
 /// single request.
+/// Writes an attachment next to the database and hands back its path. The conversation keeps
+/// the path, not the bytes: a chat log should not grow by megabytes per picture.
+#[tauri::command]
+fn attachment_save(app: AppHandle, name: String, mime: String, data_base64: String) -> Result<String, String> {
+    let directory = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?
+        .join("attachments");
+    std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+
+    let bytes = base64_decode(&data_base64).ok_or_else(|| "attachment: unreadable data".to_string())?;
+    // The content type decides the extension: it is what the file actually is, while a name
+    // can say anything.
+    let extension = match mime.as_str() {
+        "image/png" => "png".to_string(),
+        "image/jpeg" => "jpg".to_string(),
+        "image/webp" => "webp".to_string(),
+        "image/gif" => "gif".to_string(),
+        _ => name
+            .rsplit('.')
+            .next()
+            .filter(|value| value.len() <= 5 && value.chars().all(|c| c.is_ascii_alphanumeric()))
+            .unwrap_or("bin")
+            .to_lowercase(),
+    };
+    let stem: String = name
+        .trim_end_matches(&format!(".{extension}"))
+        .chars()
+        .map(|character| if character.is_ascii_alphanumeric() { character } else { '-' })
+        .collect();
+    let stem = stem.trim_matches('-').chars().take(40).collect::<String>();
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let file = directory.join(format!("{stamp}-{stem}.{extension}"));
+    std::fs::write(&file, bytes).map_err(|error| error.to_string())?;
+    Ok(file.to_string_lossy().to_string())
+}
+
+fn base64_decode(value: &str) -> Option<Vec<u8>> {
+    fn digit(character: u8) -> Option<u8> {
+        match character {
+            b'A'..=b'Z' => Some(character - b'A'),
+            b'a'..=b'z' => Some(character - b'a' + 26),
+            b'0'..=b'9' => Some(character - b'0' + 52),
+            b'+' => Some(62),
+            b'/' => Some(63),
+            _ => None,
+        }
+    }
+    let cleaned: Vec<u8> = value
+        .bytes()
+        .filter(|byte| !byte.is_ascii_whitespace())
+        .collect();
+    let mut out = Vec::with_capacity(cleaned.len() / 4 * 3);
+    for chunk in cleaned.chunks(4) {
+        let mut buffer = 0u32;
+        let mut count = 0;
+        for (index, byte) in chunk.iter().enumerate() {
+            if *byte == b'=' {
+                break;
+            }
+            buffer |= (digit(*byte)? as u32) << (18 - 6 * index);
+            count += 1;
+        }
+        if count >= 2 { out.push((buffer >> 16) as u8); }
+        if count >= 3 { out.push((buffer >> 8) as u8); }
+        if count >= 4 { out.push(buffer as u8); }
+    }
+    Some(out)
+}
+
 #[tauri::command]
 fn name_ideas(meaning: Option<String>, origin: Option<String>, limit: Option<usize>) -> Vec<String> {
     search_names(meaning.as_deref(), origin.as_deref(), limit.unwrap_or(40).min(200))
@@ -841,6 +915,7 @@ pub fn run() {
             db::memory_retire,
             db::memory_restore,
             name_ideas,
+            attachment_save,
             db::memory_report,
             db::memory_prune,
             db::search,

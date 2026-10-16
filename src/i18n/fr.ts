@@ -168,6 +168,7 @@ export const fr: Messages = {
     fullAuthorization: "Autorisation complète",
     scrollToBottom: "Défilement vers le bas",
     attach: "Pièce jointe",
+    removeAttachment: "Retirer la pièce jointe",
     model: "Modèle",
     contextHint: "{used} sur {total} jetons en contexte ({percent} %)",
     contextUnknown: "Aucune requête pour l'instant.",
