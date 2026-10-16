@@ -985,6 +985,18 @@ impl Db {
         Ok(retired)
     }
 
+    /// How many messages the user has written in total, across sessions. Used as the honest
+    /// answer to "do you know this person well enough to take a permanent name".
+    pub fn count_user_messages(&self) -> Result<i64, String> {
+        let conn = self.lock()?;
+        conn.query_row(
+            "SELECT COUNT(*) FROM messages WHERE role = 'user'",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())
+    }
+
     /// The partner's own name. `None` means it has not chosen one yet and is still going by
     /// the placeholder.
     pub fn partner_name(&self) -> Result<Option<String>, String> {

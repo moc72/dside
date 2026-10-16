@@ -268,6 +268,20 @@ pub fn definitions() -> Vec<Value> {
         json!({
             "type": "function",
             "function": {
+                "name": "name_ideas",
+                "description": "Look up names by what they mean, from a pool of about 950. Use it when you want to choose your own name and nothing comes to mind — or when you want to see what a name actually means before taking it.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "meaning": { "type": "string", "description": "What it should mean, e.g. 'light', 'guardian', 'stone'." },
+                        "origin": { "type": "string", "description": "Optional language or culture, e.g. 'Old Norse'." }
+                    }
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
                 "name": "choose_name",
                 "description": "Choose the name you want to be called by. You are currently going by the placeholder 'Seeky'. This is a one-time decision and cannot be changed afterwards, so do it when you have a name that actually fits this person and the way you two work — not on the first turn. Say it in the answer as well: the user sees it immediately.",
                 "parameters": {

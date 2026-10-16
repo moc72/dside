@@ -2,9 +2,9 @@
 """Turn a saved names table (HTML fragment) into our own table.
 
 The pages the user saves carry one `<tr>` per name with the columns
-Name | Herkunft | Bedeutung | Beliebtheit | Trend. Popularity is not text — it is the
-width of a coloured bar in an inline SVG, scaled to 50. Trend is drawn on a `<canvas>`,
-so its data is not in the HTML at all and stays empty here.
+Name | Herkunft | Bedeutung | Beliebtheit | Trend. Only name, origin and meaning are kept:
+popularity would nudge the choice ("but Marlow is more popular"), and trend is drawn on a
+`<canvas>`, so its data is not in the HTML to begin with.
 
 Usage:
     python3 scripts/namen_import.py src/assets/namen.html [--append]
@@ -22,8 +22,7 @@ import pathlib
 import re
 import sys
 
-COLUMNS = ["name", "origin", "meaning", "popularity"]
-BAR_SCALE = 50.0
+COLUMNS = ["name", "origin", "meaning"]
 
 
 def cells(row: str) -> list[str]:
@@ -34,15 +33,6 @@ def text_of(cell: str) -> str:
     cell = re.sub(r"<svg.*?</svg>", " ", cell, flags=re.S)
     cell = re.sub(r"<canvas.*?</canvas>", " ", cell, flags=re.S)
     return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", cell))).strip()
-
-
-def popularity(cell: str) -> float | None:
-    widths = [float(w) for w in re.findall(r'<rect[^>]*width="([0-9.]+)"', cell)]
-    if not widths:
-        return None
-    # First rectangle is the grey track (always full), the coloured one holds the value.
-    value = next((w for w in widths if w < BAR_SCALE), widths[0])
-    return round(value / BAR_SCALE * 100, 1)
 
 
 def parse(path: pathlib.Path) -> list[dict]:
@@ -56,23 +46,15 @@ def parse(path: pathlib.Path) -> list[dict]:
         name, origin, meaning = values[1], values[2], values[3]
         if not name or not meaning:
             continue
-        table.append(
-            {
-                "name": name,
-                "origin": origin,
-                "meaning": meaning,
-                "popularity": popularity(columns[4]) if len(columns) > 4 else None,
-            }
-        )
+        table.append({"name": name, "origin": origin, "meaning": meaning})
     return table
 
 
 def write_table(directory: pathlib.Path, rows: list[dict]) -> None:
     with io.open(directory / "namen.tsv", "w", encoding="utf-8") as out:
-        out.write("Name\tHerkunft\tBedeutung\tBeliebtheit\n")
+        out.write("Name\tHerkunft\tBedeutung\n")
         for entry in rows:
-            pop = "" if entry["popularity"] is None else str(entry["popularity"])
-            out.write(f"{entry['name']}\t{entry['origin']}\t{entry['meaning']}\t{pop}\n")
+            out.write(f"{entry['name']}\t{entry['origin']}\t{entry['meaning']}\n")
 
     with io.open(directory / "namen.json", "w", encoding="utf-8") as out:
         json.dump(rows, out, ensure_ascii=False, indent=1)
@@ -106,7 +88,6 @@ def main(argv: list[str]) -> int:
     print(f"{source.name}: {len(rows)} rows, {len(set(names))} distinct names")
     print(f"  duplicated names kept: {len(duplicates)}")
     print(f"  distinct meanings: {len(meanings)} — top: {meanings.most_common(5)}")
-    print(f"  without popularity: {sum(1 for entry in rows if entry['popularity'] is None)}")
 
     if "--report" not in argv:
         write_table(directory, rows)

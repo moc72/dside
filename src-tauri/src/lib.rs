@@ -570,6 +570,45 @@ fn default_workspace() -> String {
     std::env::var("HOME").unwrap_or_else(|_| ".".to_string())
 }
 
+/// The name pool the partner may browse. Embedded at compile time, so it works the same in a
+/// packaged build as in the repository — no path to get wrong.
+const NAME_POOL: &str = include_str!("../../src/assets/namen.json");
+
+#[derive(serde::Deserialize)]
+struct NameIdea {
+    name: String,
+    origin: String,
+    meaning: String,
+}
+
+fn search_names(needle: Option<&str>, origin: Option<&str>, limit: usize) -> Vec<String> {
+    let pool: Vec<NameIdea> = match serde_json::from_str(NAME_POOL) {
+        Ok(pool) => pool,
+        Err(_) => return Vec::new(),
+    };
+    let needle = needle.map(str::to_lowercase).filter(|text| !text.is_empty());
+    let origin = origin.map(str::to_lowercase).filter(|text| !text.is_empty());
+
+    pool.into_iter()
+        .filter(|entry| {
+            needle.as_ref().is_none_or(|text| entry.meaning.to_lowercase().contains(text))
+        })
+        .filter(|entry| {
+            origin.as_ref().is_none_or(|text| entry.origin.to_lowercase().contains(text))
+        })
+        .take(limit)
+        .map(|entry| format!("{} ({}) — {}", entry.name, entry.origin, entry.meaning))
+        .collect()
+}
+
+/// Names to choose from, by what they mean. Not a menu: a place to look when nothing comes
+/// to mind. Kept out of the system prompt on purpose — 947 entries would ride along in every
+/// single request.
+#[tauri::command]
+fn name_ideas(meaning: Option<String>, origin: Option<String>, limit: Option<usize>) -> Vec<String> {
+    search_names(meaning.as_deref(), origin.as_deref(), limit.unwrap_or(40).min(200))
+}
+
 /// What the About page shows: the version and the packages the app is actually built from.
 ///
 /// Both manifests are embedded at compile time, so the list cannot go stale the way a
@@ -801,6 +840,7 @@ pub fn run() {
             db::memory_update,
             db::memory_retire,
             db::memory_restore,
+            name_ideas,
             db::memory_report,
             db::memory_prune,
             db::search,
@@ -849,6 +889,25 @@ mod tests {
             !backend.iter().any(|entry| entry.name.contains("dependencies")),
             "sections are not packages: {backend:?}"
         );
+    }
+
+    /// The pool is embedded and searched by meaning; if the file or the field names ever
+    /// change, this fails instead of the tool quietly returning nothing.
+    #[test]
+    fn the_name_pool_can_be_searched() {
+        let all = search_names(None, None, 5000);
+        assert!(all.len() > 900, "pool size: {}", all.len());
+        assert!(all.iter().all(|line| line.contains(" — ")), "each line carries a meaning");
+
+        let light = search_names(Some("licht"), None, 40);
+        assert!(!light.is_empty());
+        assert!(light.iter().all(|line| line.to_lowercase().contains("licht")));
+
+        let nordic = search_names(None, Some("nordisch"), 200);
+        assert!(!nordic.is_empty(), "origin filter works");
+
+        assert!(search_names(Some("zzzz"), None, 10).is_empty());
+        assert_eq!(search_names(None, None, 3).len(), 3, "limit is respected");
     }
 
     #[test]

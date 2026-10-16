@@ -385,10 +385,26 @@ fn persist_turn(
 }
 
 /// The partner's own name: chosen once, by the model itself, and never changed again.
+/// How much conversation has to have happened before a name can be taken. Not a lock to
+/// defend, a reminder that a permanent name should mean something — see PROGRESS.md §29.
+const NAME_MIN_USER_MESSAGES: i64 = 5;
+
 fn choose_name_tool(app: &AppHandle, args: &Value) -> tools::ToolOutcome {
     let Some(db) = app.try_state::<Db>() else {
         return tools::ToolOutcome::err("choose_name: database unavailable");
     };
+
+    match db.count_user_messages() {
+        Ok(count) if count < NAME_MIN_USER_MESSAGES => {
+            return tools::ToolOutcome::err(format!(
+                "not yet: you have heard {count} messages from this person. A name you cannot \
+                 change is worth taking once you know who you are taking it for — keep the \
+                 placeholder for now and ask again later."
+            ));
+        }
+        Ok(_) => {}
+        Err(error) => return tools::ToolOutcome::err(format!("choose_name: {error}")),
+    }
     let name = args
         .get("name")
         .and_then(Value::as_str)
@@ -1019,6 +1035,17 @@ async fn run_turn(
             let started = std::time::Instant::now();
             let tool_outcome = if call.function.name == "memory" {
                 memory_tool(app, &arguments)
+            } else if call.function.name == "name_ideas" {
+                let ideas = crate::search_names(
+                    arguments.get("meaning").and_then(Value::as_str),
+                    arguments.get("origin").and_then(Value::as_str),
+                    40,
+                );
+                if ideas.is_empty() {
+                    tools::ToolOutcome::ok("nothing in the pool matches that")
+                } else {
+                    tools::ToolOutcome::ok(ideas.join("\n"))
+                }
             } else if call.function.name == "choose_name" {
                 choose_name_tool(app, &arguments)
             } else if call.function.name == "ask_user" {
