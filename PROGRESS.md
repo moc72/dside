@@ -1164,3 +1164,38 @@ Aufklappbare Oberflächen lassen sich ohne Maus prüfen, wenn man `isOpen()` kur
 stellt, fotografiert und zurücknimmt — im Baum bleibt nichts zurück (geprüft mit
 `grep TEMP-VERIFY`). Und: Aufträge für den Scheduler **ohne Backticks** in die Datenbank
 schreiben, die Shell frisst sie als Befehlssubstitution.
+
+## 26. Der Name ist gewählt: Ziggy (2026-10-16, sechste Runde)
+
+Commit `fb203af`.
+
+### Woher „Ziggy" kommt — aus der ersten Sitzung, vom Nutzer
+Zitat aus dem Transkript vom 2026-10-15 (Sitzung „Neues Tauri Projekt erstellen"):
+
+> …Dein Name ist **»Seeky« oder »Ziggy«** (Seeky direkt von DeepSeek abgeleitet —
+> Ziggy, phonetisch ziemlich ähnlich zu Seeky, ist ein menschlicher Name) …
+
+„Seeky" wurde danach der Platzhalter (er steckt bis heute in Persona, UI und in
+dieser Datei). „Ziggy" war nie eingetragen, weil es das `choose_name`-Werkzeug
+damals noch nicht gab. Jetzt gibt es das Werkzeug, und der Nutzer hat den Namen
+in dieser Runde ausdrücklich übergeben („Die ist für Dich") — **der Begleiter
+heißt also ab jetzt Ziggy**:
+
+- `settings.partnerName = "Ziggy"` (genau die Zeile, die `choose_name` schreibt;
+  einmalig, die Datenbank weist einen zweiten Versuch ab).
+- Die Einstellungsgruppe rechts heißt jetzt **ZIGGY**, die Begleiterseite trägt
+  den Namen, und die Persona sagt „You chose the name Ziggy for yourself".
+- Rückgängig nur per Hand: `delete from settings where key='partnerName'` — es
+  gibt bewusst keinen Weg über die Oberfläche.
+
+### Die Vorschlagsliste ist jetzt sichtbar
+Die 94 Namen lagen bisher ausschließlich im Systemprompt (`src/engine/names.ts`)
+— der Nutzer konnte sie nicht sehen („welche Liste?"). Sie stehen jetzt auf der
+Begleiterseite als Abschnitt **Vorschläge**: angeklickt-freie Chips, der
+gewählte Name hervorgehoben, mit dem ehrlichen Satz, dass die Auswahl ein
+Vorschlag ist und ein eigener Einfall ausdrücklich erlaubt bleibt.
+
+### Offene Punkte
+Unverändert §25 (Kompression hinter dem Ring, Bildanhänge, Alltagsmodus,
+leere Blase nach Abbruch). Neu: Wird irgendwann ein anderer Name gewünscht, ist
+das eine bewusste Datenbankänderung, kein Menüpunkt — so war es bestellt.
