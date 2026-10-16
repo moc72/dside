@@ -913,14 +913,82 @@ sind deshalb *nicht* mit der Maus durchgeklickt — gesagt, damit es niemand fü
 erledigt hält, der es nicht ist.
 
 ### Offene Punkte
-1. **`doc`/`ppt`/`odp`** brauchen einen Konverter; `odp` wäre am ehesten machbar
-   (ebenfalls ein Zip, `content.xml` mit `draw:page`).
+1. ~~**`doc`/`ppt`/`odp`** brauchen einen Konverter~~ — erledigt in Abschnitt 22.
 2. Tabellen zeigen nur das **erste** Blatt, ohne Formeln und Formatierung.
 3. Zwei Advisory-Reste außerhalb des Themas: `dompurify` in `monaco-editor` (low,
    gepatchte Version wäre ≥ 3.4.16) und ein transitives `sprintf-js` (moderate).
 4. Gedächtnis: der Nutzer kann Einträge **bearbeiten und stilllegen, aber noch
    keinen neuen anlegen** — der Weg „Nutzer schreibt eine Notiz" fehlt.
-5. Gedächtnis-Einsicht sitzt unter *Personalisierung*; „Konto & Modell" ist
-   unberührt geblieben.
+5. ~~Gedächtnis-Einsicht sitzt unter *Personalisierung*~~ — erledigt in Abschnitt 22
+   (eigene Gruppe des Begleiters); „Konto & Modell" ist unberührt geblieben.
 6. Folien: reiner Text. Bilder, Notizen und Reihenfolge der Formen bleiben außen vor.
 
+## 22. Der Begleiter bekommt ein Zuhause (2026-10-16, zweite Runde)
+
+Vier Commits: `f5d53db`, `0ecde50`, `7505e1d` und dieser Doku-Commit. `0ecde50`
+enthält zusätzlich den runden Splash — die Nachricht nennt ihn nicht, weil ich
+ihn versehentlich mit `git add -A` mitgenommen habe; die Änderung selbst ist
+`src/App.vue` + `tauri.conf.json` (transparentes Fenster, runde Scheibe).
+
+### Was der Nutzer entschieden hat
+- **„Personalisierung" ist weg** aus den Voreinstellungen. Das Wort bedeutet für
+  Nutzer Look & Feel; jetzt gibt es eine eigene Gruppe, die nach dem Begleiter
+  heißt, mit „Erinnerungen" (das Gedächtnis-Panel, unverändert) und „Begleiter".
+- **Der Name gehört dem Begleiter.** Es bekommt eine Liste von Vorschlägen
+  (`src/engine/names.ts`, 94 Namen) und darf sie ignorieren; das Werkzeug
+  `choose_name` schreibt den Namen einmalig in die Datenbank. Danach verschwindet
+  das Werkzeug aus der Liste, die Datenbank weist einen zweiten Versuch ab, und
+  die Einstellungsgruppe heißt statt „SEEKY" dann der gewählte Name. Getestet:
+  `db::tests::the_partner_name_is_chosen_once`.
+- **Eigene Anweisungen** des Nutzers (Textfeld unter „Begleiter") landen als
+  eigener Abschnitt im Systemprompt, ausdrücklich über den Vorlieben des
+  Begleiters.
+- **Über-Seite** unter Verwaltung: Version, Autoren (Ziggy Shēn, Modest Coder),
+  Adressen, und die verwendeten Pakete in zwei Accordions. Versionen kommen aus
+  den Manifesten selbst — beide werden zur Kompilierzeit in das Binary
+  eingebettet (`include_str!`), damit die Liste nicht veralten kann.
+  `tests::about_reads_both_manifests` prüft den Parser.
+- **🌐 Webdesign raus**: der Eintrag öffnete dasselbe Browser-Panel, das die
+  Werkzeugleiste schon hat.
+
+### Modellnamen — mein Fehler, korrigiert
+Ich hatte behauptet, `deepseek-flash` und `deepseek-v4-pro` existierten nicht, und
+sie durch `deepseek-chat`/`deepseek-reasoner` ersetzt. Falsch: der Provider meldet
+**genau diese zwei**, mit den Namen `DeepSeek-V4.1-Flash` und `DeepSeek-V4-Pro`
+(plus Kontextfenster, `effort`-Stufen low/high/max und Eingabe-Modalitäten). Das
+echte Problem war die **Anzeige**: wir zeigten die ID und nie den Namen. Jetzt
+zeigt der Composer die Namen (ID beim Hovern) und die Einstellungszeile den Namen
+unter dem Feld; gesendet wird weiter die ID. Die Rust-Voreinstellungen sagen nicht
+mehr `deepseek-chat`. Vorauswahl: Alltag → Pro, Programmieren → Flash.
+
+Gegengeprüft mit echten Aufrufen: `/models` direkt abgefragt, und die drei
+Live-Tests laufen durch — Text (`PONG`), Werkzeugaufruf (`glob`), Denkmodell
+(103 Zeichen Reasoning, Antwort 391).
+
+### Rundes Splash
+Fenster ist jetzt transparent und quadratisch (360×360), der Inhalt sitzt auf
+einer runden Scheibe mit Ring und Schatten; die Ecken sind wirklich durchsichtig.
+Per Screenshot des Fensters bestätigt (X11). Unter Wayland lässt sich das hier
+nicht fotografieren: `grim` sagt „compositor doesn't support the screen capture
+protocol".
+
+### Lernnotiz: nicht aufräumen mit zu weitem Muster
+Mein `ps | grep "target/debug/DSIDE" | xargs kill -9` hat **die laufende Instanz
+des Nutzers** mitgerissen, weil sein `pnpm tauri dev` dieselbe Binärdatei startet.
+Seine Sitzung war danach weg (Port 1420 frei). Lehre: vor dem Beenden von
+Prozessen die Startzeit prüfen und nur treffen, was man selbst gestartet hat.
+Zweite Lehre aus derselben Stunde: `tauri dev` startet die App auch dann, wenn
+Vite am belegten Port scheitert — dann hängt eine Instanz an einem fremden
+Vite-Server und zeigt fremden Code.
+
+### Offene Punkte
+1. **`effort`** (low/high/max, Vorgabe high) meldet der Provider pro Modell. Ob
+   und wo wir das im Request setzen, ist ungeprüft — als Nächstes mit dem
+   entsprechenden Feld testen, nicht raten.
+2. **Bilder**: `input_modalities` nennt `image` für Flash. Anhänge/`paste` von
+   Bildern wären damit möglich; bisher reicht der Client nur Text durch.
+3. Name: einmalig heißt einmalig. Es gibt keinen Weg zurück über die Oberfläche —
+   bewusst, aber wenn ein Name doch festsitzt, hilft nur ein Eingriff in
+   `partnerName` in der `settings`-Tabelle.
+4. Der Weg „Nutzer legt selbst eine Erinnerung an" fehlt weiterhin (aus §21).
+5. Splash: unter Wayland ungeprüft (siehe oben).
