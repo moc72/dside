@@ -4,6 +4,13 @@ import { invoke } from "@tauri-apps/api/core";
 import Icon from "../Icon.vue";
 import { t } from "../../i18n";
 
+/**
+ * Seeky's long-term memory, seen from the user's side.
+ *
+ * It lives in the settings rather than on the work area because it is not a tool: it is the
+ * place where the user corrects what their partner believes about them. Nothing here deletes
+ * a row — an entry the user takes out is retired and can be put back.
+ */
 interface MemoryRow {
   id: number;
   kind: string;
@@ -11,6 +18,9 @@ interface MemoryRow {
   text: string;
   importance: number;
   createdAt: number;
+  origin: string;
+  editedAt: number | null;
+  retiredAt: number | null;
 }
 
 interface MemoryReport {
@@ -20,9 +30,14 @@ interface MemoryReport {
 }
 
 const rows = ref<MemoryRow[]>([]);
+const retired = ref<MemoryRow[]>([]);
 const report = ref<MemoryReport | null>(null);
 const loading = ref(false);
 const error = ref<string | null>(null);
+
+const editingId = ref<number | null>(null);
+const draft = ref("");
+const retiredOpen = ref(false);
 
 const scopeLabels = computed<Record<string, string>>(() => ({
   user: t("memory.scopeUser"),
@@ -34,21 +49,60 @@ async function load() {
   loading.value = true;
   error.value = null;
   try {
-    rows.value = await invoke<MemoryRow[]>("memories_list", { limit: 200 });
+    const [active, aside] = await Promise.all([
+      invoke<MemoryRow[]>("memories_list", { limit: 200 }),
+      invoke<MemoryRow[]>("memories_retired", { limit: 200 }),
+    ]);
+    rows.value = active;
+    retired.value = aside;
   } catch (cause) {
     error.value = String(cause);
     rows.value = [];
+    retired.value = [];
   } finally {
     loading.value = false;
   }
 }
 
-async function forget(id: number) {
+function startEdit(row: MemoryRow) {
+  editingId.value = row.id;
+  draft.value = row.text;
+}
+
+function cancelEdit() {
+  editingId.value = null;
+  draft.value = "";
+}
+
+/** Saving a correction is the one thing that marks an entry as the user's own. */
+async function saveEdit(id: number) {
+  const text = draft.value.trim();
+  if (!text) return;
   try {
-    await invoke("memory_delete", { id });
-  } finally {
-    await load();
+    await invoke("memory_update", { id, text });
+    cancelEdit();
+  } catch (cause) {
+    error.value = String(cause);
   }
+  await load();
+}
+
+async function retire(id: number) {
+  try {
+    await invoke("memory_retire", { id });
+  } catch (cause) {
+    error.value = String(cause);
+  }
+  await load();
+}
+
+async function restore(id: number) {
+  try {
+    await invoke("memory_restore", { id });
+  } catch (cause) {
+    error.value = String(cause);
+  }
+  await load();
 }
 
 function formatDate(seconds: number): string {
@@ -58,7 +112,7 @@ function formatDate(seconds: number): string {
   }).format(new Date(seconds * 1000));
 }
 
-/** The "doctor" pass: mechanical findings only. Deleting stays a human decision. */
+/** The "doctor" pass: mechanical findings only. Setting entries aside stays a human decision. */
 async function check() {
   try {
     report.value = await invoke<MemoryReport>("memory_report");
@@ -82,10 +136,7 @@ onMounted(() => {
 <template>
   <div class="memory">
     <header class="head">
-      <div>
-        <h2 class="title">{{ t("memory.title") }}</h2>
-        <p class="subtitle">{{ t("memory.hint") }}</p>
-      </div>
+      <p class="hint">{{ t("memory.hint") }}</p>
       <div class="actions">
         <button class="mini" type="button" :title="t('memory.check')" @click="check">
           <Icon name="sparkle" :size="14" />
@@ -101,13 +152,13 @@ onMounted(() => {
         <div v-if="report.duplicates.length" class="report-row">
           <span>{{ t("memory.duplicates", { count: report.duplicates.length }) }}</span>
           <button class="mini-text" type="button" @click="prune(report.duplicates)">
-            {{ t("memory.prune") }}
+            {{ t("memory.retire") }}
           </button>
         </div>
         <div v-if="report.stale.length" class="report-row">
           <span>{{ t("memory.stale", { count: report.stale.length }) }}</span>
           <button class="mini-text" type="button" @click="prune(report.stale)">
-            {{ t("memory.prune") }}
+            {{ t("memory.retire") }}
           </button>
         </div>
       </div>
@@ -123,27 +174,69 @@ onMounted(() => {
         <div class="entry-head">
           <span class="chip scope">{{ scopeLabels[row.scope] ?? row.scope }}</span>
           <span class="chip kind">{{ row.kind }}</span>
-          <span class="when">{{ formatDate(row.createdAt) }}</span>
+          <span v-if="row.origin === 'user'" class="chip mine">{{ t("memory.changedByUser") }}</span>
+          <span class="when">{{ formatDate(row.editedAt ?? row.createdAt) }}</span>
           <button
             class="mini"
             type="button"
-            :title="t('memory.forget')"
-            @click="forget(row.id)"
+            :title="t('memory.edit')"
+            @click="startEdit(row)"
+          >
+            <Icon name="pencil" :size="12" />
+          </button>
+          <button
+            class="mini"
+            type="button"
+            :title="t('memory.retire')"
+            @click="retire(row.id)"
           >
             <Icon name="x" :size="12" />
           </button>
         </div>
-        <p class="text">{{ row.text }}</p>
+
+        <template v-if="editingId === row.id">
+          <textarea v-model="draft" class="editor" rows="2"></textarea>
+          <div class="editor-actions">
+            <button class="mini-text" type="button" @click="cancelEdit">
+              {{ t("memory.cancel") }}
+            </button>
+            <button class="mini-text primary" type="button" @click="saveEdit(row.id)">
+              {{ t("memory.save") }}
+            </button>
+          </div>
+        </template>
+        <p v-else class="text">{{ row.text }}</p>
       </li>
     </ul>
+
+    <section v-if="retired.length" class="retired">
+      <button class="retired-head" type="button" @click="retiredOpen = !retiredOpen">
+        <Icon :name="retiredOpen ? 'chevron-down' : 'chevron-right'" :size="12" />
+        <span>{{ t("memory.retired", { count: retired.length }) }}</span>
+      </button>
+      <p v-if="retiredOpen" class="note">{{ t("memory.retiredHint") }}</p>
+      <ul v-if="retiredOpen" class="list">
+        <li v-for="row in retired" :key="row.id" class="entry aside">
+          <div class="entry-head">
+            <span class="chip scope">{{ scopeLabels[row.scope] ?? row.scope }}</span>
+            <span class="chip kind">{{ row.kind }}</span>
+            <span class="when">{{ formatDate(row.retiredAt ?? row.createdAt) }}</span>
+            <button class="mini-text" type="button" @click="restore(row.id)">
+              {{ t("memory.restore") }}
+            </button>
+          </div>
+          <p class="text">{{ row.text }}</p>
+        </li>
+      </ul>
+    </section>
   </div>
 </template>
 
 <style scoped>
 .memory {
-  height: 100%;
-  overflow-y: auto;
-  padding: 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .head {
@@ -151,20 +244,18 @@ onMounted(() => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 14px;
 }
 
-.title {
+.hint {
   margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-strong);
-}
-
-.subtitle {
-  margin: 4px 0 0;
   color: var(--text-muted);
   font-size: 12px;
+}
+
+.actions {
+  display: flex;
+  gap: 4px;
+  flex: none;
 }
 
 .mini {
@@ -185,6 +276,7 @@ onMounted(() => {
 }
 
 .note {
+  margin: 0;
   color: var(--text-muted);
   font-size: 12px;
 }
@@ -193,14 +285,7 @@ onMounted(() => {
   color: var(--danger);
 }
 
-.actions {
-  display: flex;
-  gap: 4px;
-  flex: none;
-}
-
 .report {
-  margin-bottom: 14px;
   padding: 10px 12px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
@@ -240,6 +325,12 @@ onMounted(() => {
   color: var(--text-strong);
 }
 
+.mini-text.primary {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
+  color: var(--accent-contrast);
+}
+
 .list {
   list-style: none;
   margin: 0;
@@ -254,6 +345,10 @@ onMounted(() => {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-panel);
+}
+
+.entry.aside {
+  opacity: 0.7;
 }
 
 .entry-head {
@@ -279,6 +374,11 @@ onMounted(() => {
   color: var(--text-muted);
 }
 
+.chip.mine {
+  background: var(--bg-elevated);
+  color: var(--text-strong);
+}
+
 .when {
   margin-left: auto;
   color: var(--text-muted);
@@ -290,5 +390,48 @@ onMounted(() => {
   color: var(--text);
   font-size: 12px;
   line-height: 1.5;
+}
+
+.editor {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.retired {
+  margin-top: 6px;
+}
+
+.retired-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.retired-head:hover {
+  color: var(--text-strong);
+}
+
+.retired .note {
+  margin-bottom: 8px;
 }
 </style>

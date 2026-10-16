@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import Icon from "../Icon.vue";
 import ToggleRow from "./ToggleRow.vue";
+import MemoryPanel from "./MemoryPanel.vue";
 import { locale, localeLabel, locales, setLocale, t } from "../../i18n";
 import type { Locale } from "../../i18n";
 import { links } from "../../engine/links";
@@ -380,6 +381,13 @@ watch(activeItem, (value) => {
         <p class="hint" :class="{ warn: secretBackend === 'file' }">{{ secretHint }}</p>
         <p v-if="modelsError" class="hint warn">{{ modelsError }}</p>
         <p v-if="balanceError" class="hint warn">{{ balanceError }}</p>
+      </template>
+
+      <template v-else-if="activeItem === 'personalization'">
+        <h1 class="title">{{ t("settings.items.personalization") }}</h1>
+
+        <h2 class="section">{{ t("memory.title") }}</h2>
+        <MemoryPanel />
       </template>
 
       <template v-else-if="activeItem === 'archived'">

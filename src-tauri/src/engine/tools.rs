@@ -174,15 +174,15 @@ pub fn definitions() -> Vec<Value> {
             "type": "function",
             "function": {
                 "name": "memory",
-                "description": "Long-term memory, kept across sessions. Use 'add' to remember a durable fact, preference, event or project detail about the user or about yourself; 'list' to review what is stored; 'forget' to delete an entry by id; 'curate' to get a hygiene report (exact duplicates and long-unused entries) and then merge or forget deliberately.",
+                "description": "Long-term memory, kept across sessions. Use 'add' to remember a durable fact, preference, event or project detail about the user or about yourself; 'update' to correct a note you got wrong; 'list' to review what is stored; 'forget' to set an entry aside by id (it stays in the database but is no longer recalled); 'curate' to get a hygiene report (exact duplicates and long-unused entries) and then decide deliberately. Notes the user edited are marked as theirs.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "action": { "type": "string", "enum": ["add", "list", "forget", "curate"] },
+                        "action": { "type": "string", "enum": ["add", "update", "list", "forget", "curate"] },
                         "kind": { "type": "string", "enum": ["fact", "preference", "event", "project", "news"] },
                         "scope": { "type": "string", "enum": ["user", "agent", "session"] },
                         "text": { "type": "string", "description": "The memory, one sentence." },
-                        "id": { "type": "number", "description": "Entry id, required for 'forget'." }
+                        "id": { "type": "number", "description": "Entry id, required for 'update' and 'forget'." }
                     },
                     "required": ["action"]
                 }

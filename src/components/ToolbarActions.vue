@@ -86,14 +86,6 @@ async function openDownload() {
     <button
       class="icon-btn"
       type="button"
-      :title="t('toolbar.memory')"
-      @click="openTab('memory')"
-    >
-      <Icon name="sparkle" />
-    </button>
-    <button
-      class="icon-btn"
-      type="button"
       :title="t('toolbar.toggleWorkArea')"
       @click="toggleWorkArea"
     >

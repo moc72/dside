@@ -61,7 +61,10 @@ CREATE TABLE IF NOT EXISTS memories (
   source       TEXT,
   importance   INTEGER NOT NULL DEFAULT 1,
   created_at   INTEGER NOT NULL,
-  last_used_at INTEGER
+  last_used_at INTEGER,
+  origin       TEXT NOT NULL DEFAULT 'seeky',
+  edited_at    INTEGER,
+  retired_at   INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope, kind);
 
@@ -104,6 +107,47 @@ fn row_to_schedule(row: &rusqlite::Row<'_>) -> rusqlite::Result<ScheduleRow> {
 
 const SCHEDULE_COLUMNS: &str =
     "id, session_id, prompt, interval_seconds, enabled, last_run_at, next_run_at";
+
+fn row_to_memory(row: &rusqlite::Row<'_>) -> rusqlite::Result<MemoryRow> {
+    Ok(MemoryRow {
+        id: row.get(0)?,
+        kind: row.get(1)?,
+        scope: row.get(2)?,
+        text: row.get(3)?,
+        importance: row.get(4)?,
+        created_at: row.get(5)?,
+        origin: row.get(6)?,
+        edited_at: row.get(7)?,
+        retired_at: row.get(8)?,
+    })
+}
+
+/// Adds a column to an existing table when an older database does not have it yet.
+fn add_column(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    definition: &str,
+) -> Result<(), String> {
+    let mut statement = conn
+        .prepare(&format!("PRAGMA table_info({table})"))
+        .map_err(|error| error.to_string())?;
+    let columns: Vec<String> = statement
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|error| error.to_string())?
+        .filter_map(Result::ok)
+        .collect();
+
+    if columns.iter().any(|name| name == column) {
+        return Ok(());
+    }
+    conn.execute(
+        &format!("ALTER TABLE {table} ADD COLUMN {column} {definition}"),
+        [],
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(())
+}
 
 fn now() -> i64 {
     SystemTime::now()
@@ -217,6 +261,12 @@ pub struct MemoryRow {
     pub text: String,
     pub importance: i64,
     pub created_at: i64,
+    /// `seeky` or `user` — whose words these are. The user marker is what the recall shows.
+    pub origin: String,
+    /// When the user last changed the entry, if they ever did.
+    pub edited_at: Option<i64>,
+    /// When the entry was set aside. Only the retired list has this set.
+    pub retired_at: Option<i64>,
 }
 
 pub struct Db {
@@ -253,25 +303,13 @@ impl Db {
     /// `CREATE TABLE IF NOT EXISTS` never alters an existing table, so columns added
     /// after the first release need an explicit step here.
     fn migrate(conn: &Connection) -> Result<(), String> {
-        let columns: Vec<String> = {
-            let mut statement = conn
-                .prepare("PRAGMA table_info(sessions)")
-                .map_err(|error| error.to_string())?;
-            let collected = statement
-                .query_map([], |row| row.get::<_, String>(1))
-                .map_err(|error| error.to_string())?
-                .filter_map(Result::ok)
-                .collect();
-            collected
-        };
-
-        if !columns.iter().any(|name| name == "archived") {
-            conn.execute(
-                "ALTER TABLE sessions ADD COLUMN archived INTEGER NOT NULL DEFAULT 0",
-                [],
-            )
-            .map_err(|error| error.to_string())?;
-        }
+        add_column(conn, "sessions", "archived", "INTEGER NOT NULL DEFAULT 0")?;
+        // The companion rows: who owns a memory (Seeky or the user), when the user last
+        // touched it, and when it was retired. Retired rows stay in the table — the memory
+        // is set aside, not erased.
+        add_column(conn, "memories", "origin", "TEXT NOT NULL DEFAULT 'seeky'")?;
+        add_column(conn, "memories", "edited_at", "INTEGER")?;
+        add_column(conn, "memories", "retired_at", "INTEGER")?;
         Ok(())
     }
 
@@ -777,66 +815,116 @@ impl Db {
         scope: &str,
         text: &str,
         source: Option<&str>,
+        origin: &str,
     ) -> Result<i64, String> {
         let conn = self.lock()?;
         conn.execute(
-            "INSERT INTO memories (kind, scope, text, source, importance, created_at)
-             VALUES (?1, ?2, ?3, ?4, 1, ?5)",
-            params![kind, scope, text, source, now()],
+            "INSERT INTO memories (kind, scope, text, source, importance, created_at, origin)
+             VALUES (?1, ?2, ?3, ?4, 1, ?5, ?6)",
+            params![kind, scope, text, source, now(), origin],
         )
         .map_err(|error| error.to_string())?;
         Ok(conn.last_insert_rowid())
     }
 
     pub fn list_memories(&self, limit: usize) -> Result<Vec<MemoryRow>, String> {
+        self.select_memories(
+            "SELECT id, kind, scope, text, importance, created_at, origin, edited_at, retired_at
+             FROM memories WHERE retired_at IS NULL
+             ORDER BY created_at DESC, id DESC LIMIT ?1",
+            limit,
+        )
+    }
+
+    /// Set aside, not erased: these are the entries the user took out of Seeky's memory.
+    pub fn list_retired_memories(&self, limit: usize) -> Result<Vec<MemoryRow>, String> {
+        self.select_memories(
+            "SELECT id, kind, scope, text, importance, created_at, origin, edited_at, retired_at
+             FROM memories WHERE retired_at IS NOT NULL
+             ORDER BY retired_at DESC, id DESC LIMIT ?1",
+            limit,
+        )
+    }
+
+    fn select_memories(&self, sql: &str, limit: usize) -> Result<Vec<MemoryRow>, String> {
         let conn = self.lock()?;
-        let mut statement = conn
-            .prepare(
-                "SELECT id, kind, scope, text, importance, created_at
-                 FROM memories ORDER BY created_at DESC LIMIT ?1",
-            )
-            .map_err(|error| error.to_string())?;
+        let mut statement = conn.prepare(sql).map_err(|error| error.to_string())?;
         let rows = statement
-            .query_map([limit as i64], |row| {
-                Ok(MemoryRow {
-                    id: row.get(0)?,
-                    kind: row.get(1)?,
-                    scope: row.get(2)?,
-                    text: row.get(3)?,
-                    importance: row.get(4)?,
-                    created_at: row.get(5)?,
-                })
-            })
+            .query_map([limit as i64], row_to_memory)
             .map_err(|error| error.to_string())?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|error| error.to_string())
     }
 
     /// Most valuable entries first: importance, then freshness. Used for recall.
+    /// Retired entries are never recalled.
     pub fn memory_context(&self, limit: usize) -> Result<Vec<MemoryRow>, String> {
+        self.select_memories(
+            "SELECT id, kind, scope, text, importance, created_at, origin, edited_at, retired_at
+             FROM memories
+             WHERE retired_at IS NULL
+             ORDER BY importance DESC, COALESCE(last_used_at, 0) DESC, created_at DESC
+             LIMIT ?1",
+            limit,
+        )
+    }
+
+    /// Rewrites the words and records who owns them now. A change the user makes in the UI
+    /// sets `origin` to `user` and stamps `edited_at`; Seeky correcting its own note puts it
+    /// back to `seeky` and drops the stamp. The recall reads exactly this pair.
+    pub fn update_memory(
+        &self,
+        id: i64,
+        text: Option<&str>,
+        kind: Option<&str>,
+        importance: Option<i64>,
+        origin: &str,
+    ) -> Result<(), String> {
         let conn = self.lock()?;
-        let mut statement = conn
-            .prepare(
-                "SELECT id, kind, scope, text, importance, created_at
-                 FROM memories
-                 ORDER BY importance DESC, COALESCE(last_used_at, 0) DESC, created_at DESC
-                 LIMIT ?1",
+        let changed = conn
+            .execute(
+                "UPDATE memories
+                 SET text       = COALESCE(?2, text),
+                     kind       = COALESCE(?3, kind),
+                     importance = COALESCE(?4, importance),
+                     origin     = ?6,
+                     edited_at  = CASE WHEN ?6 = 'user' THEN ?5 ELSE NULL END
+                 WHERE id = ?1",
+                params![id, text, kind, importance, now(), origin],
             )
             .map_err(|error| error.to_string())?;
-        let rows = statement
-            .query_map([limit as i64], |row| {
-                Ok(MemoryRow {
-                    id: row.get(0)?,
-                    kind: row.get(1)?,
-                    scope: row.get(2)?,
-                    text: row.get(3)?,
-                    importance: row.get(4)?,
-                    created_at: row.get(5)?,
-                })
-            })
+        if changed == 0 {
+            return Err(format!("no memory #{id}"));
+        }
+        Ok(())
+    }
+
+    pub fn retire_memory(&self, id: i64) -> Result<(), String> {
+        let conn = self.lock()?;
+        let changed = conn
+            .execute(
+                "UPDATE memories SET retired_at = ?2 WHERE id = ?1 AND retired_at IS NULL",
+                params![id, now()],
+            )
             .map_err(|error| error.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|error| error.to_string())
+        if changed == 0 {
+            return Err(format!("no memory #{id}"));
+        }
+        Ok(())
+    }
+
+    pub fn restore_memory(&self, id: i64) -> Result<(), String> {
+        let conn = self.lock()?;
+        let changed = conn
+            .execute(
+                "UPDATE memories SET retired_at = NULL WHERE id = ?1",
+                params![id],
+            )
+            .map_err(|error| error.to_string())?;
+        if changed == 0 {
+            return Err(format!("no memory #{id}"));
+        }
+        Ok(())
     }
 
     pub fn touch_memories(&self, ids: &[i64]) -> Result<(), String> {
@@ -855,22 +943,28 @@ impl Db {
         Ok(())
     }
 
-    pub fn delete_memory(&self, id: i64) -> Result<(), String> {
-        let conn = self.lock()?;
-        conn.execute("DELETE FROM memories WHERE id = ?1", params![id])
-            .map_err(|error| error.to_string())?;
-        Ok(())
+    /// Nothing here deletes a row any more — retiring keeps the history and still gets the
+    /// entry out of the way.
+    pub fn retire_memories(&self, ids: &[i64]) -> Result<usize, String> {
+        let mut retired = 0;
+        for id in ids {
+            if self.retire_memory(*id).is_ok() {
+                retired += 1;
+            }
+        }
+        Ok(retired)
     }
 
     /// The mechanical half of curation: what is provably redundant, and what has gone
     /// unused for a long time. Judgement about *meaning* stays with the model or the user —
-    /// this only proposes, it never deletes on its own.
+    /// this only proposes, it never touches a memory on its own. Retired entries are out of
+    /// the picture already, so they are not counted here.
     pub fn memory_report(&self, stale_after_days: i64) -> Result<MemoryReport, String> {
         let conn = self.lock()?;
         let mut statement = conn
             .prepare(
                 "SELECT id, text, COALESCE(last_used_at, 0), created_at
-                 FROM memories ORDER BY id",
+                 FROM memories WHERE retired_at IS NULL ORDER BY id",
             )
             .map_err(|error| error.to_string())?;
         let rows = statement
@@ -1002,9 +1096,31 @@ pub fn memories_list(db: tauri::State<'_, Db>, limit: Option<usize>) -> Result<V
     db.list_memories(limit.unwrap_or(200))
 }
 
+/// The memories that were set aside. They are still there — the panel can bring one back.
 #[tauri::command]
-pub fn memory_delete(db: tauri::State<'_, Db>, id: i64) -> Result<(), String> {
-    db.delete_memory(id)
+pub fn memories_retired(db: tauri::State<'_, Db>, limit: Option<usize>) -> Result<Vec<MemoryRow>, String> {
+    db.list_retired_memories(limit.unwrap_or(200))
+}
+
+#[tauri::command]
+pub fn memory_update(
+    db: tauri::State<'_, Db>,
+    id: i64,
+    text: Option<String>,
+    kind: Option<String>,
+    importance: Option<i64>,
+) -> Result<(), String> {
+    db.update_memory(id, text.as_deref(), kind.as_deref(), importance, "user")
+}
+
+#[tauri::command]
+pub fn memory_retire(db: tauri::State<'_, Db>, id: i64) -> Result<(), String> {
+    db.retire_memory(id)
+}
+
+#[tauri::command]
+pub fn memory_restore(db: tauri::State<'_, Db>, id: i64) -> Result<(), String> {
+    db.restore_memory(id)
 }
 
 #[tauri::command]
@@ -1012,14 +1128,10 @@ pub fn memory_report(db: tauri::State<'_, Db>) -> Result<MemoryReport, String> {
     db.memory_report(30)
 }
 
+/// The curation pass proposes; this sets the proposed entries aside. Nothing is erased.
 #[tauri::command]
 pub fn memory_prune(db: tauri::State<'_, Db>, ids: Vec<i64>) -> Result<usize, String> {
-    let mut removed = 0;
-    for id in ids {
-        db.delete_memory(id)?;
-        removed += 1;
-    }
-    Ok(removed)
+    db.retire_memories(&ids)
 }
 
 #[tauri::command]
@@ -1119,7 +1231,7 @@ mod tests {
 
         let db = Db::open(&path).unwrap();
         let id = db
-            .insert_memory("preference", "user", "Mag kurze Antworten", None)
+            .insert_memory("preference", "user", "Mag kurze Antworten", None, "seeky")
             .unwrap();
         assert!(id > 0);
 
@@ -1127,13 +1239,118 @@ mod tests {
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].scope, "user");
         assert_eq!(list[0].kind, "preference");
+        assert_eq!(list[0].origin, "seeky");
+        assert!(list[0].edited_at.is_none());
 
         let context = db.memory_context(10).unwrap();
         assert_eq!(context.len(), 1);
         db.touch_memories(&[id]).unwrap();
 
-        db.delete_memory(id).unwrap();
+        db.retire_memory(id).unwrap();
         assert!(db.list_memories(10).unwrap().is_empty());
+        assert!(db.memory_context(10).unwrap().is_empty());
+
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    /// Retiring is not deleting: the entry keeps its text and can come back.
+    #[test]
+    fn retiring_hides_a_memory_and_restoring_brings_it_back() {
+        let directory = std::env::temp_dir().join(format!("ds-ide-mem-retire-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("m.sqlite3");
+
+        let db = Db::open(&path).unwrap();
+        let id = db
+            .insert_memory("fact", "user", "Wohnt in Köln", None, "seeky")
+            .unwrap();
+
+        db.retire_memory(id).unwrap();
+        assert!(db.list_memories(10).unwrap().is_empty());
+
+        let retired = db.list_retired_memories(10).unwrap();
+        assert_eq!(retired.len(), 1);
+        assert_eq!(retired[0].text, "Wohnt in Köln");
+        assert!(retired[0].retired_at.is_some());
+        assert_eq!(db.memory_report(30).unwrap().total, 0, "retired is not counted");
+
+        db.restore_memory(id).unwrap();
+        assert_eq!(db.list_memories(10).unwrap().len(), 1);
+        assert!(db.list_retired_memories(10).unwrap().is_empty());
+
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    /// Who owns a memory is the point of the marker: the user's rewrite is marked and stays
+    /// marked, until Seeky rewrites the entry itself.
+    #[test]
+    fn a_user_edit_marks_the_memory_as_theirs() {
+        let directory = std::env::temp_dir().join(format!("ds-ide-mem-origin-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("m.sqlite3");
+
+        let db = Db::open(&path).unwrap();
+        let id = db
+            .insert_memory("preference", "user", "Mag lange Antworten", None, "seeky")
+            .unwrap();
+
+        db.update_memory(id, Some("Mag kurze, direkte Antworten"), None, None, "user")
+            .unwrap();
+        let row = &db.list_memories(10).unwrap()[0];
+        assert_eq!(row.text, "Mag kurze, direkte Antworten");
+        assert_eq!(row.origin, "user");
+        assert!(row.edited_at.is_some());
+        assert_eq!(row.kind, "preference", "untouched fields survive the update");
+
+        db.update_memory(id, Some("Notiz von Seeky"), None, None, "seeky")
+            .unwrap();
+        let row = &db.list_memories(10).unwrap()[0];
+        assert_eq!(row.origin, "seeky");
+        assert!(row.edited_at.is_none(), "the user marker goes with the text");
+
+        assert!(db.update_memory(999, Some("x"), None, None, "user").is_err());
+        assert!(db.retire_memory(999).is_err());
+
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    /// The companion columns have to appear in a database that predates them.
+    #[test]
+    fn migrate_adds_the_memory_columns() {
+        let directory =
+            std::env::temp_dir().join(format!("ds-ide-mem-migrate-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("old.sqlite3");
+
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE memories (
+                   id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                   kind         TEXT NOT NULL,
+                   scope        TEXT NOT NULL DEFAULT 'user',
+                   text         TEXT NOT NULL,
+                   source       TEXT,
+                   importance   INTEGER NOT NULL DEFAULT 1,
+                   created_at   INTEGER NOT NULL,
+                   last_used_at INTEGER
+                 );
+                 INSERT INTO memories (kind, scope, text, created_at)
+                 VALUES ('fact', 'user', 'Altes Wissen', 1);",
+            )
+            .unwrap();
+        }
+
+        let db = Db::open(&path).unwrap();
+        let rows = db.list_memories(10).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].text, "Altes Wissen");
+        assert_eq!(rows[0].origin, "seeky", "old rows belong to Seeky");
+        assert!(rows[0].edited_at.is_none());
+        assert!(rows[0].retired_at.is_none());
 
         let _ = std::fs::remove_dir_all(&directory);
     }
@@ -1223,11 +1440,11 @@ mod tests {
         std::fs::create_dir_all(&directory).unwrap();
         let db = Db::open(&directory.join("d.sqlite3")).unwrap();
 
-        db.insert_memory("preference", "user", "Mag kurze Antworten", None)
+        db.insert_memory("preference", "user", "Mag kurze Antworten", None, "seeky")
             .unwrap();
-        db.insert_memory("preference", "user", "mag  kurze   antworten", None)
+        db.insert_memory("preference", "user", "mag  kurze   antworten", None, "seeky")
             .unwrap();
-        db.insert_memory("fact", "user", "Etwas anderes", None)
+        db.insert_memory("fact", "user", "Etwas anderes", None, "seeky")
             .unwrap();
 
         let report = db.memory_report(30).unwrap();

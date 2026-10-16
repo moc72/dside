@@ -5,7 +5,6 @@ import type { WorkAreaTabKind } from "../../types";
 import { activeTab, activateTab, closeTab, tabs } from "../../stores/workArea";
 import ProgressTab from "./ProgressTab.vue";
 import ViewFileTab from "./ViewFileTab.vue";
-import MemoryTab from "./MemoryTab.vue";
 import SkillsTab from "./SkillsTab.vue";
 import SchedulesTab from "./SchedulesTab.vue";
 
@@ -13,13 +12,11 @@ const labels: Record<
   WorkAreaTabKind,
   | "workArea.tabProgress"
   | "workArea.tabFile"
-  | "workArea.tabMemory"
   | "workArea.tabSkills"
   | "workArea.tabSchedules"
 > = {
   progress: "workArea.tabProgress",
   file: "workArea.tabFile",
-  memory: "workArea.tabMemory",
   skills: "workArea.tabSkills",
   schedules: "workArea.tabSchedules",
 };
@@ -53,7 +50,6 @@ const labels: Record<
     <div class="content">
       <ProgressTab v-if="activeTab?.kind === 'progress'" />
       <ViewFileTab v-else-if="activeTab?.kind === 'file'" :path="activeTab.filePath ?? null" />
-      <MemoryTab v-else-if="activeTab?.kind === 'memory'" />
       <SkillsTab v-else-if="activeTab?.kind === 'skills'" />
       <SchedulesTab v-else-if="activeTab?.kind === 'schedules'" />
       <p v-else class="empty">{{ t("workArea.empty") }}</p>

@@ -316,6 +316,38 @@ pub fn run_due_schedules(app: &AppHandle) {
     }
 }
 
+/// The part of the system prompt that hands the partner its own memory. Split out so the
+/// wording — scopes and the user's marker included — is testable without a live turn.
+fn recall_block(rows: &[crate::db::MemoryRow]) -> String {
+    if rows.is_empty() {
+        return String::new();
+    }
+
+    let mut block = String::from(
+        "\n\n## Your long-term memory\n\
+         These are notes you kept from earlier work, and things you know about the user.\n\
+         - `[you]` — your own note. `[user]` — what you know about the user. `[session]` — tied to one task.\n\
+         - `(changed by the user)` means the user rewrote that note themselves: treat the wording\n\
+         as theirs, not as something you inferred.\n\
+         You are this person's partner, so use these notes the way a colleague would use what\n\
+         they remember: silently, and without reciting them back.\n",
+    );
+
+    for row in rows {
+        let scope = match row.scope.as_str() {
+            "agent" => "you",
+            other => other,
+        };
+        let marker = if row.origin == "user" {
+            " (changed by the user)"
+        } else {
+            ""
+        };
+        block.push_str(&format!("- [{scope}] {}{marker}\n", row.text));
+    }
+    block
+}
+
 /// Long-term memory lives in the database, so it is handled here rather than in
 /// `tools::execute`, which stays storage-free.
 fn memory_tool(app: &AppHandle, args: &Value) -> tools::ToolOutcome {
@@ -336,8 +368,30 @@ fn memory_tool(app: &AppHandle, args: &Value) -> tools::ToolOutcome {
             }
             let kind = args.get("kind").and_then(Value::as_str).unwrap_or("fact");
             let scope = args.get("scope").and_then(Value::as_str).unwrap_or("user");
-            match db.insert_memory(kind, scope, text, None) {
+            // Seeky's own note. Entries the user rewrote in the UI carry origin 'user'.
+            match db.insert_memory(kind, scope, text, None, "seeky") {
                 Ok(id) => tools::ToolOutcome::ok(format!("remembered as #{id} ({scope}/{kind})")),
+                Err(error) => tools::ToolOutcome::err(format!("memory: {error}")),
+            }
+        }
+        "update" => {
+            let Some(id) = args.get("id").and_then(Value::as_i64) else {
+                return tools::ToolOutcome::err("memory: 'id' is required for update");
+            };
+            let text = args
+                .get("text")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty());
+            let kind = args.get("kind").and_then(Value::as_str);
+            let importance = args.get("importance").and_then(Value::as_i64);
+            if text.is_none() && kind.is_none() && importance.is_none() {
+                return tools::ToolOutcome::err("memory: nothing to update");
+            }
+            // Seeky rewrote it itself, so the entry is its own again — the user marker is
+            // only for changes the user made.
+            match db.update_memory(id, text, kind, importance, "seeky") {
+                Ok(()) => tools::ToolOutcome::ok(format!("updated #{id}")),
                 Err(error) => tools::ToolOutcome::err(format!("memory: {error}")),
             }
         }
@@ -345,8 +399,10 @@ fn memory_tool(app: &AppHandle, args: &Value) -> tools::ToolOutcome {
             let Some(id) = args.get("id").and_then(Value::as_i64) else {
                 return tools::ToolOutcome::err("memory: 'id' is required for forget");
             };
-            match db.delete_memory(id) {
-                Ok(()) => tools::ToolOutcome::ok(format!("forgot #{id}")),
+            match db.retire_memory(id) {
+                Ok(()) => tools::ToolOutcome::ok(format!(
+                    "set #{id} aside — it stays in the database but is no longer recalled"
+                )),
                 Err(error) => tools::ToolOutcome::err(format!("memory: {error}")),
             }
         }
@@ -366,7 +422,14 @@ fn memory_tool(app: &AppHandle, args: &Value) -> tools::ToolOutcome {
             Ok(rows) => {
                 let body = rows
                     .iter()
-                    .map(|row| format!("#{} [{}/{}] {}", row.id, row.scope, row.kind, row.text))
+                    .map(|row| {
+                        let marker = if row.origin == "user" {
+                            " (changed by the user)"
+                        } else {
+                            ""
+                        };
+                        format!("#{} [{}/{}] {}{marker}", row.id, row.scope, row.kind, row.text)
+                    })
                     .collect::<Vec<_>>()
                     .join("\n");
                 tools::ToolOutcome::ok(body)
@@ -550,6 +613,48 @@ mod tests {
         })
     }
 
+    /// The recall has to say whose words these are — that marker is the whole point of the
+    /// companion rows, and it is easy to lose in a prompt refactor.
+    #[test]
+    fn recall_marks_scope_and_user_edits() {
+        let row = |id: i64, scope: &str, text: &str, origin: &str| crate::db::MemoryRow {
+            id,
+            kind: "fact".to_string(),
+            scope: scope.to_string(),
+            text: text.to_string(),
+            importance: 1,
+            created_at: 0,
+            origin: origin.to_string(),
+            edited_at: None,
+            retired_at: None,
+        };
+
+        assert!(recall_block(&[]).is_empty(), "no memory, no block");
+
+        let block = recall_block(&[
+            row(1, "user", "Arbeitet an DS.IDE", "seeky"),
+            row(2, "agent", "Ich halte Antworten kurz", "seeky"),
+            row(3, "user", "Mag kurze Antworten", "user"),
+            row(4, "session", "Testet gerade die Vorschau", "seeky"),
+        ]);
+
+        assert!(block.contains("## Your long-term memory"));
+        assert!(block.contains("- [user] Arbeitet an DS.IDE\n"));
+        assert!(
+            block.contains("- [you] Ich halte Antworten kurz\n"),
+            "an agent-scope note is the partner's own: {block}"
+        );
+        assert!(
+            block.contains("- [user] Mag kurze Antworten (changed by the user)\n"),
+            "a user edit is marked: {block}"
+        );
+        assert!(
+            !block.contains("Arbeitet an DS.IDE (changed by the user)"),
+            "Seeky's own note stays unmarked"
+        );
+        assert!(block.contains("- [session] Testet gerade die Vorschau\n"));
+    }
+
     #[tokio::test]
     #[ignore = "requires DS_IDE_API_KEY"]
     async fn live_task_subagent_answers_without_tools() {
@@ -700,10 +805,7 @@ async fn run_turn(
     if let Some(db) = app.try_state::<Db>() {
         if let Ok(recall) = db.memory_context(40) {
             if !recall.is_empty() {
-                system_prompt.push_str("\n\n## What you already know\n");
-                for row in &recall {
-                    system_prompt.push_str(&format!("- [{}] {}\n", row.scope, row.text));
-                }
+                system_prompt.push_str(&recall_block(&recall));
                 let ids: Vec<i64> = recall.iter().map(|row| row.id).collect();
                 let _ = db.touch_memories(&ids);
             }
