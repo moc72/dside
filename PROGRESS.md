@@ -1342,3 +1342,27 @@ und keinen Zwang — „Seeky" zu bleiben ist ausdrücklich eine gültige Wahl.
   Stichworte des Pools sind zwei Formate. Aktuell: Pool für die Wahl, kuratierte
   Liste nur noch als Nachschlagewerk für die Anzeige des gewählten Namens.
 - §25–§28 unverändert (Kompression, Bildanhänge, Alltagsmodus, leere Blase).
+
+## 30. Aufgeräumt: die Vorlagen sind raus (2026-10-16, zehnte Runde)
+
+`minimax-code-main/` (74 MB), `minimax-jarvis/` (540 KB) und `Ubuntu/` (2,4 MB)
+sind gelöscht — rund 77 MB. Geprüft, dass nichts darauf zeigt:
+
+- Im Code gab es nur **Kommentare**, die den gespiegelten Vertrag nennen
+  (`engine/types.rs`: Mavis-Runtime; `persona.ts`: bewusst nicht kopiert). Kein
+  Import, kein Ladepfad, nichts im Build.
+- `Ubuntu/` war **byte-identisch** mit `public/fonts/` (App lädt `/fonts/…`),
+  inklusive `UFL.txt` daneben.
+- Die Attribution hängt seit §30-Commit an der **Über-Seite** (Vorbild: MiniMax
+  Code, MIT; Schrift: Ubuntu Font Licence), nicht am Ordner.
+
+### Wo die Vorlagen zu finden sind, wenn sie gebraucht werden
+- `minimax-code-main` → Kopie in `/home/me/Projects/[SAVED]/minimax-code-main`
+  (4270 Dateien, identisch) und als `minimax-code-main.zip` (26,7 MB) daneben;
+  online <https://github.com/MiniMax-AI/minimax-code>.
+- `minimax-jarvis` (Agent-Definitionen) → dasselbe Repo, Pfad
+  `packages/local-runtime-v2/assets/agents/`.
+- `Ubuntu/` → die Schriften liegen weiter in `public/fonts/`.
+- `kilocode-main/` (140 MB) **bleibt vorerst**: es ist die Vorlage für die
+  Kompression (<https://github.com/Kilo-Org/kilocode>) und wird danach ebenfalls
+  entfernt.
