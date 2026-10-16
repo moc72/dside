@@ -756,6 +756,7 @@ watch(activeItem, (value) => {
 .model-field {
   display: flex;
   align-items: center;
+  justify-content: end;
   gap: 6px;
   flex: 1;
   min-width: 0;

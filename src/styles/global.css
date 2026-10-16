@@ -118,8 +118,8 @@
 
   --watermark: url("/deepseek-mark-blue.png");
 
-  --bubble-bg: #f4f4f4;
-  --bubble-user-bg: #e6e6e6;
+  --bubble-bg: #f4f4f455;
+  --bubble-user-bg: #dadada55;
   --bubble-border: #0000001f;
 }
 
