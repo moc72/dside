@@ -992,3 +992,65 @@ Vite-Server und zeigt fremden Code.
    `partnerName` in der `settings`-Tabelle.
 4. Der Weg „Nutzer legt selbst eine Erinnerung an" fehlt weiterhin (aus §21).
 5. Splash: unter Wayland ungeprüft (siehe oben).
+
+## 23. Denktiefe, Tabellenblätter, eigene Erinnerungen (2026-10-16, dritte Runde)
+
+Commits `b4e9e06` und `9c48f04`, dazu dieser Doku-Commit.
+
+### Modell — Korrektur meiner Korrektur
+In Abschnitt 22 stand, die IDs `deepseek-flash`/`deepseek-v4-pro` existierten
+nicht. Falsch. Der Provider meldet genau diese zwei; falsch war nur, dass wir
+die **ID** zeigten und nie den **Namen**. Jetzt:
+- Der Einstellungswert ist eine Auswahlliste mit dem Anbieternamen
+  (`DeepSeek-V4.1-Flash`), darunter steht die ID, die tatsächlich gesendet wird.
+  Eine unbekannte ID (anderer Anbieter) schaltet auf ein freies Textfeld.
+- Rust-Voreinstellungen sagen nicht mehr `deepseek-chat`.
+
+### Denktiefe (`reasoning_effort`)
+Der Provider nimmt ein Feld `reasoning_effort` mit den Werten
+`none, minimal, low, medium, high, xhigh, ultra, max`, und meldet pro Modell,
+welche Stufen es unterstützt (hier beide: `low, high, max`, Vorgabe `high`).
+Direkt nachgemessen: Vorgabe → 129 Zeichen Reasoning, `low` → 42. Deshalb kommt
+die Auswahl aus der Modellliste statt aus einer Vermutung; leer heißt
+„Anbieter-Vorgabe". Neue Einstellung **Denktiefe** unter Konto & Modell, plus
+Live-Test `live_deepseek_accepts_reasoning_effort` (ein falscher Feldname oder
+Wert wäre ein 422).
+
+### Tabellen: alle Blätter
+`renderSheet` las nur `SheetNames[0]` — bei einem Arbeitsblatt mit Noten auf
+Blatt 2 war das eine stille Lüge. Jetzt wird jedes Blatt nacheinander mit Namen
+gerendert; die Zeilen pro Blatt schrumpfen mit der Zahl der Blätter
+(Zellbudget), leere Blätter fallen weg, und ein Hinweis nennt nicht gezeigte
+Blätter. Geprüft mit einem selbstgebauten Drei-Blatt-Fixture.
+
+### Erinnerungen: der Nutzer darf selbst schreiben
+Bisher konnte der Nutzer nur korrigieren und stilllegen. Jetzt gibt es ein Feld
+im Panel (`memory_add`, `origin = user`, `edited_at` leer) und der Recall
+unterscheidet **„(written by the user)"** von **„(changed by the user)"** — ein
+selbst geschriebener Satz ist etwas anderes als eine Korrektur. Im Panel steht
+dafür „von dir geschrieben" bzw. „von dir geändert".
+
+### Verifikation
+19 Rust-Tests, 10 ignoriert (davon 4 live gegen den echten Anbieter, alle grün);
+`pnpm build` grün. Sichtbar geprüft per Screenshot: Modellfeld zeigt
+`DeepSeek-V4.1-Flash`, neue Zeile „Denktiefe", Erinnerungsfeld mit
+„von dir geschrieben". Dafür wurde kurzzeitig der Standard-View auf
+Einstellungen/Erinnerungen gesetzt und danach zurückgenommen — im Baum ist
+davon nichts übrig (`git status` sauber).
+
+### Offene Punkte
+1. **Bildanhänge**: Flash meldet `image` als Eingabe. Der Client schickt nur
+   Text; Anhänge brauchen UI (Einfügen/Auswählen), Ablage und das
+   Inhaltsformat im Request. Noch nicht angefasst.
+2. **Konsole**: Der Partner hat eine Shell (`bash`-Werkzeug), aber der Nutzer
+   sieht nur den Werkzeug-Chip im Chat, kein Terminal. Vorschlag: sichtbares
+   Konsolen-Panel (Ausgabe der Werkzeugaufrufe) zuerst, interaktives Terminal
+   (pty + xterm.js) danach — der Nutzer will es oben links neben Browser und
+   Dateibrowser.
+3. **„Alltag"-Modus**: nur die Modellvorauswahl ist umgesetzt; welche Werkzeuge
+   und Panels der Modus ausblendet, ist noch nicht bestätigt.
+4. Einstellungen dürfen nicht über die volle Breite laufen (freier Platz rechts)
+   — der Nutzer überarbeitet das Layout selbst.
+5. Zweite Runde Prozess-Aufräumen: `background_process stop` beendet nicht immer
+   den ganzen Baum (`tauri dev` → vite + App blieben stehen) und blockierte
+   danach Port 1420. Seitdem: PIDs explizit sammeln und `kill -9`.
