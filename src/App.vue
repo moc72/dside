@@ -40,65 +40,38 @@ try {
 const isSplash = ref(windowLabel === "splash");
 
 /**
- * Launch splash. The bar is theatre — no download is measured here — but a bar that moves
- * unevenly reads as "working" while a smooth one reads as "fake". Steps are (ms, percent):
- * small plateaus for the stalls, bigger jumps for the catch-up moments.
+ * Launch splash. The bar is theatre — nothing is downloaded — but a bar that moves
+ * unevenly reads as "working" while a smooth one reads as "fake". The curve lives in CSS
+ * (`splash-progress`), because `requestAnimationFrame` does not fire reliably in a splash
+ * window under Wayland: the first version stalled here and never handed over.
  */
 const SPLASH_MS = 7000;
-const SPLASH_STEPS: Array<[number, number]> = [
-  [0, 0],
-  [420, 7],
-  [780, 8],
-  [1260, 24],
-  [1520, 25],
-  [2200, 46],
-  [2680, 50],
-  [3400, 69],
-  [3960, 71],
-  [4700, 86],
-  [5240, 87],
-  [5980, 96],
-  [6540, 99],
-  [7000, 100],
-];
-
-const progress = ref(0);
-
-function animateProgress(done: () => void) {
-  const started = performance.now();
-  const tick = (now: number) => {
-    const elapsed = Math.min(SPLASH_MS, now - started);
-    let value = 100;
-    for (let index = 1; index < SPLASH_STEPS.length; index += 1) {
-      const [at, percent] = SPLASH_STEPS[index];
-      if (elapsed <= at) {
-        const [prevAt, prevPercent] = SPLASH_STEPS[index - 1];
-        const ratio = at === prevAt ? 1 : (elapsed - prevAt) / (at - prevAt);
-        value = prevPercent + (percent - prevPercent) * ratio;
-        break;
-      }
-    }
-    progress.value = value;
-    if (elapsed < SPLASH_MS) {
-      requestAnimationFrame(tick);
-    } else {
-      done();
-    }
-  };
-  requestAnimationFrame(tick);
-}
 
 /** The splash stays hidden until its artwork is ready, then holds for the full run. */
 async function finishSplash() {
+  const say = (text: string) => {
+    void invoke("log_message", { text }).catch(() => undefined);
+  };
+
+  say("splash: waiting for artwork");
   await new Promise<void>((resolve) => {
     const image = new Image();
     image.onload = () => resolve();
     image.onerror = () => resolve();
     image.src = "/whale-splash.webp";
   });
+  say("splash: artwork ready");
+
   await invoke("splash_visible").catch(() => undefined);
-  await new Promise<void>((resolve) => animateProgress(resolve));
+  say("splash: visible");
+
+  await new Promise<void>((resolve) => {
+    window.setTimeout(resolve, SPLASH_MS);
+  });
+  say("splash: progress done");
+
   await invoke("splash_ready").catch(() => undefined);
+  say("splash: handed over");
 }
 
 onMounted(() => {
@@ -106,6 +79,7 @@ onMounted(() => {
     void finishSplash();
     return;
   }
+  void invoke("log_message", { text: "main window: mounted" }).catch(() => undefined);
   window.addEventListener("keydown", onKey);
 });
 onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
@@ -176,7 +150,7 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
   <div v-if="isSplash" class="splash-window">
     <img src="/whale-splash.webp" alt="" />
     <span class="splash-mark" v-html="deepSeekMark"></span>
-    <div class="splash-bar"><span :style="{ width: `${progress}%` }"></span></div>
+    <div class="splash-bar"><span></span></div>
   </div>
 
   <template v-else>
@@ -276,5 +250,52 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
   height: 100%;
   background: var(--accent);
   border-radius: 999px;
+  animation: splash-progress 7s linear forwards;
+}
+
+/* Uneven on purpose: plateaus read as work, jumps as progress. */
+@keyframes splash-progress {
+  0% {
+    width: 0%;
+  }
+  6% {
+    width: 7%;
+  }
+  11% {
+    width: 8%;
+  }
+  18% {
+    width: 24%;
+  }
+  22% {
+    width: 25%;
+  }
+  31% {
+    width: 46%;
+  }
+  38% {
+    width: 50%;
+  }
+  49% {
+    width: 69%;
+  }
+  57% {
+    width: 71%;
+  }
+  67% {
+    width: 86%;
+  }
+  75% {
+    width: 87%;
+  }
+  85% {
+    width: 96%;
+  }
+  93% {
+    width: 99%;
+  }
+  100% {
+    width: 100%;
+  }
 }
 </style>

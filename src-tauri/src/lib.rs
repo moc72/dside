@@ -358,7 +358,19 @@ fn dedupe_key(candidate: &EditorCandidate) -> String {
 
 #[tauri::command]
 fn detect_editors() -> Vec<EditorCandidate> {
-    detect_editors_impl()
+    let found = detect_editors_impl();
+    // One line per call: "no editor found" in the UI is otherwise impossible to tell apart
+    // from "the scan found nothing in this environment".
+    eprintln!(
+        "editors: {} found [{}]",
+        found.len(),
+        found
+            .iter()
+            .map(|candidate| candidate.id.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    found
 }
 
 #[tauri::command]
@@ -558,6 +570,13 @@ fn default_workspace() -> String {
     std::env::var("HOME").unwrap_or_else(|_| ".".to_string())
 }
 
+/// A channel for the frontend to write into the same log. A desktop app without a console
+/// needs one, and "the UI did nothing" is otherwise indistinguishable from "the UI never ran".
+#[tauri::command]
+fn log_message(text: String) {
+    eprintln!("ui: {text}");
+}
+
 /// Shows the splash only once its artwork is on screen — the window is created hidden for
 /// exactly this reason, so nobody sees a black rectangle while the webview boots.
 #[tauri::command]
@@ -643,6 +662,7 @@ pub fn run() {
             browser::browser_action,
             browser::browser_close,
             splash_visible,
+            log_message,
             splash_ready,
             engine::engine_answer,
             engine::engine_abort,

@@ -6,9 +6,13 @@ import { t } from "../i18n";
 import { settings } from "../stores/settings";
 import { openTab, toggleWorkArea } from "../stores/workArea";
 import { toggleWeb } from "../stores/ui";
-import { activeEditor, detectEditors, detecting, editors } from "../composables/useEditors";
+import { activeEditor, detectEditors, detecting, editors, useEditors } from "../composables/useEditors";
 
 const EDITOR_DOWNLOAD_URL = "https://code.visualstudio.com/download";
+
+// Looks for installed editors once, when the toolbar appears. Without this call the
+// dropdown stays on "no editor found" forever — a missing side effect, not a missing scan.
+useEditors();
 
 const menuOpen = ref(false);
 
