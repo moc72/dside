@@ -1545,3 +1545,28 @@ geprüft (Frontend eingebettet, kein Vite): `pnpm build` → `cargo build --rele
 → Start unter X11 → Screenshot, Kanten am Pixelverlauf gemessen. 24 Rust-Tests
 grün, Baum sauber. Debug-Umrisse und Testcode sind restlos entfernt
 (`grep TEMP-VERIFY` leer), der Fensterzustand zurückgesetzt.
+
+## 34. Plan für morgen: Veröffentlichung über GitHub (notiert 2026-10-16, abends)
+
+Vom Nutzer so gewünscht, damit der nächste Tag aus dieser Datei startet und
+nicht aus dem Gedächtnis:
+
+1. **Für GitHub vorbereiten** — Repository-Inhalt prüfen, was gehört hinein, was
+   nicht (die großen Vorlagen sind schon raus, §30/§31), README mit dem, was das
+   Programm ist und wie man es baut, Lizenzhinweise (MiniMax Code MIT, Ubuntu
+   Font Licence — beides steht schon auf der Über-Seite).
+2. **GitHub Actions** für **macOS- und Windows-Builds** (der Linux-Build läuft
+   hier lokal schon, §32).
+3. **Artefakte ausliefern:** AppImage, deb, rpm **und zip**.
+
+Was dabei zu beachten ist und morgen geklärt werden muss:
+- **Signieren:** Ohne Zertifikat bekommen macOS-Nutzer die Gatekeeper-Warnung,
+  Windows-Nutzer SmartScreen. Ein „zip" ist genau deshalb sinnvoll, weil es ohne
+  Installer funktioniert. Zertifikate gibt es nicht — also entweder Warnungen in
+  der README erklären oder Schlüssel beschaffen.
+- **Woher die Version kommt:** `0.1.0` steckt in `package.json`, `Cargo.toml` und
+  `tauri.conf.json`. Für Releases sollten sie nicht auseinanderlaufen; ein Tag
+  (`v0.1.0`) müsste die Quelle sein.
+- **Der Build braucht WebKit** (Linux) bzw. die jeweiligen Runner — die
+  Standard-`ubuntu-latest`-Runner haben den WebKitGTK-Kram nicht, das kostet
+  einen Installationsschritt im Workflow.

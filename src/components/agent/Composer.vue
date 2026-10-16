@@ -244,7 +244,7 @@ function toggleAuthorization() {
   margin-left: calc(15% + 3px);
   padding: 8px 6px 10px;
   border-top: 1px solid var(--border);
-  background: var(--bg-app);
+  /* background: var(--bg-app); */
 }
 
 .note {
