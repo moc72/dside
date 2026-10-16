@@ -124,6 +124,9 @@ export const zhHans: Messages = {
     preview: "预览",
     source: "源文本",
     unsupported: "无法预览此格式。",
+    slide: "第 {n} 张幻灯片",
+    slidesWithoutText: "此演示文稿不包含文字。",
+    moreRows: "… 另有 {n} 行未显示",
     workspace: "工作目录",
   },
   browser: {

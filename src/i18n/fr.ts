@@ -123,6 +123,9 @@ export const fr: Messages = {
     preview: "Aperçu",
     source: "Source",
     unsupported: "Ce format ne peut pas être prévisualisé.",
+    slide: "Diapositive {n}",
+    slidesWithoutText: "Cette présentation ne contient pas de texte.",
+    moreRows: "… {n} lignes supplémentaires non affichées",
     workspace: "Répertoire de travail",
   },
   browser: {

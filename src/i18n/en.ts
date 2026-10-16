@@ -124,6 +124,9 @@ export const en: Messages = {
     preview: "Preview",
     source: "Source",
     unsupported: "This format cannot be previewed.",
+    slide: "Slide {n}",
+    slidesWithoutText: "This presentation contains no text.",
+    moreRows: "… {n} more rows not shown",
     workspace: "Workspace",
   },
   browser: {

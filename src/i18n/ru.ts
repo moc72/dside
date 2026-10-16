@@ -124,6 +124,9 @@ export const ru: Messages = {
     preview: "Предпросмотр",
     source: "Исходник",
     unsupported: "Этот формат нельзя просмотреть.",
+    slide: "Слайд {n}",
+    slidesWithoutText: "В этой презентации нет текста.",
+    moreRows: "… ещё {n} строк не показано",
     workspace: "Рабочая директория",
   },
   browser: {

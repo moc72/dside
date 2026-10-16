@@ -1,7 +1,16 @@
 import DOMPurify from "dompurify";
 import { marked } from "marked";
 
-export type PreviewKind = "markdown" | "image" | "pdf" | "docx" | "sheet" | "rtf" | "unsupported" | "text";
+export type PreviewKind =
+  | "markdown"
+  | "image"
+  | "pdf"
+  | "docx"
+  | "sheet"
+  | "rtf"
+  | "slides"
+  | "unsupported"
+  | "text";
 
 const markdownExtensions = new Set(["md", "markdown", "mdown", "mkd"]);
 const imageExtensions = new Set([
@@ -19,8 +28,9 @@ const pdfExtensions = new Set(["pdf"]);
 const docxExtensions = new Set(["docx", "odt"]);
 const sheetExtensions = new Set(["xlsx", "xls", "ods", "csv"]);
 const rtfExtensions = new Set(["rtf"]);
-/** Old binary Word documents: no library reads these without a converter. */
-const unsupportedExtensions = new Set(["doc", "ppt", "pptx", "odp"]);
+const slideExtensions = new Set(["pptx"]);
+/** Old binary Word and PowerPoint documents: no library reads these without a converter. */
+const unsupportedExtensions = new Set(["doc", "ppt", "odp"]);
 
 export function extensionOf(path: string): string {
   const name = path.split("/").pop() ?? path;
@@ -35,6 +45,7 @@ export function previewKindFor(path: string): PreviewKind {
   if (docxExtensions.has(extension)) return "docx";
   if (sheetExtensions.has(extension)) return "sheet";
   if (rtfExtensions.has(extension)) return "rtf";
+  if (slideExtensions.has(extension)) return "slides";
   if (unsupportedExtensions.has(extension)) return "unsupported";
   return "text";
 }

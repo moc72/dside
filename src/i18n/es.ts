@@ -123,6 +123,9 @@ export const es: Messages = {
     preview: "Vista previa",
     source: "Código",
     unsupported: "Este formato no se puede previsualizar.",
+    slide: "Diapositiva {n}",
+    slidesWithoutText: "Esta presentación no contiene texto.",
+    moreRows: "… {n} filas más sin mostrar",
     workspace: "Directorio de trabajo",
   },
   browser: {

@@ -122,6 +122,9 @@ export const de = {
     preview: "Vorschau",
     source: "Quelle",
     unsupported: "Dieses Format kann nicht angezeigt werden.",
+    slide: "Folie {n}",
+    slidesWithoutText: "Diese Präsentation enthält keinen Text.",
+    moreRows: "… {n} weitere Zeilen nicht angezeigt",
     workspace: "Arbeitsverzeichnis",
   },
   browser: {

@@ -9,7 +9,7 @@ import { t } from "../../i18n";
 import type { FileNode } from "../../types";
 import { languageFromPath } from "../../lib/language";
 import { escapeHtml, mimeFor, previewKindFor, renderMarkdown, rtfToText } from "../../lib/preview";
-import { renderDocx, renderSheet } from "../../lib/office";
+import { renderDocx, renderSheet, renderSlides } from "../../lib/office";
 import {
   initWorkspace,
   loadChildren,
@@ -63,18 +63,19 @@ const rendered = computed(() =>
 
 const officeHtml = ref("");
 
-/** Word, spreadsheets and RTF: their own loader, because they are not text and not images. */
+/** Word, spreadsheets, presentations and RTF: their own loader — not text, not images. */
 watch(
   [() => props.path, kind],
   async ([path, currentKind]) => {
     officeHtml.value = "";
     if (!path) return;
-    if (!["docx", "sheet", "rtf"].includes(currentKind)) return;
+    if (!["docx", "sheet", "rtf", "slides"].includes(currentKind)) return;
     error.value = null;
     try {
       const base64 = await invoke<string>("read_file_base64", { path });
       if (currentKind === "docx") officeHtml.value = await renderDocx(base64);
       else if (currentKind === "sheet") officeHtml.value = renderSheet(base64);
+      else if (currentKind === "slides") officeHtml.value = await renderSlides(base64);
       else officeHtml.value = `<pre>${escapeHtml(rtfToText(atob(base64)))}</pre>`;
     } catch (cause) {
       error.value = String(cause);
@@ -170,7 +171,7 @@ async function toggle(node: FileNode) {
         ></div>
 
         <div
-          v-else-if="kind === 'docx' || kind === 'sheet' || kind === 'rtf'"
+          v-else-if="['docx', 'sheet', 'rtf', 'slides'].includes(kind)"
           class="markdown"
           v-html="officeHtml"
         ></div>
@@ -391,6 +392,39 @@ async function toggle(node: FileNode) {
   margin: 1.5em 0;
   border: none;
   border-top: 1px solid var(--border);
+}
+
+/* Presentations: one card per slide. The text is real, the layout is not — so it reads as a
+   list of slides instead of pretending to be the original page. */
+.markdown :deep(.slide) {
+  margin: 0 0 1.4em;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+}
+
+.markdown :deep(.slide h3) {
+  margin: 0 0 0.7em;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.markdown :deep(.slide p) {
+  margin: 0.3em 0;
+}
+
+.markdown :deep(.slide .slide-title) {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.markdown :deep(.truncated) {
+  color: var(--text-muted);
+  font-size: 0.92em;
 }
 
 .placeholder {
