@@ -195,6 +195,10 @@ export const en: Messages = {
     baseUrlDesc: "Endpoint for chat completions",
     model: "Model",
     modelDesc: "Model id, as reported by the provider",
+    customId: "Custom model id (for other providers)",
+    effort: "Thinking effort",
+    effortDesc: "How hard the model thinks before answering. Higher is slower and more expensive, but more thorough.",
+    effortDefault: "Provider default",
     balanceTotal: "Total balance (grants + top-ups)",
     fullAuthorizationDesc:
       "Lets the partner write and edit files and run commands",

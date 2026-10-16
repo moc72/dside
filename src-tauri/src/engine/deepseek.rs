@@ -51,6 +51,13 @@ pub async fn stream_chat(
     if !tools.is_empty() {
         body["tools"] = Value::Array(tools.to_vec());
     }
+    // How hard the model thinks before answering. The provider rejects an empty string, so an
+    // unset value must stay out of the body entirely and leave its own default in place.
+    if let Some(effort) = config.reasoning_effort.as_deref() {
+        if !effort.trim().is_empty() {
+            body["reasoning_effort"] = Value::String(effort.trim().to_string());
+        }
+    }
 
     let response = client
         .post(config.chat_completions_url())
@@ -204,6 +211,7 @@ mod live {
             workspace: "/tmp".to_string(),
             full_authorization: true,
             max_turns: 2,
+            reasoning_effort: None,
         })
     }
 
@@ -263,6 +271,26 @@ mod live {
             }
             Err(error) => panic!("live tool call failed: {error}"),
         }
+    }
+
+    /// `reasoning_effort` is a real field with a fixed set of values; a typo in either the
+    /// name or the value is a 422, and that is worth catching without a human in the loop.
+    #[tokio::test]
+    #[ignore = "requires DS_IDE_API_KEY"]
+    async fn live_deepseek_accepts_reasoning_effort() {
+        let Some(mut config) = live_config() else {
+            eprintln!("skipped: DS_IDE_API_KEY not set");
+            return;
+        };
+        config.model = "deepseek-v4-pro".to_string();
+        config.reasoning_effort = Some("low".to_string());
+
+        let messages = vec![ChatMessage::user("Antworte mit genau: OK")];
+        let mut sink = |_kind: DeltaKind, _chunk: &str| {};
+        let outcome = stream_chat(&config, &messages, &[], &mut sink)
+            .await
+            .expect("request with reasoning_effort must be accepted");
+        assert_eq!(outcome.content.trim(), "OK");
     }
 
     #[tokio::test]

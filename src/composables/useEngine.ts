@@ -118,6 +118,7 @@ export async function configureEngine(): Promise<void> {
       workspace: settings.workspace,
       fullAuthorization: settings.fullAuthorization,
       maxTurns: 24,
+      reasoningEffort: settings.reasoningEffort || null,
     },
   });
   await refreshSecret();

@@ -14,10 +14,10 @@ import { settings } from "../../stores/settings";
 import {
   balance,
   balanceError,
-  knownModels,
   loadBalance,
+  effortsFor,
   loadModels,
-  modelLabel,
+  modelChoices,
   modelsError,
 } from "../../stores/models";
 import { settingsItem } from "../../stores/ui";
@@ -139,6 +139,9 @@ async function removeKey() {
 }
 
 const systemName = ref("");
+
+/** True while the stored id is one the provider reports — then a picker makes sense. */
+const modelIsKnown = computed(() => modelChoices().some((entry) => entry.id === settings.model));
 
 async function openLink(url: string) {
   try {
@@ -388,10 +391,22 @@ watch(activeItem, (value) => {
           <div class="row">
             <div class="text">
               <div class="label">{{ t("model.model") }}</div>
-              <div class="desc">{{ modelLabel(settings.model) }}</div>
+              <!-- The name is what a person recognises; the id is what actually gets sent, so
+                   both are on screen instead of only the one that looked wrong. -->
+              <div class="desc">{{ modelIsKnown ? settings.model : t("model.modelDesc") }}</div>
             </div>
             <div class="model-field">
-              <input v-model="settings.model" class="input" list="ds-models" />
+              <select v-if="modelIsKnown" v-model="settings.model" class="input">
+                <option v-for="entry in modelChoices()" :key="entry.id" :value="entry.id">
+                  {{ entry.name }}
+                </option>
+              </select>
+              <input
+                v-else
+                v-model="settings.model"
+                class="input"
+                :title="t('model.customId')"
+              />
               <button
                 class="mini"
                 type="button"
@@ -400,11 +415,21 @@ watch(activeItem, (value) => {
               >
                 <Icon name="reload" :size="14" />
               </button>
-              <datalist id="ds-models">
-                <option v-for="entry in knownModels" :key="entry.id" :value="entry.id">
-                  {{ entry.name }}
+            </div>
+          </div>
+
+          <div v-if="effortsFor(settings.model).length" class="row">
+            <div class="text">
+              <div class="label">{{ t("model.effort") }}</div>
+              <div class="desc">{{ t("model.effortDesc") }}</div>
+            </div>
+            <div class="model-field">
+              <select v-model="settings.reasoningEffort" class="input">
+                <option value="">{{ t("model.effortDefault") }}</option>
+                <option v-for="level in effortsFor(settings.model)" :key="level" :value="level">
+                  {{ level }}
                 </option>
-              </datalist>
+              </select>
             </div>
           </div>
 

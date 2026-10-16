@@ -93,6 +93,10 @@ pub struct ModelInfo {
     pub id: String,
     pub name: String,
     pub context_window: Option<i64>,
+    /// The provider's thinking levels for this model, as it reports them. Empty when the
+    /// model does not think, and then we do not offer a choice.
+    pub efforts: Vec<String>,
+    pub default_effort: Option<String>,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -154,6 +158,7 @@ pub async fn engine_models(app: AppHandle) -> Result<Vec<ModelInfo>, String> {
             list.iter()
                 .filter_map(|entry| {
                     let id = entry.get("id").and_then(Value::as_str)?;
+                    let effort = entry.get("effort");
                     Some(ModelInfo {
                         id: id.to_string(),
                         name: entry
@@ -162,6 +167,21 @@ pub async fn engine_models(app: AppHandle) -> Result<Vec<ModelInfo>, String> {
                             .unwrap_or(id)
                             .to_string(),
                         context_window: entry.get("context_window").and_then(Value::as_i64),
+                        efforts: effort
+                            .and_then(|value| value.get("supported_levels"))
+                            .and_then(Value::as_array)
+                            .map(|levels| {
+                                levels
+                                    .iter()
+                                    .filter_map(Value::as_str)
+                                    .map(str::to_string)
+                                    .collect()
+                            })
+                            .unwrap_or_default(),
+                        default_effort: effort
+                            .and_then(|value| value.get("default_level"))
+                            .and_then(Value::as_str)
+                            .map(str::to_string),
                     })
                 })
                 .collect()
@@ -633,6 +653,7 @@ mod tests {
             workspace: std::env::temp_dir().to_string_lossy().to_string(),
             full_authorization: true,
             max_turns: 4,
+            reasoning_effort: None,
         })
     }
 

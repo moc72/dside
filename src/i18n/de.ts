@@ -194,6 +194,10 @@ export const de = {
     baseUrlDesc: "Endpunkt für Chat-Completions",
     model: "Modell",
     modelDesc: "Modell-ID, wie vom Anbieter gemeldet",
+    customId: "Freie Modell-ID (für andere Anbieter)",
+    effort: "Denktiefe",
+    effortDesc: "Wie hart das Modell nachdenkt, bevor es antwortet. Höher ist langsamer und teurer, aber gründlicher.",
+    effortDefault: "Anbieter-Vorgabe",
     balanceTotal: "Guthaben gesamt (Gutschriften + Aufladungen)",
     fullAuthorizationDesc:
       "Erlaubt dem Partner, Dateien zu schreiben, zu ändern und Befehle auszuführen",

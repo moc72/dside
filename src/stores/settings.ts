@@ -19,6 +19,8 @@ export interface SettingsState {
   fontSize: number;
   /** The user's own addition to the partner's instructions, verbatim. */
   partnerPrompt: string;
+  /** How hard the model should think, on the provider's own scale. Empty = provider default. */
+  reasoningEffort: string;
 }
 
 /**
@@ -51,6 +53,7 @@ const PERSISTED_KEYS: (keyof SettingsState)[] = [
   "displayName",
   "fontSize",
   "partnerPrompt",
+  "reasoningEffort",
 ];
 
 const LEGACY_KEY = "ds-ide.settings";
@@ -70,6 +73,7 @@ const defaults: SettingsState = {
   displayName: "",
   fontSize: 14,
   partnerPrompt: "",
+  reasoningEffort: "",
 };
 
 export const settings = reactive<SettingsState>({ ...defaults });

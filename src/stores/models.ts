@@ -7,6 +7,9 @@ export interface ModelInfo {
   id: string;
   name: string;
   contextWindow?: number | null;
+  /** Thinking levels the provider reports for this model. Empty when it does not think. */
+  efforts?: string[];
+  defaultEffort?: string | null;
 }
 
 export interface BalanceInfo {
@@ -30,8 +33,8 @@ export const modelsError = ref<string | null>(null);
  * it gives them — a wrong id here would mean a field that looks fine and fails every request.
  */
 const fallbackModels: ModelInfo[] = [
-  { id: "deepseek-flash", name: "DeepSeek-V4.1-Flash" },
-  { id: "deepseek-v4-pro", name: "DeepSeek-V4-Pro" },
+  { id: "deepseek-flash", name: "DeepSeek-V4.1-Flash", efforts: ["low", "high", "max"] },
+  { id: "deepseek-v4-pro", name: "DeepSeek-V4-Pro", efforts: ["low", "high", "max"] },
 ];
 
 export function modelChoices(): ModelInfo[] {
@@ -41,6 +44,15 @@ export function modelChoices(): ModelInfo[] {
 /** The provider's name for a model, or the id itself when it is not in the list. */
 export function modelLabel(id: string): string {
   return modelChoices().find((entry) => entry.id === id)?.name ?? id;
+}
+
+/** The thinking levels the current model offers; empty means there is nothing to choose. */
+export function effortsFor(id: string): string[] {
+  return modelChoices().find((entry) => entry.id === id)?.efforts ?? [];
+}
+
+export function defaultEffortFor(id: string): string {
+  return modelChoices().find((entry) => entry.id === id)?.defaultEffort ?? "";
 }
 
 export const balance = ref<BalanceInfo | null>(null);

@@ -195,6 +195,10 @@ export const fr: Messages = {
     baseUrlDesc: "Point de terminaison pour les complétions de chat",
     model: "Modèle",
     modelDesc: "Identifiant du modèle, tel que fourni par le fournisseur",
+    customId: "Identifiant de modèle libre (pour d'autres fournisseurs)",
+    effort: "Profondeur de réflexion",
+    effortDesc: "À quel point le modèle réfléchit avant de répondre. Plus haut, plus lent et plus cher, mais plus minutieux.",
+    effortDefault: "Valeur du fournisseur",
     balanceTotal: "Solde total (crédits offerts + recharges)",
     fullAuthorizationDesc:
       "Autorise le partenaire à créer, modifier des fichiers et à exécuter des commandes",

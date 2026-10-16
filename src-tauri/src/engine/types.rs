@@ -20,6 +20,10 @@ pub struct EngineConfig {
     pub full_authorization: bool,
     #[serde(default = "default_max_turns")]
     pub max_turns: u32,
+    /// How hard the model thinks: the provider's own scale (`none` … `max`). Empty means
+    /// "whatever the provider does by default", which is the honest default for us too.
+    #[serde(default)]
+    pub reasoning_effort: Option<String>,
 }
 
 fn default_base_url() -> String {
