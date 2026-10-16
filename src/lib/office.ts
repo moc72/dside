@@ -94,7 +94,7 @@ export async function renderSlides(base64: string): Promise<string> {
   }
 
   if (slides.length === 0) {
-    return `<p class="truncated">${escapeHtml(t("viewFile.slidesWithoutText"))}</p>`;
+    return `<p class="truncated">${escapeHtml(t("viewFile.noText"))}</p>`;
   }
 
   return DOMPurify.sanitize(slides.join(""), { USE_PROFILES: { html: true } });

@@ -10,6 +10,8 @@ import type { FileNode } from "../../types";
 import { languageFromPath } from "../../lib/language";
 import { escapeHtml, mimeFor, previewKindFor, renderMarkdown, rtfToText } from "../../lib/preview";
 import { renderDocx, renderSheet, renderSlides } from "../../lib/office";
+import { renderLegacySlides, renderLegacyWord } from "../../lib/binaryOffice";
+import { renderOdfSlides, renderOdfText } from "../../lib/odf";
 import {
   initWorkspace,
   loadChildren,
@@ -63,19 +65,25 @@ const rendered = computed(() =>
 
 const officeHtml = ref("");
 
-/** Word, spreadsheets, presentations and RTF: their own loader — not text, not images. */
+/** The office family: each format has its own reader, none of them is plain text. */
+const OFFICE_KINDS = ["docx", "doc", "odt", "sheet", "rtf", "slides", "ppt", "odp"];
+
 watch(
   [() => props.path, kind],
   async ([path, currentKind]) => {
     officeHtml.value = "";
     if (!path) return;
-    if (!["docx", "sheet", "rtf", "slides"].includes(currentKind)) return;
+    if (!OFFICE_KINDS.includes(currentKind)) return;
     error.value = null;
     try {
       const base64 = await invoke<string>("read_file_base64", { path });
       if (currentKind === "docx") officeHtml.value = await renderDocx(base64);
+      else if (currentKind === "doc") officeHtml.value = await renderLegacyWord(base64);
+      else if (currentKind === "odt") officeHtml.value = await renderOdfText(base64);
       else if (currentKind === "sheet") officeHtml.value = renderSheet(base64);
       else if (currentKind === "slides") officeHtml.value = await renderSlides(base64);
+      else if (currentKind === "ppt") officeHtml.value = renderLegacySlides(base64);
+      else if (currentKind === "odp") officeHtml.value = await renderOdfSlides(base64);
       else officeHtml.value = `<pre>${escapeHtml(rtfToText(atob(base64)))}</pre>`;
     } catch (cause) {
       error.value = String(cause);
@@ -171,7 +179,7 @@ async function toggle(node: FileNode) {
         ></div>
 
         <div
-          v-else-if="['docx', 'sheet', 'rtf', 'slides'].includes(kind)"
+          v-else-if="OFFICE_KINDS.includes(kind)"
           class="markdown"
           v-html="officeHtml"
         ></div>
