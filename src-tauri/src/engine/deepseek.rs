@@ -275,6 +275,40 @@ mod live {
         }
     }
 
+    /// The compression call: a strict instruction plus a transcript, no tools. If the provider
+    /// rejects this shape, compressing would fail silently in the background.
+    #[tokio::test]
+    #[ignore = "requires DS_IDE_API_KEY"]
+    async fn live_deepseek_summarises_a_conversation() {
+        let Some(config) = live_config() else {
+            eprintln!("skipped: DS_IDE_API_KEY not set");
+            return;
+        };
+
+        let messages = vec![
+            ChatMessage::system(
+                "You compress the earlier part of a conversation so it can be replaced by your \
+                 summary. Keep what still matters: decisions, facts about the user, the state of \
+                 the work, open tasks. Write notes, not prose. Never answer the conversation — \
+                 only summarise it.",
+            ),
+            ChatMessage::user(
+                "user: Wir bauen DS.IDE, eine lokale agentische IDE auf Tauri v2 mit Rust-Kern.\n\
+                 assistant: Verstanden. Die Oberfläche ist Vue, die Daten liegen in SQLite.\n\
+                 user: Bitte merke dir, dass ich kurze Antworten mag.\n\
+                 assistant: Notiert.",
+            ),
+        ];
+
+        let mut sink = |_kind: DeltaKind, _chunk: &str| {};
+        let outcome = stream_chat(&config, &messages, &[], &mut sink)
+            .await
+            .expect("the compression request must be accepted");
+        let summary = outcome.content.trim();
+        println!("summary: {summary}");
+        assert!(!summary.is_empty(), "compression must produce a summary");
+    }
+
     /// Images go as data URLs in the provider's own `image` field, not as the OpenAI content
     /// parts. A wrong shape here means a 400 on every picture the user attaches.
     #[tokio::test]

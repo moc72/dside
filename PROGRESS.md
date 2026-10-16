@@ -1434,9 +1434,30 @@ jeweils mit Entfernen-Knopf.
 - **Verifiziert:** neuer Live-Test `live_deepseek_takes_an_image` baut ein PNG im Test,
   schickt es durch unseren eigenen Pfad und bekommt „BILD" zurück (5 Live-Tests grün).
 
-### 6. Kompression — offen
-Nächster Schritt. Plan: `EngineConfig.context_window` (die Oberfläche kennt das Fenster aus
-der Modellliste), eine Tabelle für die Zusammenfassung je Sitzung, Verdichten vor dem Turn
-ab einem Schwellwert (ältere Nachrichten zusammenfassen, Zusammenfassung speichern, nur
-noch Zusammenfassung + jüngste Nachrichten senden) und `session_compact` für den Klick auf
-den Kontext-Ring. Danach wird `kilocode-main/` gelöscht.
+### 6. Kompression — `51cb160`
+Der Ring zeigte die Füllung, aber nichts hat sie je geleert. Jetzt wird der ältere Teil
+eines Gesprächs zu einer Zusammenfassung verdichtet, die das Modell selbst schreibt; ab
+dann wird **sie** verschickt statt der Nachrichten, die sie abdeckt.
+
+- **Automatisch**, wenn ein Turn mehr als **75 %** des Kontextfensters (`context_window`,
+  aus der Modellliste der Oberfläche) überschreiten würde — und **auf Klick** über den Ring,
+  der jetzt ein Knopf ist und meldet, was er getan hat („N Nachrichten verdichtet" bzw.
+  „Nichts zu verdichten").
+- **Speicherung:** eigene Tabelle `session_summaries` mit der ID der letzten abgedeckten
+  Nachricht. Wiederholtes Verdichten faltet die vorige Zusammenfassung mit hinein, statt sie
+  zu verlieren; das **Protokoll in der Datenbank bleibt vollständig** — nur das Gesendete
+  ändert sich.
+- **Der Verdichtungsaufruf** läuft mit derselben Konfiguration, aber **ohne Werkzeuge**: er
+  soll nichts ausführen und nichts fragen, nur zusammenfassen.
+- **Verifiziert:** `db::tests::a_summary_replaces_the_messages_it_covers` (Zusammenfassung
+  ersetzt genau das, was sie abdeckt; der Verlauf bleibt vollständig) und der Live-Test
+  `live_deepseek_summarises_a_conversation` (die Form des Aufrufs wird vom Anbieter
+  angenommen und liefert eine Zusammenfassung). 24 Tests grün, 12 ignoriert (live).
+- **Eine Falle, die der Test durch Hängen gefunden hat:** die Zusammenfassung über die
+  Verbindung zu lesen, die eine Methode schon hält, muss mit *demselben* Lock passieren.
+  Der Aufruf des sperrenden Getters darin hat die ganze Datenbank verklemmt.
+
+### Aufgeräumt: `kilocode-main` (140 MB) ist weg
+Wie in §30 angekündigt, nach Abschluss der Kompression gelöscht — die Vorlage liegt unter
+<https://github.com/Kilo-Org/kilocode>. Der Eintrag in `.gitignore` bleibt, damit nichts
+davon versehentlich wieder eingecheckt wird, falls es nochmal lokal landet.
