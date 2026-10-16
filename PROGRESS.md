@@ -1366,3 +1366,52 @@ sind gelöscht — rund 77 MB. Geprüft, dass nichts darauf zeigt:
 - `kilocode-main/` (140 MB) **bleibt vorerst**: es ist die Vorlage für die
   Kompression (<https://github.com/Kilo-Org/kilocode>) und wird danach ebenfalls
   entfernt.
+
+## 31. Die sechs offenen Punkte (2026-10-16, elfte Runde)
+
+Die Liste aus §25–§29 wird als geführtes Vorhaben abgearbeitet, klein zuerst.
+Stand: 1–4 erledigt, 5 und 6 offen.
+
+### 1. Leere Blase nach Abbruch — `79e1d18`
+Ein Turn, der mitten im Lauf beendet wurde, hinterlässt eine Assistentenzeile,
+die angelegt, aber nie gefüllt wurde; nach dem Neuladen stand dort eine leere
+Blase. Zeilen ohne Text, ohne Werkzeuge und ohne Zeitleiste werden beim Laden
+übersprungen (`hasSomethingToSay` in `useEngine.ts`).
+
+### 2. Alltagsmodus wirkt — `a71790f`
+`settings.mode` wurde geschrieben und nirgends gelesen. Jetzt hat die Wahl Folgen,
+und sie stehen an **einer** Stelle (`src/engine/mode.ts`):
+- Werkzeuge des Begleiters: `bash`, `code_review`, `task` **weg** — doppelt
+  abgesichert: sie werden dem Modell nicht mehr angeboten (der Rust-Kern filtert
+  sie aus der Definitionsliste) *und* ein trotzdem eintreffender Aufruf wird
+  abgelehnt statt still ausgeführt.
+- Panels: Plan-, Skill- und Geplantes-Tabs aus, ebenso die Einträge in der
+  Seitenleiste; ist der offene Tab einer davon, wechselt die Werkbank auf die
+  Dateiansicht statt leer zu bleiben.
+- Dateien öffnen als **schlichter Text** statt im Code-Editor; der Editor-Knopf
+  in der Werkzeugleiste verschwindet.
+- Die Modus-Karten sagen jetzt, was sie tun (sechs Sprachen).
+
+### 3. Skills im Programm schreiben — `3ddb60a`
+Das Skill-Panel konnte nur auflisten. Jetzt lädt ein Klick den `SKILL.md` in ein
+Formular (Name, ein Satz wozu, Anleitung) oder legt einen neuen an; Schreiben ist
+dasselbe wie Bearbeiten, weil ein Skill eine Datei ist. Der Name wird zum Ordner,
+der Slug entschärft, damit ein Name den Skills-Ordner nicht verlassen kann — mit
+Test dafür und einem Test, der einen Skill in einen temporären Ordner schreibt
+und samt Frontmatter wieder einliest. 23 Rust-Tests.
+
+### 4. Die zwei Advisory-Reste — `6313008`
+`pnpm audit`: **3 → 1**.
+- **Behoben:** `dompurify` 3.4.15 (die Kopie in `monaco-editor`) wird per
+  Override auf die gepatchte 3.4.17-Linie gezwungen, die dieses Projekt ohnehin
+  benutzt. Jetzt eine Version im Baum.
+- **Nicht behebbar, ehrlich dokumentiert:** `sprintf-js` („denial of service
+  through unbounded precision specifiers"). Das Advisory betrifft **jede
+  veröffentlichte Version** („patched: none"), es gibt also keinen Fix zum
+  Einspielen. Der Pfad ist `mammoth → argparse → sprintf-js`, und `argparse` ist
+  Mammoths **Kommandozeilen**-Abhängigkeit: der von uns importierte Einstieg
+  (`lib/index.js`) lädt sie nie, und im gebauten Bundle steht kein argparse-Code.
+  Bleibt also im Baum, ist aber nicht ausgeliefert.
+
+### 5. Bildanhänge — offen
+### 6. Kompression — offen (danach wird `kilocode-main` gelöscht)
