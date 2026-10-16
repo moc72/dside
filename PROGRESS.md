@@ -1559,14 +1559,21 @@ nicht aus dem Gedächtnis:
    hier lokal schon, §32).
 3. **Artefakte ausliefern:** AppImage, deb, rpm **und zip**.
 
-Was dabei zu beachten ist und morgen geklärt werden muss:
-- **Signieren:** Ohne Zertifikat bekommen macOS-Nutzer die Gatekeeper-Warnung,
-  Windows-Nutzer SmartScreen. Ein „zip" ist genau deshalb sinnvoll, weil es ohne
-  Installer funktioniert. Zertifikate gibt es nicht — also entweder Warnungen in
-  der README erklären oder Schlüssel beschaffen.
+Was dabei zu beachten ist (so vom Nutzer klargestellt):
+- **Signieren ist nicht nötig.** Ohne Zertifikat lässt sich die App trotzdem
+  installieren: auf macOS per Rechtsklick → Öffnen, auf Windows per Bestätigung
+  des Herkunftshinweises. Die Warnungen gehören in die README, nicht in den Weg.
+- **Vertriebswege:** **homebrew** und **winget**; ab nächstem Monat zusätzlich der
+  **Microsoft Store** (19 € einmalig). winget und Store sind zertifiziert, GitHub
+  ist es nicht — deshalb laufen die Installer-Wege getrennt vom Release-Anhang.
+- **Zwei Warndialoge sind erwartbar und in Ordnung**, solange die README sie
+  erklärt: das ist der Preis dafür, kein Zertifikat zu kaufen.
 - **Woher die Version kommt:** `0.1.0` steckt in `package.json`, `Cargo.toml` und
   `tauri.conf.json`. Für Releases sollten sie nicht auseinanderlaufen; ein Tag
   (`v0.1.0`) müsste die Quelle sein.
 - **Der Build braucht WebKit** (Linux) bzw. die jeweiligen Runner — die
   Standard-`ubuntu-latest`-Runner haben den WebKitGTK-Kram nicht, das kostet
   einen Installationsschritt im Workflow.
+- **Erst danach:** Der Quelltext geht als **Issue an DeepSeek** — ausdrücklich
+  erst, wenn **alle Installer funktionieren** (AppImage, deb, rpm, zip, macOS,
+  Windows).
