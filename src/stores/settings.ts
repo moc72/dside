@@ -17,6 +17,22 @@ export interface SettingsState {
   model: string;
   displayName: string;
   fontSize: number;
+  /** The user's own addition to the partner's instructions, verbatim. */
+  partnerPrompt: string;
+}
+
+/**
+ * Which model a mode starts with — both are real DeepSeek ids. Everyday work gets the
+ * thinking model, coding the faster one. Changing these two lines changes the pre-selection
+ * for both modes; a model the user picks by hand is never overwritten.
+ */
+const MODEL_BY_MODE: Record<AppMode, string> = {
+  everyday: "deepseek-reasoner",
+  coding: "deepseek-chat",
+};
+
+export function defaultModelFor(mode: AppMode): string {
+  return MODEL_BY_MODE[mode] ?? "deepseek-chat";
 }
 
 /** The API key is deliberately NOT here: it lives in the OS keyring (see secret.rs). */
@@ -34,6 +50,7 @@ const PERSISTED_KEYS: (keyof SettingsState)[] = [
   "model",
   "displayName",
   "fontSize",
+  "partnerPrompt",
 ];
 
 const LEGACY_KEY = "ds-ide.settings";
@@ -49,9 +66,10 @@ const defaults: SettingsState = {
   pinnedEditorId: null,
   workspace: "",
   baseUrl: "https://api.deepseek.com",
-  model: "deepseek-chat",
+  model: MODEL_BY_MODE.everyday,
   displayName: "",
   fontSize: 14,
+  partnerPrompt: "",
 };
 
 export const settings = reactive<SettingsState>({ ...defaults });
@@ -126,6 +144,22 @@ export async function initSettings(): Promise<void> {
 
   loaded = true;
   watch(settings, schedulePersist, { deep: true });
+  watchModeModel();
+}
+
+/**
+ * Switching the mode moves the pre-selected model with it — but only while the current model
+ * is still the default of the mode being left. A model the user chose by hand stays.
+ */
+function watchModeModel(): void {
+  watch(
+    () => settings.mode,
+    (mode, previous) => {
+      if (previous && settings.model === defaultModelFor(previous)) {
+        settings.model = defaultModelFor(mode);
+      }
+    },
+  );
 }
 
 const media =

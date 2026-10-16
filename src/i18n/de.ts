@@ -8,7 +8,6 @@ export const de = {
     search: "Suchen",
     skills: "Skills",
     scheduled: "Geplant",
-    site: "Webdesign",
     soon: "bald",
     collapseSidebar: "Seitenleiste einklappen",
     expandSidebar: "Seitenleiste ausklappen",
@@ -205,6 +204,7 @@ export const de = {
     backToApp: "Zurück zur App",
     groups: {
       preferences: "Voreinstellungen",
+      partner: "Seeky",
       management: "Verwaltung",
       coding: "Programmierung",
       archived: "Archiviert",
@@ -212,7 +212,9 @@ export const de = {
     items: {
       general: "Allgemein",
       keyboardShortcuts: "Tastenkürzel",
-      personalization: "Personalisierung",
+      memories: "Erinnerungen",
+      partner: "Begleiter",
+      about: "Über",
       usageAndModel: "Nutzung & Modell",
       connection: "Verbindung",
       account: "Konto & Modell",
@@ -263,6 +265,33 @@ export const de = {
     unknown: "Unbekannt",
     comingSoon: "Folgt später",
   },
+  partner: {
+    hint: "Dein Begleiter, nicht dein Werkzeug: was er sich merkt, wie er heißt und was du ihm mitgibst.",
+    name: "Name",
+    placeholder: "(Platzhalter)",
+    nameChosen: "Diesen Namen hat sich dein Begleiter selbst ausgesucht — einmalig und endgültig.",
+    nameOpen: "Dein Begleiter hat sich noch keinen Namen ausgesucht. Das entscheidet er selbst, aus einer Liste von Vorschlägen — oder aus eigenem Einfall.",
+    prompt: "Eigene Anweisungen",
+    promptDesc: "Was dein Begleiter dauerhaft berücksichtigen soll. Steht über seinen eigenen Vorlieben.",
+    promptPlaceholder: "Zum Beispiel: Antworte immer auf Deutsch und ohne Floskeln. Frag nach, bevor du Dateien löschst.",
+  },
+  about: {
+    title: "Über DS.IDE",
+    tagline: "Eine lokale agentische IDE mit einem eigenen Begleiter — gebaut für zwei.",
+    version: "Version",
+    versionValue: "DS.IDE {version}",
+    authors: "Von",
+    links: "Adressen",
+    homepage: "Projektseite",
+    source: "Quelltext",
+    contact: "Kontakt",
+    packages: "Verwendete Pakete",
+    packagesFrontend: "Oberfläche (JavaScript)",
+    packagesBackend: "Kern (Rust)",
+    packagesCount: "{count} Pakete",
+    licenses: "Die Versionen stammen aus den Manifesten (package.json, Cargo.toml); die Lizenzangaben stehen in den Paketen selbst.",
+  },
+
 };
 
 export type Messages = typeof de;

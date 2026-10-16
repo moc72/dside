@@ -10,10 +10,14 @@ import { abortTurn, engineReady, running, sendPrompt } from "../../composables/u
 const text = ref("");
 const model = ref(settings.model);
 
-/** Used until the provider list is loaded; the real ids come from the API. */
+/**
+ * Only for the moment before the provider answers: the real list comes from `/models`.
+ * These are DeepSeek's actual ids — the previous ones here (`deepseek-flash`, `deepseek-v4-pro`)
+ * never existed, and a stored value like that made every request fail with "model not found".
+ */
 const fallbackModels: ModelInfo[] = [
-  { id: "deepseek-flash", name: "DeepSeek V4.1 Flash" },
-  { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro" },
+  { id: "deepseek-chat", name: "DeepSeek Chat" },
+  { id: "deepseek-reasoner", name: "DeepSeek Reasoner" },
 ];
 
 const canSend = computed(() => text.value.trim().length > 0 && !running.value);
