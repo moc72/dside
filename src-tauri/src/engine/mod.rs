@@ -80,14 +80,24 @@ pub fn engine_abort(app: AppHandle, session_id: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Compress the conversation now, on the user's word (the context ring).
 #[tauri::command]
-pub fn engine_send(
+pub async fn session_compact(
+    app: AppHandle,
+    session_id: String,
+    keep_recent: Option<usize>,
+) -> Result<Option<CompactionReport>, String> {
+    compact_session(&app, &session_id, keep_recent.unwrap_or(KEEP_RECENT)).await
+}
+
+#[tauri::command]
+pub async fn engine_send(
     app: AppHandle,
     session_id: String,
     prompt: String,
     attachments: Option<Vec<AttachmentRef>>,
 ) -> Result<(), String> {
-    send_prompt(&app, &session_id, &prompt, &attachments.unwrap_or_default())
+    send_prompt(&app, &session_id, &prompt, &attachments.unwrap_or_default()).await
 }
 
 /// What the provider reports for one model. The API knows friendlier names than the id,
@@ -250,6 +260,108 @@ pub fn engine_answer(app: AppHandle, action_id: String, answer: String) -> Resul
 
 /// Starts one turn. Shared by the `engine_send` command and the scheduler, so a timed run
 /// goes through exactly the same path (persistence, tools, events) as a typed one.
+/// What compression did, for the caller (and the log).
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompactionReport {
+    pub folded: usize,
+    pub through_message_id: i64,
+}
+
+/// Rough size of what is about to be sent. Characters over four is the usual estimate; it only
+/// has to be good enough to decide *when* to compress, never to be quoted as a token count.
+fn estimated_tokens(messages: &[ChatMessage]) -> i64 {
+    let characters: usize = messages
+        .iter()
+        .map(|message| message.content.as_deref().map(str::len).unwrap_or(0))
+        .sum();
+    (characters / 4) as i64
+}
+
+const COMPACT_AT: f64 = 0.75;
+const KEEP_RECENT: usize = 8;
+
+/// Replaces the older half of a conversation with a summary the model writes itself. The
+/// summary goes into the database and is what later turns send instead of those messages.
+pub async fn compact_session(
+    app: &AppHandle,
+    session_id: &str,
+    keep_recent: usize,
+) -> Result<Option<CompactionReport>, String> {
+    let Some(db) = app.try_state::<Db>() else {
+        return Err("engine: database unavailable".to_string());
+    };
+
+    let history = db.compactable_messages(session_id)?;
+    let keep = keep_recent.max(2);
+    if history.len() <= keep {
+        return Ok(None);
+    }
+
+    let (fold, _) = history.split_at(history.len() - keep);
+    let through_message_id = fold.last().map(|(id, _, _)| *id).unwrap_or(0);
+    if through_message_id == 0 {
+        return Ok(None);
+    }
+
+    let previous = db.session_summary(session_id)?.map(|(_, summary)| summary);
+    let mut transcript = String::new();
+    if let Some(previous) = previous {
+        transcript.push_str("Earlier summary:\n");
+        transcript.push_str(&previous);
+        transcript.push_str("\n\n");
+    }
+    for (_, role, text) in fold {
+        if text.trim().is_empty() {
+            continue;
+        }
+        transcript.push_str(&format!("{role}: {text}\n"));
+    }
+
+    // The summary is written by the same model, with the same configuration, in one turn
+    // without tools — compression must not run tools or ask questions.
+    let mut config = {
+        let state = app.state::<EngineState>();
+        let slot = state.config.lock().map_err(|error| error.to_string())?;
+        slot.clone()
+            .ok_or_else(|| "engine: not configured".to_string())?
+    };
+    config.api_key = app
+        .try_state::<SecretStore>()
+        .and_then(|store| store.get())
+        .unwrap_or_default();
+    if config.api_key.trim().is_empty() {
+        return Err("engine: API key is missing".to_string());
+    }
+
+    let instructions = ChatMessage::system(
+        "You compress the earlier part of a conversation so it can be replaced by your summary. \
+         Keep what still matters: decisions and their reasons, facts about the user, the state of \
+         the work, open tasks and next steps, and anything the user asked you to remember. Drop \
+         pleasantries, repetition and detail that no longer influences anything. Write notes, not \
+         prose, in the user's language. Never answer the conversation — only summarise it.",
+    );
+    let messages = vec![instructions, ChatMessage::user(transcript)];
+
+    let mut sink = |_kind: deepseek::DeltaKind, _chunk: &str| {};
+    let outcome = deepseek::stream_chat(&config, &messages, &[], &mut sink).await?;
+    let summary = outcome.content.trim().to_string();
+    if summary.is_empty() {
+        return Err("compression produced nothing".to_string());
+    }
+
+    db.set_session_summary(session_id, through_message_id, &summary)?;
+    eprintln!(
+        "compaction: session {session_id} folded {} messages up to #{through_message_id}",
+        fold.len()
+    );
+
+    Ok(Some(CompactionReport {
+        folded: fold.len(),
+        through_message_id,
+    }))
+}
+
 /// One attached file, as the webview knows it: where the bytes are, what it is, and a small
 /// preview the conversation can show without loading the original again.
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
@@ -262,7 +374,7 @@ pub struct AttachmentRef {
     pub preview: Option<String>,
 }
 
-pub fn send_prompt(
+pub async fn send_prompt(
     app: &AppHandle,
     session_id: &str,
     prompt: &str,
@@ -311,7 +423,25 @@ pub fn send_prompt(
                 let _ = db.update_message(id, Some(prompt), None, Some(timeline));
             }
             db.touch_session(session_id)?;
-            db.load_llm_messages(session_id)?
+            let mut loaded = db.load_llm_messages(session_id)?;
+            // Too big to send whole? Fold the older part into a summary first, then send that.
+            if let Some(window) = config.context_window.filter(|window| *window > 0) {
+                let limit = (window as f64 * COMPACT_AT) as i64;
+                if estimated_tokens(&loaded) > limit {
+                    match compact_session(app, session_id, KEEP_RECENT).await {
+                        Ok(Some(report)) => {
+                            eprintln!(
+                                "compaction: folded {} messages before the turn",
+                                report.folded
+                            );
+                            loaded = db.load_llm_messages(session_id)?;
+                        }
+                        Ok(None) => {}
+                        Err(error) => eprintln!("compaction: skipped: {error}"),
+                    }
+                }
+            }
+            loaded
         }
         None => vec![ChatMessage::user(prompt.to_string())],
     };
@@ -358,7 +488,7 @@ pub fn send_prompt(
 }
 
 /// Called from a background loop: start every schedule that is due.
-pub fn run_due_schedules(app: &AppHandle) {
+pub async fn run_due_schedules(app: &AppHandle) {
     let Some(db) = app.try_state::<Db>() else {
         return;
     };
@@ -373,7 +503,7 @@ pub fn run_due_schedules(app: &AppHandle) {
 
     for schedule in due {
         let _ = db.mark_schedule_run(schedule.id, now + schedule.interval_seconds);
-        if let Err(error) = send_prompt(app, &schedule.session_id, &schedule.prompt, &[]) {
+        if let Err(error) = send_prompt(app, &schedule.session_id, &schedule.prompt, &[]).await {
             eprintln!("scheduler: schedule {} failed: {error}", schedule.id);
         }
     }
@@ -730,6 +860,7 @@ mod tests {
             full_authorization: true,
             max_turns: 4,
             reasoning_effort: None,
+            context_window: None,
             disabled_tools: Vec::new(),
         })
     }

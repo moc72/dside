@@ -31,6 +31,14 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, id);
 
+-- Compression: the summary that stands in for the older part of a conversation.
+CREATE TABLE IF NOT EXISTS session_summaries (
+  session_id         TEXT PRIMARY KEY,
+  through_message_id INTEGER NOT NULL,
+  summary            TEXT NOT NULL,
+  created_at         INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS tool_calls (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   session_id  TEXT NOT NULL,
@@ -127,6 +135,18 @@ fn row_to_memory(row: &rusqlite::Row<'_>) -> rusqlite::Result<MemoryRow> {
 
 /// Reads the image parts of a stored message back into the data URLs the provider wants.
 /// Missing files are skipped — a deleted picture must not break the conversation.
+/// The summary row of a session, on a connection that is already locked. Taking the lock a
+/// second time inside a method that holds it deadlocks the whole database.
+fn summary_of(conn: &Connection, session_id: &str) -> Result<Option<(i64, String)>, String> {
+    conn.query_row(
+        "SELECT through_message_id, summary FROM session_summaries WHERE session_id = ?1",
+        params![session_id],
+        |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+    )
+    .optional()
+    .map_err(|error| error.to_string())
+}
+
 fn images_from_parts(parts: Option<&str>) -> Option<Vec<String>> {
     let parsed: Vec<serde_json::Value> = serde_json::from_str(parts?).ok()?;
     let images: Vec<String> = parsed
@@ -655,14 +675,16 @@ impl Db {
         session_id: &str,
     ) -> Result<Vec<crate::engine::types::ChatMessage>, String> {
         let conn = self.lock()?;
+        // Everything the summary already covers is not sent again.
+        let through = summary_of(&conn, session_id)?.map(|(id, _)| id).unwrap_or(0);
         let mut statement = conn
             .prepare(
                 "SELECT role, content, tool_calls, tool_call_id, parts FROM messages
-                 WHERE session_id = ?1 ORDER BY id",
+                 WHERE session_id = ?1 AND id > ?2 ORDER BY id",
             )
             .map_err(|error| error.to_string())?;
         let rows = statement
-            .query_map([session_id], |row| {
+            .query_map(params![session_id, through], |row| {
                 Ok((
                     row.get::<_, String>(0)?,
                     row.get::<_, Option<String>>(1)?,
@@ -674,6 +696,11 @@ impl Db {
             .map_err(|error| error.to_string())?;
 
         let mut messages = Vec::new();
+        if let Some((_, summary)) = summary_of(&conn, session_id)? {
+            messages.push(crate::engine::types::ChatMessage::system(format!(
+                "Earlier in this conversation (compressed, keep it in mind):\n{summary}"
+            )));
+        }
         for row in rows {
             let (role, content, tool_calls, tool_call_id, parts) =
                 row.map_err(|error| error.to_string())?;
@@ -1020,6 +1047,67 @@ impl Db {
             }
         }
         Ok(retired)
+    }
+
+    /// The summary that replaces everything up to `through_message_id`, if the conversation
+    /// has been compressed before.
+    pub fn session_summary(&self, session_id: &str) -> Result<Option<(i64, String)>, String> {
+        let conn = self.lock()?;
+        conn.query_row(
+            "SELECT through_message_id, summary FROM session_summaries WHERE session_id = ?1",
+            params![session_id],
+            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+        )
+        .optional()
+        .map_err(|error| error.to_string())
+    }
+
+    pub fn set_session_summary(
+        &self,
+        session_id: &str,
+        through_message_id: i64,
+        summary: &str,
+    ) -> Result<(), String> {
+        let conn = self.lock()?;
+        conn.execute(
+            "INSERT INTO session_summaries (session_id, through_message_id, summary, created_at)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(session_id) DO UPDATE SET
+               through_message_id = excluded.through_message_id,
+               summary = excluded.summary,
+               created_at = excluded.created_at",
+            params![session_id, through_message_id, summary, now()],
+        )
+        .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    /// What compression would fold in: everything after the current summary, oldest first,
+    /// with the ids so the summary can record how far it reaches.
+    pub fn compactable_messages(
+        &self,
+        session_id: &str,
+    ) -> Result<Vec<(i64, String, String)>, String> {
+        let conn = self.lock()?;
+        let through = summary_of(&conn, session_id)?.map(|(id, _)| id).unwrap_or(0);
+        let mut statement = conn
+            .prepare(
+                "SELECT id, role, COALESCE(content, '') FROM messages
+                 WHERE session_id = ?1 AND id > ?2 AND role IN ('user', 'assistant')
+                 ORDER BY id",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map(params![session_id, through], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            })
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())
     }
 
     /// The row just written for a session. Used when a message is created and then filled in
@@ -1508,6 +1596,49 @@ mod tests {
         assert_eq!(rows[0].origin, "seeky", "old rows belong to Seeky");
         assert!(rows[0].edited_at.is_none());
         assert!(rows[0].retired_at.is_none());
+
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    /// Compression: the summary stands in for the messages it covers — in the request to the
+    /// model, while the transcript itself stays complete.
+    #[test]
+    fn a_summary_replaces_the_messages_it_covers() {
+        let directory = std::env::temp_dir().join(format!("ds-ide-compact-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let db = Db::open(&directory.join("c.sqlite3")).unwrap();
+
+        db.create_session("s1", "Test", "/tmp").unwrap();
+        for text in ["erster", "zweiter", "dritter", "vierter"] {
+            db.insert_message("s1", "user", Some(text), None, None).unwrap();
+        }
+
+        let all = db.compactable_messages("s1").unwrap();
+        assert_eq!(all.len(), 4);
+        let through = all[1].0;
+        db.set_session_summary("s1", through, "Zusammenfassung der ersten beiden").unwrap();
+
+        let sent = db.load_llm_messages("s1").unwrap();
+        assert_eq!(sent.len(), 3, "summary plus the two messages it does not cover");
+        assert!(sent[0]
+            .content
+            .as_deref()
+            .unwrap_or_default()
+            .contains("Zusammenfassung der ersten beiden"));
+        assert_eq!(sent[1].content.as_deref(), Some("dritter"));
+        assert_eq!(sent[2].content.as_deref(), Some("vierter"));
+
+        assert_eq!(
+            db.compactable_messages("s1").unwrap().len(),
+            2,
+            "only what the summary does not cover is folded again"
+        );
+        assert_eq!(
+            db.load_history("s1").unwrap().len(),
+            4,
+            "the transcript stays complete"
+        );
 
         let _ = std::fs::remove_dir_all(&directory);
     }

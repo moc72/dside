@@ -22,7 +22,7 @@ import { ensureWorkspace } from "./useWorkspace";
 import { buildPersona } from "../engine/persona";
 import { EVERYDAY_DISABLED_TOOLS, everydayMode } from "../engine/mode";
 import { partnerName, refreshPartnerName } from "../stores/partner";
-import { loadModels } from "../stores/models";
+import { loadModels, modelChoices } from "../stores/models";
 import { saveUiState } from "../lib/uiState";
 import { t } from "../i18n";
 
@@ -130,6 +130,8 @@ export async function configureEngine(): Promise<void> {
       fullAuthorization: settings.fullAuthorization,
       maxTurns: 24,
       reasoningEffort: settings.reasoningEffort || null,
+      // Compression needs the window to know when a conversation is too long.
+      contextWindow: modelChoices().find((entry) => entry.id === settings.model)?.contextWindow ?? null,
       // Everyday mode takes the shell, code review and sub-agents away from the partner.
       disabledTools: everydayMode.value ? [...EVERYDAY_DISABLED_TOOLS] : [],
     },

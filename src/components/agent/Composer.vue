@@ -81,6 +81,16 @@ function onFiles(event: Event): void {
   input.value = "";
 }
 
+/** A short-lived line under the field: what compression just did, or that there was nothing. */
+const note = ref<string | null>(null);
+
+function onCompacted(folded: number | null): void {
+  note.value = folded ? t("composer.compacted", { count: folded }) : t("composer.compactNothing");
+  window.setTimeout(() => {
+    note.value = null;
+  }, 6000);
+}
+
 function removeAttachment(index: number): void {
   attachments.value.splice(index, 1);
 }
@@ -155,6 +165,8 @@ function toggleAuthorization() {
         @paste="onPaste"
       ></textarea>
 
+      <p v-if="note" class="note">{{ note }}</p>
+
       <div class="row">
         <div class="left">
           <button class="chip" type="button" :title="t('composer.attach')" @click="fileInput?.click()">
@@ -181,7 +193,7 @@ function toggleAuthorization() {
         </div>
 
         <div class="right">
-          <ContextRing />
+          <ContextRing @compacted="onCompacted" />
           <select v-model="model" class="model" :title="`${t('composer.model')}: ${modelLabel(model)} (${model})`">
             <option
               v-if="!modelChoices().some((entry) => entry.id === model)"
@@ -227,6 +239,12 @@ function toggleAuthorization() {
   max-width: 980px;
   margin: 0 auto;
   padding: 0 6px 10px;
+}
+
+.note {
+  margin: 0 0 6px;
+  color: var(--text-muted);
+  font-size: 11.5px;
 }
 
 .attachments {

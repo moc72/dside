@@ -852,7 +852,7 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 loop {
                     tokio::time::sleep(std::time::Duration::from_secs(30)).await;
-                    engine::run_due_schedules(&handle);
+                    engine::run_due_schedules(&handle).await;
                 }
             });
 
@@ -882,6 +882,7 @@ pub fn run() {
             engine::engine_set_config,
             engine::engine_configured,
             engine::engine_send,
+            engine::session_compact,
             engine::engine_models,
             engine::provider_balance,
             browser::open_browser_window,
