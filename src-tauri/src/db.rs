@@ -1140,6 +1140,28 @@ pub fn memories_list(db: tauri::State<'_, Db>, limit: Option<usize>) -> Result<V
     db.list_memories(limit.unwrap_or(200))
 }
 
+/// A memory the user writes themselves. `origin` stays `user`, and because nothing was
+/// rewritten, `edited_at` stays empty — the recall can tell the two apart.
+#[tauri::command]
+pub fn memory_add(
+    db: tauri::State<'_, Db>,
+    text: String,
+    kind: Option<String>,
+    scope: Option<String>,
+) -> Result<i64, String> {
+    let text = text.trim();
+    if text.is_empty() {
+        return Err("a memory needs text".to_string());
+    }
+    db.insert_memory(
+        kind.as_deref().unwrap_or("fact"),
+        scope.as_deref().unwrap_or("user"),
+        text,
+        None,
+        "user",
+    )
+}
+
 /// The memories that were set aside. They are still there — the panel can bring one back.
 #[tauri::command]
 pub fn memories_retired(db: tauri::State<'_, Db>, limit: Option<usize>) -> Result<Vec<MemoryRow>, String> {

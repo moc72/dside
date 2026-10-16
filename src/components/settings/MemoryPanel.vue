@@ -39,6 +39,25 @@ const editingId = ref<number | null>(null);
 const draft = ref("");
 const retiredOpen = ref(false);
 
+/** A memory the user writes is theirs from the start — no tool, no model in between. */
+const newMemory = ref("");
+const adding = ref(false);
+
+async function addMemory() {
+  const text = newMemory.value.trim();
+  if (!text) return;
+  adding.value = true;
+  try {
+    await invoke("memory_add", { text });
+    newMemory.value = "";
+  } catch (cause) {
+    error.value = String(cause);
+  } finally {
+    adding.value = false;
+  }
+  await load();
+}
+
 const scopeLabels = computed<Record<string, string>>(() => ({
   user: t("memory.scopeUser"),
   agent: t("memory.scopeAgent"),
@@ -165,6 +184,26 @@ onMounted(() => {
       <p v-else class="report-clean">{{ t("memory.clean") }}</p>
     </div>
 
+    <div class="add">
+      <textarea
+        v-model="newMemory"
+        class="editor"
+        rows="2"
+        :placeholder="t('memory.addPlaceholder')"
+        @keydown.ctrl.enter.prevent="addMemory"
+      ></textarea>
+      <div class="editor-actions">
+        <button
+          class="mini-text primary"
+          type="button"
+          :disabled="adding || !newMemory.trim()"
+          @click="addMemory"
+        >
+          {{ t("memory.add") }}
+        </button>
+      </div>
+    </div>
+
     <p v-if="loading" class="note">{{ t("viewFile.loading") }}</p>
     <p v-else-if="error" class="note error">{{ error }}</p>
     <p v-else-if="rows.length === 0" class="note">{{ t("memory.empty") }}</p>
@@ -174,7 +213,9 @@ onMounted(() => {
         <div class="entry-head">
           <span class="chip scope">{{ scopeLabels[row.scope] ?? row.scope }}</span>
           <span class="chip kind">{{ row.kind }}</span>
-          <span v-if="row.origin === 'user'" class="chip mine">{{ t("memory.changedByUser") }}</span>
+          <span v-if="row.origin === 'user'" class="chip mine">
+            {{ row.editedAt ? t("memory.changedByUser") : t("memory.writtenByUser") }}
+          </span>
           <span class="when">{{ formatDate(row.editedAt ?? row.createdAt) }}</span>
           <button
             class="mini"
@@ -329,6 +370,20 @@ onMounted(() => {
   border-color: var(--accent-strong);
   background: var(--accent-strong);
   color: var(--accent-contrast);
+}
+
+.add {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+}
+
+.mini-text:disabled {
+  opacity: 0.5;
 }
 
 .list {

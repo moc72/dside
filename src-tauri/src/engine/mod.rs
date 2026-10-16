@@ -347,8 +347,8 @@ fn recall_block(rows: &[crate::db::MemoryRow]) -> String {
         "\n\n## Your long-term memory\n\
          These are notes you kept from earlier work, and things you know about the user.\n\
          - `[you]` — your own note. `[user]` — what you know about the user. `[session]` — tied to one task.\n\
-         - `(changed by the user)` means the user rewrote that note themselves: treat the wording\n\
-         as theirs, not as something you inferred.\n\
+         - `(written by the user)` and `(changed by the user)` mean the wording is theirs, not\n\
+         something you inferred or guessed. Take it as given.\n\
          You are this person's partner, so use these notes the way a colleague would use what\n\
          they remember: silently, and without reciting them back.\n",
     );
@@ -358,10 +358,10 @@ fn recall_block(rows: &[crate::db::MemoryRow]) -> String {
             "agent" => "you",
             other => other,
         };
-        let marker = if row.origin == "user" {
-            " (changed by the user)"
-        } else {
-            ""
+        let marker = match (row.origin.as_str(), row.edited_at.is_some()) {
+            ("user", true) => " (changed by the user)",
+            ("user", false) => " (written by the user)",
+            _ => "",
         };
         block.push_str(&format!("- [{scope}] {}{marker}\n", row.text));
     }
@@ -661,7 +661,7 @@ mod tests {
     /// companion rows, and it is easy to lose in a prompt refactor.
     #[test]
     fn recall_marks_scope_and_user_edits() {
-        let row = |id: i64, scope: &str, text: &str, origin: &str| crate::db::MemoryRow {
+        let row = |id: i64, scope: &str, text: &str, origin: &str, edited: bool| crate::db::MemoryRow {
             id,
             kind: "fact".to_string(),
             scope: scope.to_string(),
@@ -669,17 +669,18 @@ mod tests {
             importance: 1,
             created_at: 0,
             origin: origin.to_string(),
-            edited_at: None,
+            edited_at: if edited { Some(1) } else { None },
             retired_at: None,
         };
 
         assert!(recall_block(&[]).is_empty(), "no memory, no block");
 
         let block = recall_block(&[
-            row(1, "user", "Arbeitet an DS.IDE", "seeky"),
-            row(2, "agent", "Ich halte Antworten kurz", "seeky"),
-            row(3, "user", "Mag kurze Antworten", "user"),
-            row(4, "session", "Testet gerade die Vorschau", "seeky"),
+            row(1, "user", "Arbeitet an DS.IDE", "seeky", false),
+            row(2, "agent", "Ich halte Antworten kurz", "seeky", false),
+            row(3, "user", "Mag kurze Antworten", "user", true),
+            row(4, "session", "Testet gerade die Vorschau", "seeky", false),
+            row(5, "user", "Hat zwei Kinder", "user", false),
         ]);
 
         assert!(block.contains("## Your long-term memory"));
@@ -695,6 +696,10 @@ mod tests {
         assert!(
             !block.contains("Arbeitet an DS.IDE (changed by the user)"),
             "Seeky's own note stays unmarked"
+        );
+        assert!(
+            block.contains("- [user] Hat zwei Kinder (written by the user)\n"),
+            "a note the user wrote is marked as theirs, without pretending it was an edit: {block}"
         );
         assert!(block.contains("- [session] Testet gerade die Vorschau\n"));
     }

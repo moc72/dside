@@ -797,6 +797,7 @@ pub fn run() {
             db::default_display_name,
             db::memories_list,
             db::memories_retired,
+            db::memory_add,
             db::memory_update,
             db::memory_retire,
             db::memory_restore,

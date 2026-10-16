@@ -430,6 +430,18 @@ async function toggle(node: FileNode) {
   font-weight: 600;
 }
 
+.markdown :deep(.sheet-name) {
+  margin: 1.4em 0 0.5em;
+  color: var(--text-strong);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.markdown :deep(.sheet-name:first-child) {
+  margin-top: 0;
+}
+
 .markdown :deep(.truncated) {
   color: var(--text-muted);
   font-size: 0.92em;

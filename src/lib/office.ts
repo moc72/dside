@@ -6,8 +6,10 @@ import * as XLSX from "xlsx";
 import { base64ToArrayBuffer, escapeHtml } from "./preview";
 import { t } from "../i18n";
 
-const MAX_ROWS = 300;
 const MAX_COLUMNS = 40;
+/** A ceiling for the whole workbook, shared out over its sheets. */
+const MAX_CELLS = 12_000;
+const MAX_SHEETS = 24;
 const MAX_SLIDES = 80;
 
 /** Word: mammoth produces HTML, which then goes through the same sanitiser as markdown. */
@@ -20,35 +22,62 @@ export async function renderDocx(base64: string): Promise<string> {
  * Spreadsheets: the table is built here, cell by cell, from values we escape ourselves.
  * Letting the library emit HTML would mean trusting it twice.
  */
+/**
+ * Spreadsheets: every sheet, one after the other, each with its own name. Only the first one
+ * would be a silent lie about what the file contains — the second sheet is usually where the
+ * work is. The number of rows per sheet shrinks as the number of sheets grows, so a workbook
+ * with forty sheets cannot flood the viewer.
+ */
 export function renderSheet(base64: string): string {
   const workbook = XLSX.read(base64ToArrayBuffer(base64), { type: "array" });
-  const name = workbook.SheetNames[0];
-  if (!name) return "";
+  const names = workbook.SheetNames.slice(0, MAX_SHEETS);
+  if (names.length === 0) return "";
 
-  const sheet = workbook.Sheets[name];
-  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
-    header: 1,
-    blankrows: false,
-    defval: "",
-  });
+  const rowsPerSheet = Math.max(20, Math.floor(MAX_CELLS / (names.length * MAX_COLUMNS)));
+  const sections: string[] = [];
 
-  const body = rows
-    .slice(0, MAX_ROWS)
-    .map(
-      (row) =>
-        `<tr>${row
-          .slice(0, MAX_COLUMNS)
-          .map((value) => `<td>${escapeHtml(String(value ?? ""))}</td>`)
-          .join("")}</tr>`,
-    )
-    .join("");
+  for (const name of names) {
+    const sheet = workbook.Sheets[name];
+    if (!sheet) continue;
 
-  const truncated =
-    rows.length > MAX_ROWS
-      ? `<p class="truncated">${escapeHtml(t("viewFile.moreRows", { n: rows.length - MAX_ROWS }))}</p>`
-      : "";
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+      header: 1,
+      blankrows: false,
+      defval: "",
+    });
+    if (rows.length === 0) continue;
 
-  return `<table>${body}</table>${truncated}`;
+    const body = rows
+      .slice(0, rowsPerSheet)
+      .map(
+        (row) =>
+          `<tr>${row
+            .slice(0, MAX_COLUMNS)
+            .map((value) => `<td>${escapeHtml(String(value ?? ""))}</td>`)
+            .join("")}</tr>`,
+      )
+      .join("");
+
+    const truncated =
+      rows.length > rowsPerSheet
+        ? `<p class="truncated">${escapeHtml(
+            t("viewFile.moreRows", { n: rows.length - rowsPerSheet }),
+          )}</p>`
+        : "";
+    const heading =
+      names.length > 1 ? `<h3 class="sheet-name">${escapeHtml(name)}</h3>` : "";
+
+    sections.push(`${heading}<table>${body}</table>${truncated}`);
+  }
+
+  if (workbook.SheetNames.length > names.length) {
+    const rest = workbook.SheetNames.length - names.length;
+    sections.push(
+      `<p class="truncated">${escapeHtml(t("viewFile.moreSheets", { n: rest }))}</p>`,
+    );
+  }
+
+  return sections.join("");
 }
 
 /**
