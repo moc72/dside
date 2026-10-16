@@ -1245,3 +1245,54 @@ dann aber ein eigenes Vorhaben mit eigener Oberfläche.
 ### Offene Punkte
 Unverändert §25/§26 (Kompression hinter dem Ring, Bildanhänge, Alltagsmodus,
 leere Blase nach Abbruch, vier Sprachkataloge ohne Namensbedeutungen).
+
+## 28. Die große Namenstabelle (2026-10-16, achte Runde)
+
+Commit `c2c992a`. Der Nutzer hat eine Namensseite als HTML gespeichert
+(`src/assets/namen.html`) und daraus eine Tabelle verlangt — Duplikate
+ausdrücklich **nicht** aussortiert.
+
+### Was in der Datei steckt
+Spalten: **Name | Herkunft | Bedeutung | Beliebtheit | Trend**. 947 Zeilen.
+- **Beliebtheit** steht nicht als Text in der Datei, sondern ist die Breite eines
+  farbigen Balkens in einem Inline-SVG (Skala 50) — daraus als Prozentwert
+  rekonstruiert (alle 947 Zeilen).
+- **Trend** ist ein `<canvas>`, wird also erst im Browser gezeichnet. Die Daten
+  sind nicht im HTML und bleiben in unserer Tabelle leer.
+- Die **Bedeutungen sind Stichworte** (Krieger, Gesund, Prinzessin, Erde, Lieb,
+  Engel …), keine Etymologien: 121 verschiedene, jede Zeile hat eine.
+
+### Was jetzt im Baum liegt
+- `src/assets/namen.tsv` — zum Lesen und Vergleichen (36 KB, 948 Zeilen mit Kopf).
+- `src/assets/namen.json` — für Code (100 KB).
+- `scripts/namen_import.py` — das Werkzeug, das beides erzeugt.
+  `--append` hängt weitere Seiten an und wirft nur exakte Duplikate raus;
+  `--report` sagt nur, was drinsteht. Weitere Seiten des Nutzers sind damit ein
+  Befehl statt Handarbeit.
+- Ergebnis: 947 Zeilen, **808 verschiedene Namen**, **122 mehrfach** (bewusst
+  behalten), alle mit Bedeutung und Beliebtheit.
+- Die Rohdatei bleibt **untracked**: 1,7 MB Inline-SVG, deren einziger Zweck die
+  Eingabe für das Skript ist.
+
+### Offen: Herkunft der Seite
+Das Fragment enthält keine Domain und keinen Titel (nur relative Links), die
+Quelle ist also nicht benennbar. Solange sie nicht geklärt ist, ist die Tabelle
+**Arbeitsmaterial** und wird nicht in die Anwendung gebündelt — Attribution und
+Lizenz gehören vorher geklärt, so wie es in §27 für die andere Seite schon
+entschieden wurde.
+
+### Nächster Schritt für die Namen (Vorschlag)
+947 Namen dürfen **nicht** in den Systemprompt: das sind grob 5.000–8.000 Token,
+und zwar bei *jeder* Anfrage. Besser:
+1. Ein Werkzeug, das suchen kann — etwa `name_ideas(meaning, origin)` über die
+   Tabelle, damit der Begleiter selbst stöbern kann („zeig mir Namen, die Licht
+   bedeuten").
+2. Im Prompt bleibt eine **kurze** Auswahlliste (die 96 kuratierten Einträge aus
+   §27), die auf die Tabelle verweist.
+3. Optional später: eine Namensseite **für den Nutzer** mit Suche/Filter — das
+   wäre dann der Ort, an dem 947 Einträge hingehören.
+
+### Offene Punkte
+Unverändert §25–§27, dazu: Bedeutung der kuratierten Liste und der Stichwort-
+Datensatz sind zwei Formate — beim Zusammenführen entscheiden, welches gewinnt
+(Stichwort ist maschinenfreundlich, Etymologie ist lesbarer).
