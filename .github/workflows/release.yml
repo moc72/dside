@@ -15,7 +15,34 @@ permissions:
   contents: write
 
 jobs:
+  # Cheap insurance: the code is checked once before three platforms are bundled.
+  verify:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libsoup-3.0-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev patchelf
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
+
   build:
+    needs: verify
     strategy:
       fail-fast: false
       matrix:
@@ -61,6 +88,11 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # The tag is the version. On a manual run it stays whatever the manifests say.
+      - name: Version from the tag
+        if: github.ref_type == 'tag'
+        run: node scripts/set-version.mjs "${{ github.ref_name }}"
 
       # On a tag: build and attach the bundles to a draft release. On a manual run there is no
       # tag to release under, so it only builds — the artifacts are uploaded below either way.
