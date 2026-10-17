@@ -153,6 +153,10 @@ onBeforeUnmount(() => {
   flex-direction: column;
   padding-inline: 16px;
   position: relative;
+  /* Own stacking context, so the watermark can sit *behind* the content instead of above it:
+     a positioned ::before with z-index auto paints over in-flow children — which is why the
+     mark showed on top of the supposedly opaque composer. */
+  isolation: isolate;
 }
 
 /* Watermark behind the conversation. The DeepSeek mark, white on dark and blue on light. */
@@ -160,6 +164,7 @@ onBeforeUnmount(() => {
   content: "";
   position: absolute;
   inset: 0;
+  z-index: -1;
   background: var(--watermark) center 30% / var(--watermark-size) auto no-repeat;
   opacity: var(--watermark-opacity);
   pointer-events: none;

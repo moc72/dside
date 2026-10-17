@@ -1634,3 +1634,41 @@ Die Farbe hat keinen Alphawert. Das Wasserzeichen ist `.agent::before` — eine
 eigene Ebene **hinter** den Kindern des Panels. Der Composer selbst ist opak; der
 Bereich *um* die Box (der Wrap) hatte keinen Hintergrund mehr, und dort scheint
 die Ebene durch. Es war nie die Farbe, es war die fehlende Fläche.
+
+## 36. Notiert vor der Kompression (2026-10-17, fünfzehnte Runde)
+
+Commit `f8e6a94` (Wasserzeichen) und dieser Doku-Commit. Alles, was nach der
+nächsten Kompression sonst fehlen würde.
+
+### Das Wasserzeichen lag *über* dem Composer, nicht dahinter
+Der Nutzer sah die Marke durch das angeblich opake Eingabefeld. Es war kein
+Durchscheinen: `.agent::before` ist **positioniert mit `z-index: auto`**, und ein
+positioniertes Element malt in einer späteren Ebene als normaler In-Flow-Inhalt —
+also über dem Composer. Bei 6 % Deckkraft liest sich das als Transparenz. Jetzt:
+`.agent { isolation: isolate }` plus `z-index: -1` am Pseudo-Element. Die Marke
+liegt hinter dem Inhalt, bleibt durch die halbtransparenten Blasen sichtbar und
+verschwindet unter opaken Flächen.
+
+### Budget: keine „Bremse"
+Vom Nutzer klargestellt: keine harte Begrenzung, er „tankt lieber nach". Stattdessen
+nur ein **dezenter Hinweis im Seitenmenü**, wenn das Budget überschritten ist —
+der Nutzer setzt das Budget selbst. Die Anzeige wächst mit der Überschreitung
+(Schriftgröße) und färbt sich weiß → gelb → orange → rot. Kein Abbruch.
+
+### Bereits in §35 notiert (für die Umsetzung nach der Kompression)
+1. **UI folgt dem Begleiter**: `write`/`edit` → Datei-Tab (Vorschau oder Monaco),
+   `web_fetch` → Browser auf die URL, `bash` → Terminal (fehlt noch), `read/glob/grep`
+   nur als Chip. Mit Schalter „folgen" und dezentem Hinweis statt Fokusklau.
+2. **Punkte-/Vertrauenssystem**: Name früh gewählt, aber erst ab einer Punktzahl
+   enthüllt; Punkte für Verhalten über Zeit (Streaks, erledigte Aufgaben,
+   Korrekturen, Gedächtnispflege), nicht für einzelne Klicks; Fortschritt auf der
+   Begleiterseite, kleine Enthüllung beim Erreichen. Ziggy ist bereits enthüllt —
+   gilt für neue Installationen.
+3. **Companion-Ideen** für später: Wiedereinstieg („Wo waren wir?"), Wochenrückblick
+   aus Todos/Sitzungen, **projektgebundenes** Gedächtnis, Skill-Vorschläge
+   („das machst Du zum dritten Mal von Hand"), Budgetanzeige wie oben.
+
+### Release-Plan
+Smoke-Test auf dem zweiten Linux-Rechner → README-Abschnitt „Known limitations"
+(kein Editor-/Browser-Zugriff des Begleiters) → `v0.4.8` taggen → Draft `v0.4.7`
+löschen. Windows/macOS nur über die CI-Artefakte (kein Testgerät).
