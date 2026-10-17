@@ -1577,3 +1577,60 @@ Was dabei zu beachten ist (so vom Nutzer klargestellt):
 - **Erst danach:** Der Quelltext geht als **Issue an DeepSeek** — ausdrücklich
   erst, wenn **alle Installer funktionieren** (AppImage, deb, rpm, zip, macOS,
   Windows).
+
+## 35. Regression, Reparatur und der Stand (2026-10-17, vierzehnte Runde)
+
+Commits `c2aefbe`, `fabc50d`, `631b0c4`. Dies ist der Anker vor der nächsten
+Kompression.
+
+### Die Regression (meine, von gestern)
+„Ein Turn = eine Zeile" heißt **eine** `tool_calls`-Liste pro Turn. Ich habe sie
+pro **Runde** überschrieben. Folge: Nach einem Turn mit mehreren Runden hatten die
+früheren Tool-Ergebnisse keinen Aufruf mehr, und der Anbieter lehnt genau das ab
+(„Messages with role 'tool' must be a response to a preceding message with
+'tool_calls'"). Ein gescheiterter Turn hinterließ zusätzlich eine leere
+Assistentenzeile → jede weitere Anfrage war erneut ungültig → **die Unterhaltung
+antwortete dauerhaft „error"**. Behoben:
+- Tool-Aufrufe werden über **alle Runden** gesammelt und einmal gespeichert.
+- Leere Assistentenzeilen **ohne** Aufrufe werden übersprungen; verwaiste
+  Tool-Zeilen fallen raus — **das heilt auch schon kaputte Verläufe**.
+- Fehlgeschlagene Turns werden mit Grund **geloggt** (`engine: turn failed in …`),
+  der echte Fehlertext bleibt in der Blase (nicht mehr das Wort „error"), und ein
+  Fehler vor dem ersten Token bekommt überhaupt eine Blase.
+- Verifiziert mit einem echten Turn: Antwort „OK" in der Zeile. Testnachrichten
+  danach aus der Datenbank entfernt.
+
+### Verlorene Stile (separat)
+- **Markdown-Blöcke** (`p`, `pre`, `code`, Listen, Überschriften) waren aus
+  `MessageList.vue` verschwunden → Codeblöcke ohne `overflow-x` liefen über die
+  Blase („231 行 …"). Wiederhergestellt; Tabellen scrollen in sich selbst.
+- **Composer**: `.composer-wrap` war auskommentiert — das war die „Transparenz".
+  `#202020` wurde nicht ignoriert, es **ist** `--bg-panel`. Jetzt: Hintergrund-
+  Layer zurück, Eingabefeld nutzt `--bg-composer`.
+- **Autoscroll** hing: `requestAnimationFrame` schweigt in dieser WebView (dieselbe
+  Ursache wie beim Splash). Jetzt `nextTick` + `ResizeObserver` auf den Inhalt.
+
+### Stand
+Fertig: sechs Punkte aus §25–§29, Marke (Wal/Icon/Splash-Zoom), About-Seite,
+MIT-Lizenz, Version 0.4.7, README + Screenshot, CI (verify + drei Plattformen +
+Archive am Release), alle Regressionen oben. Offen: ein **Windows-/macOS-Smoke-Test**
+(nur über CI-Artefakte möglich; lokal ist nur Linux da), `v0.4.8` taggen und den
+Draft `v0.4.7` löschen.
+
+### Die nächsten zwei Vorhaben (vom Nutzer gewünscht, noch nicht gebaut)
+1. **Aktionen sichtbar machen** („UI folgt dem Begleiter"): `write`/`edit` auf eine
+   Datei → Datei-Tab öffnen (Vorschau oder Monaco je nach Typ); `web_fetch` → den
+   Browser auf die URL; `bash` → (Terminal-Panel fehlt noch). Mit Schalter
+   „folgen" und dezentem Hinweis auf den aktiven Tab, damit die Oberfläche nicht
+   ungefragt springt.
+2. **Punkte-/Vertrauenssystem**: Der Begleiter darf seinen Namen früh *wählen*,
+   aber der Nutzer **erfährt ihn erst ab einer Punktzahl** — Punkte für Nutzung
+   über Zeit (Streaks, erledigte Aufgaben, Korrekturen, Gedächtnis-Einträge), nicht
+   für einen einzelnen Klick. Eigene Tabelle, Fortschritt auf der Begleiterseite,
+   kleine „Enthüllung" beim Erreichen.
+
+### Antwort auf die Composer-Frage
+Die Farbe hat keinen Alphawert. Das Wasserzeichen ist `.agent::before` — eine
+eigene Ebene **hinter** den Kindern des Panels. Der Composer selbst ist opak; der
+Bereich *um* die Box (der Wrap) hatte keinen Hintergrund mehr, und dort scheint
+die Ebene durch. Es war nie die Farbe, es war die fehlende Fläche.
