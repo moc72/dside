@@ -122,11 +122,8 @@ jobs:
           cd src-tauri/target/release
           tar -czf "DS.IDE-${GITHUB_REF_NAME}-linux-x86_64.tar.gz" DSIDE
 
-      - name: Zip the app (macOS)
-        if: matrix.os == 'macos-latest'
-        run: |
-          cd src-tauri/target/release/bundle/macos
-          ditto -c -k --keepParent "DS.IDE.app" "DS.IDE-${GITHUB_REF_NAME}-macos.zip"
+      # No zip step for macOS on purpose: Tauri deletes the .app after building the dmg and
+      # leaves a DS.IDE.app.tar.gz behind, which is exactly the archive we want.
 
       - name: Zip the app (Windows)
         if: matrix.os == 'windows-latest'
@@ -145,6 +142,26 @@ jobs:
             src-tauri/target/release/bundle/**/*.dmg
             src-tauri/target/release/bundle/**/*.exe
             src-tauri/target/release/*.tar.gz
-            src-tauri/target/release/bundle/macos/*.zip
+            src-tauri/target/release/bundle/macos/*.tar.gz
             *.zip
           if-no-files-found: warn
+
+  # The installers go to the release through tauri-action; the plain archives only exist as
+  # workflow artifacts so far. This puts them on the release page as well — the no-installer
+  # download for people who prefer it.
+  attach:
+    needs: build
+    if: github.ref_type == 'tag' && !cancelled()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          files: |
+            assets/**/*.tar.gz
+            assets/**/*.zip
