@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS memories (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   kind         TEXT NOT NULL,
   scope        TEXT NOT NULL DEFAULT 'user',
+  title        TEXT,
   text         TEXT NOT NULL,
   source       TEXT,
   importance   INTEGER NOT NULL DEFAULT 1,
@@ -124,12 +125,13 @@ fn row_to_memory(row: &rusqlite::Row<'_>) -> rusqlite::Result<MemoryRow> {
         id: row.get(0)?,
         kind: row.get(1)?,
         scope: row.get(2)?,
-        text: row.get(3)?,
-        importance: row.get(4)?,
-        created_at: row.get(5)?,
-        origin: row.get(6)?,
-        edited_at: row.get(7)?,
-        retired_at: row.get(8)?,
+        title: row.get(3)?,
+        text: row.get(4)?,
+        importance: row.get(5)?,
+        created_at: row.get(6)?,
+        origin: row.get(7)?,
+        edited_at: row.get(8)?,
+        retired_at: row.get(9)?,
     })
 }
 
@@ -204,6 +206,43 @@ fn now() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_secs() as i64)
         .unwrap_or(0)
+}
+
+/// The panel gives each memory one line for its heading. 120 characters fit a card without
+/// turning the grid back into a wall of text.
+const TITLE_MAX_CHARS: usize = 120;
+
+fn clip(text: &str) -> String {
+    if text.chars().count() <= TITLE_MAX_CHARS {
+        return text.to_string();
+    }
+    let mut out: String = text.chars().take(TITLE_MAX_CHARS - 1).collect();
+    out.push('…');
+    out
+}
+
+fn clean_title(value: Option<&str>) -> Option<String> {
+    let value = value?;
+    let flat = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    if flat.is_empty() {
+        return None;
+    }
+    Some(clip(&flat))
+}
+
+/// Older rows (and user entries without a heading) get their first line as the title.
+fn derive_title(text: &str) -> String {
+    let first = text
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or("");
+    let flat = first.split_whitespace().collect::<Vec<_>>().join(" ");
+    if flat.is_empty() {
+        "Memory".to_string()
+    } else {
+        clip(&flat)
+    }
 }
 
 /// Cut a readable window around the first match, so hits make sense in a list.
@@ -311,6 +350,8 @@ pub struct MemoryRow {
     pub id: i64,
     pub kind: String,
     pub scope: String,
+    /// A short heading for the panel. `None` for rows written before titles existed.
+    pub title: Option<String>,
     pub text: String,
     pub importance: i64,
     pub created_at: i64,
@@ -363,6 +404,8 @@ impl Db {
         add_column(conn, "memories", "origin", "TEXT NOT NULL DEFAULT 'seeky'")?;
         add_column(conn, "memories", "edited_at", "INTEGER")?;
         add_column(conn, "memories", "retired_at", "INTEGER")?;
+        // A short heading for the memory panel. Older rows have none and the UI derives one.
+        add_column(conn, "memories", "title", "TEXT")?;
         // The ordered timeline of an assistant answer.
         add_column(conn, "messages", "parts", "TEXT")?;
         Ok(())
@@ -942,19 +985,45 @@ impl Db {
         source: Option<&str>,
         origin: &str,
     ) -> Result<i64, String> {
+        self.insert_memory_with_title(kind, scope, None, text, source, origin)
+    }
+
+    /// The panel shows a heading per entry. A row without one gets the first line of its
+    /// text as a fallback, so every new memory is readable at a glance.
+    pub fn insert_memory_with_title(
+        &self,
+        kind: &str,
+        scope: &str,
+        title: Option<&str>,
+        text: &str,
+        source: Option<&str>,
+        origin: &str,
+    ) -> Result<i64, String> {
+        let title = clean_title(title).unwrap_or_else(|| derive_title(text));
         let conn = self.lock()?;
         conn.execute(
-            "INSERT INTO memories (kind, scope, text, source, importance, created_at, origin)
-             VALUES (?1, ?2, ?3, ?4, 1, ?5, ?6)",
-            params![kind, scope, text, source, now(), origin],
+            "INSERT INTO memories
+                (kind, scope, title, text, source, importance, created_at, origin)
+             VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6, ?7)",
+            params![kind, scope, title, text, source, now(), origin],
         )
         .map_err(|error| error.to_string())?;
         Ok(conn.last_insert_rowid())
     }
 
+    /// The local calendar date, for notes that should carry their "when" in the text itself
+    /// (recalled memories are shown without their timestamps).
+    pub fn today(&self) -> Result<String, String> {
+        let conn = self.lock()?;
+        conn.query_row("SELECT date('now', 'localtime')", [], |row| {
+            row.get::<_, String>(0)
+        })
+        .map_err(|error| error.to_string())
+    }
+
     pub fn list_memories(&self, limit: usize) -> Result<Vec<MemoryRow>, String> {
         self.select_memories(
-            "SELECT id, kind, scope, text, importance, created_at, origin, edited_at, retired_at
+            "SELECT id, kind, scope, title, text, importance, created_at, origin, edited_at, retired_at
              FROM memories WHERE retired_at IS NULL
              ORDER BY created_at DESC, id DESC LIMIT ?1",
             limit,
@@ -964,7 +1033,7 @@ impl Db {
     /// Set aside, not erased: these are the entries the user took out of Seeky's memory.
     pub fn list_retired_memories(&self, limit: usize) -> Result<Vec<MemoryRow>, String> {
         self.select_memories(
-            "SELECT id, kind, scope, text, importance, created_at, origin, edited_at, retired_at
+            "SELECT id, kind, scope, title, text, importance, created_at, origin, edited_at, retired_at
              FROM memories WHERE retired_at IS NOT NULL
              ORDER BY retired_at DESC, id DESC LIMIT ?1",
             limit,
@@ -985,7 +1054,7 @@ impl Db {
     /// Retired entries are never recalled.
     pub fn memory_context(&self, limit: usize) -> Result<Vec<MemoryRow>, String> {
         self.select_memories(
-            "SELECT id, kind, scope, text, importance, created_at, origin, edited_at, retired_at
+            "SELECT id, kind, scope, title, text, importance, created_at, origin, edited_at, retired_at
              FROM memories
              WHERE retired_at IS NULL
              ORDER BY importance DESC, COALESCE(last_used_at, 0) DESC, created_at DESC
@@ -1000,22 +1069,25 @@ impl Db {
     pub fn update_memory(
         &self,
         id: i64,
+        title: Option<&str>,
         text: Option<&str>,
         kind: Option<&str>,
         importance: Option<i64>,
         origin: &str,
     ) -> Result<(), String> {
+        let title = clean_title(title);
         let conn = self.lock()?;
         let changed = conn
             .execute(
                 "UPDATE memories
-                 SET text       = COALESCE(?2, text),
+                 SET title      = COALESCE(?7, title),
+                     text       = COALESCE(?2, text),
                      kind       = COALESCE(?3, kind),
                      importance = COALESCE(?4, importance),
                      origin     = ?6,
                      edited_at  = CASE WHEN ?6 = 'user' THEN ?5 ELSE NULL END
                  WHERE id = ?1",
-                params![id, text, kind, importance, now(), origin],
+                params![id, text, kind, importance, now(), origin, title],
             )
             .map_err(|error| error.to_string())?;
         if changed == 0 {
@@ -1356,6 +1428,7 @@ pub fn memories_list(db: tauri::State<'_, Db>, limit: Option<usize>) -> Result<V
 pub fn memory_add(
     db: tauri::State<'_, Db>,
     text: String,
+    title: Option<String>,
     kind: Option<String>,
     scope: Option<String>,
 ) -> Result<i64, String> {
@@ -1363,9 +1436,10 @@ pub fn memory_add(
     if text.is_empty() {
         return Err("a memory needs text".to_string());
     }
-    db.insert_memory(
+    db.insert_memory_with_title(
         kind.as_deref().unwrap_or("fact"),
         scope.as_deref().unwrap_or("user"),
+        title.as_deref(),
         text,
         None,
         "user",
@@ -1382,11 +1456,19 @@ pub fn memories_retired(db: tauri::State<'_, Db>, limit: Option<usize>) -> Resul
 pub fn memory_update(
     db: tauri::State<'_, Db>,
     id: i64,
+    title: Option<String>,
     text: Option<String>,
     kind: Option<String>,
     importance: Option<i64>,
 ) -> Result<(), String> {
-    db.update_memory(id, text.as_deref(), kind.as_deref(), importance, "user")
+    db.update_memory(
+        id,
+        title.as_deref(),
+        text.as_deref(),
+        kind.as_deref(),
+        importance,
+        "user",
+    )
 }
 
 #[tauri::command]
@@ -1572,7 +1654,7 @@ mod tests {
             .insert_memory("preference", "user", "Mag lange Antworten", None, "seeky")
             .unwrap();
 
-        db.update_memory(id, Some("Mag kurze, direkte Antworten"), None, None, "user")
+        db.update_memory(id, None, Some("Mag kurze, direkte Antworten"), None, None, "user")
             .unwrap();
         let row = &db.list_memories(10).unwrap()[0];
         assert_eq!(row.text, "Mag kurze, direkte Antworten");
@@ -1580,13 +1662,15 @@ mod tests {
         assert!(row.edited_at.is_some());
         assert_eq!(row.kind, "preference", "untouched fields survive the update");
 
-        db.update_memory(id, Some("Notiz von Seeky"), None, None, "seeky")
+        db.update_memory(id, None, Some("Notiz von Seeky"), None, None, "seeky")
             .unwrap();
         let row = &db.list_memories(10).unwrap()[0];
         assert_eq!(row.origin, "seeky");
         assert!(row.edited_at.is_none(), "the user marker goes with the text");
 
-        assert!(db.update_memory(999, Some("x"), None, None, "user").is_err());
+        assert!(db
+            .update_memory(999, None, Some("x"), None, None, "user")
+            .is_err());
         assert!(db.retire_memory(999).is_err());
 
         let _ = std::fs::remove_dir_all(&directory);
@@ -1625,8 +1709,39 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].text, "Altes Wissen");
         assert_eq!(rows[0].origin, "seeky", "old rows belong to Seeky");
+        assert!(rows[0].title.is_none(), "old rows have no title yet");
         assert!(rows[0].edited_at.is_none());
         assert!(rows[0].retired_at.is_none());
+
+        // New rows carry a title; without one, the first line becomes the heading.
+        let id = db
+            .insert_memory_with_title(
+                "fact",
+                "user",
+                Some("  Ein Titel  "),
+                "Ein Text",
+                None,
+                "seeky",
+            )
+            .unwrap();
+        let titled = db
+            .list_memories(10)
+            .unwrap()
+            .into_iter()
+            .find(|row| row.id == id)
+            .unwrap();
+        assert_eq!(titled.title.as_deref(), Some("Ein Titel"));
+
+        let derived = db
+            .insert_memory("fact", "user", "Erste Zeile\nzweite Zeile", None, "seeky")
+            .unwrap();
+        let derived = db
+            .list_memories(10)
+            .unwrap()
+            .into_iter()
+            .find(|row| row.id == derived)
+            .unwrap();
+        assert_eq!(derived.title.as_deref(), Some("Erste Zeile"));
 
         let _ = std::fs::remove_dir_all(&directory);
     }
@@ -1809,6 +1924,10 @@ mod tests {
 
         db.set_partner_name("  Njord  ").unwrap();
         assert_eq!(db.partner_name().unwrap().as_deref(), Some("Njord"));
+
+        // The note that records the choice carries a plain calendar date.
+        let day = db.today().unwrap();
+        assert_eq!(day.len(), 10, "expected YYYY-MM-DD, got {day}");
 
         assert!(
             db.set_partner_name("Anders").is_err(),

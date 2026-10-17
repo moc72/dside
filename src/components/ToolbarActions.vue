@@ -120,6 +120,18 @@ async function openDownload() {
   font-size: 12px;
 }
 
+/* Narrow window: the logo and the chevron still open the menu, the label is the only part
+   that has to go. Without this the right-hand toolbar pushed the session title out. */
+@media (max-width: 980px) {
+  .editor .label {
+    display: none;
+  }
+
+  .editor {
+    padding: 0 8px;
+  }
+}
+
 .editor:hover {
   background: var(--bg-hover);
 }

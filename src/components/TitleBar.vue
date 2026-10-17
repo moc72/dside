@@ -93,7 +93,7 @@ async function pick(id: string): Promise<void> {
   display: flex;
   align-items: center;
   gap: 6px;
-  max-width: 420px;
+  max-width: min(420px, 40vw);
   padding: 5px 10px;
   border: none;
   border-radius: var(--radius-sm);

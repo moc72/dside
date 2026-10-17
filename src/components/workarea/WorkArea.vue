@@ -3,7 +3,8 @@ import { computed, watch } from "vue";
 import Icon from "../Icon.vue";
 import { t } from "../../i18n";
 import type { WorkAreaTabKind } from "../../types";
-import { activeTab, activateTab, closeTab, tabs } from "../../stores/workArea";
+import { activeTab, activateTab, attentionTabId, closeTab, tabs } from "../../stores/workArea";
+import { settings } from "../../stores/settings";
 import ProgressTab from "./ProgressTab.vue";
 import ViewFileTab from "./ViewFileTab.vue";
 import SkillsTab from "./SkillsTab.vue";
@@ -51,7 +52,7 @@ watch(
         v-for="tab in shownTabs"
         :key="tab.id"
         class="tab"
-        :class="{ active: tab.id === activeTab?.id }"
+        :class="{ active: tab.id === activeTab?.id, attention: tab.id === attentionTabId }"
         type="button"
         @click="activateTab(tab.id)"
       >
@@ -67,6 +68,17 @@ watch(
       </button>
 
       <span class="spacer"></span>
+
+      <button
+        class="follow"
+        :class="{ on: settings.followCompanion }"
+        type="button"
+        :title="settings.followCompanion ? t('workArea.followOn') : t('workArea.followOff')"
+        :aria-pressed="settings.followCompanion"
+        @click="settings.followCompanion = !settings.followCompanion"
+      >
+        <Icon :name="settings.followCompanion ? 'eye' : 'eye-off'" :size="13" />
+      </button>
     </div>
 
     <div class="content">
@@ -114,6 +126,26 @@ watch(
   color: var(--text-strong);
 }
 
+/* A file the companion just opened lands in the active tab. The glow says "this changed",
+   then goes away — no dialog, no focus change. */
+.tab.attention {
+  animation: tab-attention 1.8s ease-out;
+}
+
+@keyframes tab-attention {
+  0% {
+    box-shadow: 0 0 0 2px transparent;
+  }
+
+  20% {
+    box-shadow: 0 0 0 2px var(--accent);
+  }
+
+  100% {
+    box-shadow: 0 0 0 2px transparent;
+  }
+}
+
 .tab-label {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -135,6 +167,26 @@ watch(
 
 .spacer {
   flex: 1;
+}
+
+.follow {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.follow:hover {
+  background: var(--bg-hover);
+  color: var(--text-strong);
+}
+
+.follow.on {
+  color: var(--accent);
 }
 
 .content {

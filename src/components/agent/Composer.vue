@@ -181,9 +181,10 @@ function toggleAuthorization() {
             @change="onFiles"
           />
           <button
-            class="chip"
+            class="chip permission"
             :class="{ on: settings.fullAuthorization }"
             type="button"
+            :title="t('composer.fullAuthorization')"
             @click="toggleAuthorization"
           >
             <Icon name="external-link" :size="14" />
@@ -239,14 +240,27 @@ function toggleAuthorization() {
    the same 70% column as the list above. */
 .composer-wrap {
   /* The message column reserves 6px for its scrollbar, so this box mirrors that: both have
-     the same visible left and right edge instead of being "the same width" in numbers only. */
-  width: calc(70% - 6px);
-  margin-left: calc(15% + 3px);
+     the same visible left and right edge instead of being "the same width" in numbers only.
+     The width comes from the shared reading column in `AgentPanel.vue`. */
+  width: calc(var(--chat-width, 70%) - 6px);
+  max-width: 100%;
+  margin-inline: auto;
   padding: 8px 6px 10px;
   border-top: 1px solid var(--border);
   /* This layer is what hides the message list behind the composer. Without it the watermark
      and the last messages show through, which looks like the composer is transparent. */
-  background: var(--bg-app);
+  background: var(--bg);
+}
+
+/* The controls row is a container, so it can react to its own width rather than to the
+   viewport: with both side panels open the composer is much narrower than the window. */
+.composer {
+  container-type: inline-size;
+  container-name: composer;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--bg-composer);
+  padding: 10px 12px 8px;
 }
 
 .note {
@@ -297,13 +311,6 @@ function toggleAuthorization() {
   display: none;
 }
 
-.composer {
-  border: 1px solid var(--border-strong);
-  border-radius: 12px;
-  background: var(--bg-composer);
-  padding: 10px 12px 8px;
-}
-
 .input {
   width: 100%;
   min-height: 42px;
@@ -331,6 +338,7 @@ function toggleAuthorization() {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
 }
 
 .chip {
@@ -346,6 +354,19 @@ function toggleAuthorization() {
   font-size: 12px;
 }
 
+/* Only the permission chip may shrink: its label is the part that can give way without
+   losing a control. The label itself never wraps into a vertical stack. */
+.permission {
+  min-width: 0;
+}
+
+.permission span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .chip:hover {
   background: var(--bg-hover);
   color: var(--text-strong);
@@ -356,7 +377,8 @@ function toggleAuthorization() {
 }
 
 .model {
-  width: 150px;
+  flex: 0 1 150px;
+  min-width: 92px;
   height: 26px;
   padding: 0 6px;
   border: none;
@@ -370,6 +392,18 @@ function toggleAuthorization() {
 .model:focus {
   outline: none;
   background: var(--bg-input);
+}
+
+/* Narrow composer (both side panels open): the permission label goes, the select keeps a
+   readable model name. The controls stay on one row instead of spilling out of the bubble. */
+@container composer (max-width: 440px) {
+  .permission span {
+    display: none;
+  }
+
+  .model {
+    flex-basis: 118px;
+  }
 }
 
 .send {

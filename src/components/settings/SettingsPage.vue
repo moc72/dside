@@ -319,6 +319,11 @@ watch(activeItem, (value) => {
             :description="t('settings.general.desktopNotificationsDesc')"
           />
           <ToggleRow
+            v-model="settings.followCompanion"
+            :label="t('settings.general.followCompanion')"
+            :description="t('settings.general.followCompanionDesc')"
+          />
+          <ToggleRow
             v-model="settings.joinEarlyAccess"
             :label="t('settings.general.joinEarlyAccess')"
             :description="t('settings.general.joinEarlyAccessDesc')"

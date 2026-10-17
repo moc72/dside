@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import Icon from "../Icon.vue";
+import MarkdownText from "./MarkdownText.vue";
 import { t } from "../../i18n";
 import { settings } from "../../stores/settings";
-import { escapeHtml, renderMarkdown } from "../../lib/preview";
 import type { ChatMessage } from "../../types";
 
 defineProps<{
@@ -25,9 +25,14 @@ function toggle(id: string): void {
   open.value[id] = !open.value[id];
 }
 
-/** The user's text stays exactly as typed; only the answer is rendered as markdown. */
-function escape(text: string): string {
-  return escapeHtml(text).replace(/\n/g, "<br />");
+/**
+ * Reasoning stays collapsed while it is being produced. Watching it grow is what made the
+ * whole panel stutter: every chunk re-laid out a block that was already scrolled anyway.
+ * Once the turn is over it can be opened like a normal disclosure.
+ */
+function keepClosed(event: Event, streaming?: boolean): void {
+  const element = event.target as HTMLDetailsElement;
+  if (streaming && element.open) element.open = false;
 }
 </script>
 
@@ -42,9 +47,15 @@ function escape(text: string): string {
           <details
             v-if="part.kind === 'reasoning'"
             class="reasoning"
-            :open="message.streaming && index === (message.parts?.length ?? 0) - 1"
+            :class="{ live: message.streaming }"
+            @toggle="keepClosed($event, message.streaming)"
           >
-            <summary>{{ t("message.reasoning") }}</summary>
+            <summary>
+              <span>{{ t("message.reasoning") }}</span>
+              <span class="reasoning-count">
+                {{ part.text.length.toLocaleString() }} {{ t("message.characters") }}
+              </span>
+            </summary>
             <div class="reasoning-body">{{ part.text }}</div>
           </details>
 
@@ -59,15 +70,13 @@ function escape(text: string): string {
           <!-- A picture without a stored preview still says which file it was. -->
           <div v-else-if="part.kind === 'image'" class="attachment-name">{{ part.name }}</div>
 
-          <div
+          <MarkdownText
             v-else-if="part.kind === 'text'"
-            class="text"
-            :class="{ streaming: message.streaming }"
-            :title="message.role === 'user' ? undefined : t('message.raw')"
-            v-html="
-              message.role === 'user' ? escape(part.text) : renderMarkdown(part.text, true)
-            "
-          ></div>
+            :text="part.text"
+            :user="message.role === 'user'"
+            :streaming="message.streaming"
+            :tooltip="message.role === 'user' ? undefined : t('message.raw')"
+          />
 
           <!-- No wrapper per tool: one margin on the chip itself, so two chips in a row are
                exactly one gap apart instead of one per wrapper plus one per element. -->
@@ -154,108 +163,6 @@ function escape(text: string): string {
   max-width: 70%;
 }
 
-.text {
-  line-height: 1.4;
-  padding: 6px 8px;
-  /* white-space: pre-wrap; */
-  border: 1px solid var(--bubble-border);
-  border-radius: var(--radius);
-  background-color: var(--bubble-bg);
-  font-size: var(--reading-font-size);
-  /* Anything a model writes must fit the column: long tokens break, wide blocks scroll
-     inside themselves. Without this a markdown table widened the whole list and the chat
-     grew a horizontal scrollbar — which is how text ended up outside its bubble. */
-  word-break: break-word;
-  overflow-wrap: anywhere;
-  min-width: 0;
-}
-
-.text :deep(p) {
-  margin: 0 0 8px;
-}
-
-.text :deep(p:last-child) {
-  margin-bottom: 0;
-}
-
-/* Code blocks keep their shape and scroll inside themselves; without this a long line widened
-   the bubble (the "231 行 …" block did exactly that). */
-.text :deep(pre) {
-  margin: 8px 0;
-  padding: 10px 12px;
-  max-width: 100%;
-  overflow-x: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg);
-  font-family: var(--mono);
-  font-size: 11.5px;
-  line-height: 1.5;
-}
-
-.text :deep(code) {
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: var(--bg-elevated);
-  font-family: var(--mono);
-  font-size: 0.92em;
-  overflow-wrap: anywhere;
-}
-
-.text :deep(pre code) {
-  padding: 0;
-  background: none;
-}
-
-.text :deep(ul),
-.text :deep(ol) {
-  margin: 6px 0;
-  padding-left: 20px;
-}
-
-.text :deep(a) {
-  color: var(--accent);
-}
-
-.text :deep(h1),
-.text :deep(h2),
-.text :deep(h3) {
-  margin: 10px 0 6px;
-  font-size: 1em;
-}
-
-.text :deep(table) {
-  display: block;
-  max-width: 100%;
-  overflow-x: auto;
-  border-collapse: collapse;
-  font-size: 0.95em;
-}
-
-.text :deep(th),
-.text :deep(td) {
-  padding: 4px 8px;
-  border: 1px solid var(--border);
-  text-align: left;
-  vertical-align: top;
-}
-
-.text :deep(th) {
-  background: var(--bg-elevated);
-  font-weight: 600;
-}
-
-.text :deep(img) {
-  max-width: 100%;
-  height: auto;
-}
-
-.row.user .text {
-  padding: 6px 8px;
-  border: 1px solid var(--bubble-border);
-  border-radius: var(--radius);
-  background: var(--bubble-user-bg);
-}
 
 /* Empty seat for the whale: user messages line up with the partner's. */
 .avatar.spacer {
@@ -284,6 +191,18 @@ function escape(text: string): string {
   letter-spacing: 0.5px;
   text-transform: uppercase;
   user-select: none;
+}
+
+.reasoning.live summary {
+  cursor: default;
+}
+
+.reasoning-count {
+  margin-left: 8px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 0.75;
 }
 
 .reasoning-body {

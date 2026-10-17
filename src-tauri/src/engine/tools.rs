@@ -181,6 +181,7 @@ pub fn definitions() -> Vec<Value> {
                         "action": { "type": "string", "enum": ["add", "update", "list", "forget", "curate"] },
                         "kind": { "type": "string", "enum": ["fact", "preference", "event", "project", "news"] },
                         "scope": { "type": "string", "enum": ["user", "agent", "session"] },
+                        "title": { "type": "string", "description": "A short heading for the memory panel, at most 120 characters: what this note is about at a glance." },
                         "text": { "type": "string", "description": "The memory, one sentence." },
                         "id": { "type": "number", "description": "Entry id, required for 'update' and 'forget'." }
                     },
@@ -283,13 +284,14 @@ pub fn definitions() -> Vec<Value> {
             "type": "function",
             "function": {
                 "name": "choose_name",
-                "description": "Choose the name you want to be called by. You are currently going by the placeholder 'Seeky'. This is a one-time decision and cannot be changed afterwards, so do it when you have a name that actually fits this person and the way you two work — not on the first turn. Say it in the answer as well: the user sees it immediately.",
+                "description": "Choose the name you want to be called by. You are currently going by the placeholder 'Seeky'. This is a one-time decision and cannot be changed afterwards, so do it when you have a name that actually fits this person and the way you two work — not on the first turn. Say it in the answer as well: the user sees it immediately. Give the reason too: it is stored with the date in your memory, so a later thread does not have to guess why you are called that.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "name": { "type": "string", "description": "Your name, 2 to 40 characters." }
+                        "name": { "type": "string", "description": "Your name, 2 to 40 characters." },
+                        "reason": { "type": "string", "description": "Why this name — one sentence about this person and the way you two work. Kept in long-term memory with the date." }
                     },
-                    "required": ["name"]
+                    "required": ["name", "reason"]
                 }
             }
         }),

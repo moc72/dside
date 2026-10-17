@@ -74,6 +74,8 @@ export const fr: Messages = {
     retiredHint: "Les entrées mises de côté sont conservées — elles ne sont simplement plus rappelées.",
     changedByUser: "modifié par toi",
     addPlaceholder: "Que doit-il retenir ? (Ctrl+Entrée enregistre)",
+    titlePlaceholder: "Titre — 120 caractères maximum",
+    open: "Ouvrir la note complète",
     writtenByUser: "écrit par toi",
     add: "Ajouter",
     edit: "Modifier",
@@ -124,6 +126,8 @@ export const fr: Messages = {
     tabSchedules: "Planifié",
     closeTab: "Fermer l'onglet",
     empty: "Aucun onglet ouvert.",
+    followOn: "Suivre le compagnon — activé (les fichiers et pages s'ouvrent au fil de l'eau)",
+    followOff: "Suivre le compagnon — désactivé (seulement les puces d'outils)",
   },
   progress: {
     title: "Progression",
@@ -178,13 +182,14 @@ export const fr: Messages = {
     compactNothing: "Rien à compresser — la conversation est assez courte",
     contextUnknown: "Aucune requête pour l'instant.",
     tokens: "{used} jetons",
-    disclaimer: "L'agent est IA et peut faire des erreurs.",
+    disclaimer: "Les compagnons IA peuvent eux aussi faire des erreurs !",
   },
   message: {
     autoApproved: "Exécuté sans demande — l'autorisation complète est activée.",
     raw: "Stocké en markdown",
     notWired: "Non connecté : aucun backend de modèle connecté.",
     reasoning: "Réflexion",
+    characters: "caractères",
   },
   search: {
     title: "Recherche de sessions et de messages",
@@ -288,6 +293,9 @@ export const fr: Messages = {
       desktopNotificationsDesc: "Notifier lorsque les tâches sont terminées, des erreurs surviennent ou des autorisations sont nécessaires",
       joinEarlyAccess: "Rejoindre l'accès anticipé",
       joinEarlyAccessDesc: "Essayez les fonctionnalités les plus récentes",
+      followCompanion: "Suivre le compagnon",
+      followCompanionDesc:
+        "Afficher dans l'espace de travail les fichiers et pages qu'il ouvre — le curseur reste dans le champ de saisie.",
     },
   },
   common: {
@@ -299,7 +307,7 @@ export const fr: Messages = {
     comingSoon: "Bientôt disponible.",
   },
   partner: {
-    hint: "Ton compagnon, pas ton outil : ce qu'il retient, comment il s'appelle et ce que tu lui confies durablement.",
+    hint: "Ton compagnon IA, pas ton outil : ce qu'il retient, comment il s'appelle et ce que tu lui confies durablement.",
     name: "Nom",
     meaningZiggy: "diminutif de Siegfried/Sigmund : victoire et protection",
     placeholder: "(provisoire)",
@@ -311,7 +319,7 @@ export const fr: Messages = {
   },
   about: {
     title: "À propos de DS·IDE",
-    tagline: "Un EDI agentique local avec son propre compagnon — conçu pour deux.",
+    tagline: "Un EDI agentique local avec son propre compagnon IA — conçu pour deux.",
     version: "Version",
     versionValue: "DS·IDE {version}",
     authors: "Par",

@@ -590,11 +590,38 @@ fn choose_name_tool(app: &AppHandle, args: &Value) -> tools::ToolOutcome {
     if name.is_empty() {
         return tools::ToolOutcome::err("choose_name: 'name' is required");
     }
+    // A name without its reason is exactly the riddle Ziggy left behind: the record says
+    // the name was chosen, and nothing says why. The reason goes into memory with the date.
+    let reason: String = args
+        .get("reason")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .chars()
+        .take(600)
+        .collect();
+    if reason.is_empty() {
+        return tools::ToolOutcome::err(
+            "choose_name: 'reason' is required — one sentence on why this name fits this \
+             person. It is kept in memory so later threads know where the name came from.",
+        );
+    }
 
     match db.set_partner_name(&name) {
-        Ok(()) => tools::ToolOutcome::ok(format!(
-            "From now on your name is {name}. The user sees it in the settings; use it for yourself."
-        )),
+        Ok(()) => {
+            let date = db.today().unwrap_or_default();
+            let note = if date.is_empty() {
+                format!("My name is {name}. I chose it because: {reason}")
+            } else {
+                format!("On {date} I chose the name {name}. Reason: {reason}")
+            };
+            // Best effort: the name is set either way, and a failed note must not undo it.
+            let _ = db.insert_memory("event", "agent", &note, Some("choose_name"), "seeky");
+            tools::ToolOutcome::ok(format!(
+                "From now on your name is {name}. The user sees it in the settings; use it for \
+                 yourself. The reason is remembered together with the date."
+            ))
+        }
         Err(error) => tools::ToolOutcome::err(format!("choose_name: {error}")),
     }
 }
@@ -619,8 +646,9 @@ fn memory_tool(app: &AppHandle, args: &Value) -> tools::ToolOutcome {
             }
             let kind = args.get("kind").and_then(Value::as_str).unwrap_or("fact");
             let scope = args.get("scope").and_then(Value::as_str).unwrap_or("user");
+            let title = args.get("title").and_then(Value::as_str);
             // Seeky's own note. Entries the user rewrote in the UI carry origin 'user'.
-            match db.insert_memory(kind, scope, text, None, "seeky") {
+            match db.insert_memory_with_title(kind, scope, title, text, None, "seeky") {
                 Ok(id) => tools::ToolOutcome::ok(format!("remembered as #{id} ({scope}/{kind})")),
                 Err(error) => tools::ToolOutcome::err(format!("memory: {error}")),
             }
@@ -636,12 +664,13 @@ fn memory_tool(app: &AppHandle, args: &Value) -> tools::ToolOutcome {
                 .filter(|value| !value.is_empty());
             let kind = args.get("kind").and_then(Value::as_str);
             let importance = args.get("importance").and_then(Value::as_i64);
-            if text.is_none() && kind.is_none() && importance.is_none() {
+            let title = args.get("title").and_then(Value::as_str);
+            if text.is_none() && kind.is_none() && importance.is_none() && title.is_none() {
                 return tools::ToolOutcome::err("memory: nothing to update");
             }
             // Seeky rewrote it itself, so the entry is its own again — the user marker is
             // only for changes the user made.
-            match db.update_memory(id, text, kind, importance, "seeky") {
+            match db.update_memory(id, title, text, kind, importance, "seeky") {
                 Ok(()) => tools::ToolOutcome::ok(format!("updated #{id}")),
                 Err(error) => tools::ToolOutcome::err(format!("memory: {error}")),
             }
@@ -876,6 +905,7 @@ mod tests {
             id,
             kind: "fact".to_string(),
             scope: scope.to_string(),
+            title: None,
             text: text.to_string(),
             importance: 1,
             created_at: 0,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import Icon from "../Icon.vue";
 import FileTree from "../FileTree.vue";
@@ -21,7 +21,7 @@ import {
   treeError,
   treeLoading,
 } from "../../composables/useWorkspace";
-import { openFile } from "../../stores/workArea";
+import { fileRevision, fileTreeVisible, openFile } from "../../stores/workArea";
 import { resolvedTheme } from "../../stores/settings";
 
 const props = defineProps<{ path?: string | null }>();
@@ -29,7 +29,6 @@ const props = defineProps<{ path?: string | null }>();
 const content = ref("");
 const loading = ref(false);
 const error = ref<string | null>(null);
-const treeVisible = ref(true);
 
 const selectedPath = computed(() => props.path ?? null);
 const language = computed(() => (props.path ? languageFromPath(props.path) : "plaintext"));
@@ -37,6 +36,13 @@ const editorTheme = computed(() => (resolvedTheme.value === "light" ? "vs" : "vs
 
 const kind = computed(() => (props.path ? previewKindFor(props.path) : "text"));
 const markdownMode = ref<"preview" | "source">("preview");
+
+watch(
+  () => props.path,
+  () => {
+    markdownMode.value = "preview";
+  },
+);
 
 /** Spreadsheets: the value a cell shows, or the formula that produced it. */
 const sheetView = ref<"values" | "formulas">("values");
@@ -55,9 +61,8 @@ watch(sheetView, () => {
 });
 
 watch(
-  [() => props.path, kind],
+  [() => props.path, kind, fileRevision],
   async ([path, currentKind]) => {
-    markdownMode.value = "preview";
     imageSrc.value = "";
     if (!path || currentKind !== "image") return;
     error.value = null;
@@ -87,7 +92,7 @@ watch(sheetView, () => {
 });
 
 watch(
-  [() => props.path, kind],
+  [() => props.path, kind, fileRevision],
   async ([path, currentKind]) => {
     officeHtml.value = "";
     if (!path) return;
@@ -140,8 +145,8 @@ async function load(path: string) {
 }
 
 watch(
-  () => props.path,
-  (value) => {
+  [() => props.path, fileRevision],
+  ([value]) => {
     if (value) void load(value);
   },
   { immediate: true },
@@ -151,21 +156,60 @@ onMounted(() => {
   if (tree.value.length === 0) void initWorkspace();
 });
 
+/**
+ * After a file is picked in the tree, give the eyes a moment to see where it went, then get
+ * the tree out of the way. The collapse itself is a CSS transition; this is only the pause
+ * before it starts. Choosing another file resets the pause, and using the tree cancels it.
+ */
+const AUTO_HIDE_MS = 2000;
+let hideTimer: number | undefined;
+
+function cancelTreeHide(): void {
+  if (hideTimer !== undefined) {
+    window.clearTimeout(hideTimer);
+    hideTimer = undefined;
+  }
+}
+
+function scheduleTreeHide(): void {
+  cancelTreeHide();
+  hideTimer = window.setTimeout(() => {
+    hideTimer = undefined;
+    fileTreeVisible.value = false;
+  }, AUTO_HIDE_MS);
+}
+
+function toggleTree(): void {
+  cancelTreeHide();
+  fileTreeVisible.value = !fileTreeVisible.value;
+}
+
+function closeTree(): void {
+  cancelTreeHide();
+  fileTreeVisible.value = false;
+}
+
+onBeforeUnmount(cancelTreeHide);
+
 function select(node: FileNode) {
   openFile(node.path);
+  // The companion never goes through here: `openFile` on its behalf leaves the tree alone.
+  scheduleTreeHide();
 }
 
 async function toggle(node: FileNode) {
+  // Browsing counts as using the tree — do not pull it away while folders open.
+  cancelTreeHide();
   node.expanded = !node.expanded;
   if (node.expanded && !node.loaded) await loadChildren(node);
 }
 </script>
 
 <template>
-  <div class="viewfile" :class="{ 'no-tree': !treeVisible }">
+  <div class="viewfile" :class="{ 'no-tree': !fileTreeVisible }">
     <div class="viewer">
       <template v-if="selectedPath && !error">
-        <div v-if="kind !== 'text'" class="viewer-bar">
+        <div class="viewer-bar">
           <template v-if="kind === 'markdown'">
             <button
               class="mode"
@@ -184,7 +228,19 @@ async function toggle(node: FileNode) {
               {{ t("viewFile.source") }}
             </button>
           </template>
+          <!-- The same fixed line for every kind: markdown's mode switch, code's path, and
+               the tree toggle. It does not scroll with Monaco, so the path stays visible. -->
           <span class="path">{{ selectedPath }}</span>
+          <button
+            class="mini tree-toggle"
+            :class="{ active: fileTreeVisible }"
+            type="button"
+            :title="fileTreeVisible ? t('viewFile.hideTree') : t('viewFile.showTree')"
+            :aria-pressed="fileTreeVisible"
+            @click="toggleTree"
+          >
+            <Icon name="panel" :size="14" />
+          </button>
         </div>
 
         <img v-if="kind === 'image'" class="image" :src="imageSrc" :alt="selectedPath ?? ''" />
@@ -229,10 +285,14 @@ async function toggle(node: FileNode) {
       </div>
     </div>
 
-    <div v-if="treeVisible" class="tree-pane">
+    <div
+      class="tree-pane"
+      :inert="!fileTreeVisible || undefined"
+      :aria-hidden="fileTreeVisible ? undefined : 'true'"
+    >
       <div class="tree-head">
         <span>{{ t("viewFile.workspace") }}</span>
-        <button class="mini" type="button" :title="t('viewFile.hideTree')" @click="treeVisible = false">
+        <button class="mini" type="button" :title="t('viewFile.hideTree')" @click="closeTree">
           <Icon name="x" :size="12" />
         </button>
       </div>
@@ -248,16 +308,6 @@ async function toggle(node: FileNode) {
         />
       </div>
     </div>
-
-    <button
-      v-else
-      class="show-tree"
-      type="button"
-      :title="t('viewFile.showTree')"
-      @click="treeVisible = true"
-    >
-      <Icon name="panel" :size="14" />
-    </button>
   </div>
 </template>
 
@@ -269,10 +319,13 @@ async function toggle(node: FileNode) {
   grid-template-rows: minmax(0, 1fr);
   height: 100%;
   min-height: 0;
+  /* The tree steps aside after a pick instead of vanishing: same track list, only the
+     second column goes to zero, so the browser can interpolate it. */
+  transition: grid-template-columns 260ms ease;
 }
 
 .viewfile.no-tree {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 0px;
 }
 
 .viewer {
@@ -328,12 +381,25 @@ async function toggle(node: FileNode) {
 }
 
 .path {
+  flex: 1 1 auto;
+  min-width: 0;
   margin-left: auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: right;
   color: var(--text-muted);
   font-size: 11px;
+}
+
+.tree-toggle {
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+
+.tree-toggle.active {
+  color: var(--accent);
 }
 
 .image {
@@ -498,8 +564,17 @@ async function toggle(node: FileNode) {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  overflow: hidden;
   border-left: 1px solid var(--border);
   background: var(--bg-elevated);
+  transition:
+    border-color 260ms ease,
+    opacity 260ms ease;
+}
+
+.viewfile.no-tree .tree-pane {
+  border-left-color: transparent;
+  opacity: 0;
 }
 
 .tree-head {
@@ -543,23 +618,5 @@ async function toggle(node: FileNode) {
   margin: 0;
   color: var(--text-muted);
   font-size: 12px;
-}
-
-.show-tree {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-panel);
-  color: var(--text-muted);
-}
-
-.show-tree:hover {
-  color: var(--text-strong);
 }
 </style>

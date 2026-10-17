@@ -67,6 +67,12 @@ const shapes: Record<string, string[]> = {
   terminal: ["M4 5h16v14H4z", "M8 10l3 3-3 3", "M13 16h4"],
   expand: ["M9 4H4v5", "M15 20h5v-5", "M4 4l6 6", "M20 20l-6-6"],
   "sidebar-toggle": ["M4 5h16v14H4z", "M9 5v14", "M13 10l3 2-3 2"],
+  eye: ["M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z", "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"],
+  "eye-off": [
+    "M3 3l18 18",
+    "M10.6 6.2A9.9 9.9 0 0 1 12 6c6.5 0 10 6 10 6a17 17 0 0 1-3.1 3.7",
+    "M6.1 6.3A17 17 0 0 0 2 12s3.5 6 10 6a9.6 9.6 0 0 0 4-.8",
+  ],
 };
 
 const segments = computed(() => shapes[props.name] ?? []);

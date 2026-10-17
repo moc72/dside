@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import Icon from "../Icon.vue";
 import { t } from "../../i18n";
@@ -10,11 +10,15 @@ import { t } from "../../i18n";
  * It lives in the settings rather than on the work area because it is not a tool: it is the
  * place where the user corrects what their partner believes about them. Nothing here deletes
  * a row — an entry the user takes out is retired and can be put back.
+ *
+ * The entries are cards with a heading and a short preview; the whole text opens in a modal
+ * rather than pushing the rest of the list down. Search is deliberately still missing.
  */
 interface MemoryRow {
   id: number;
   kind: string;
   scope: string;
+  title: string | null;
   text: string;
   importance: number;
   createdAt: number;
@@ -35,21 +39,51 @@ const report = ref<MemoryReport | null>(null);
 const loading = ref(false);
 const error = ref<string | null>(null);
 
-const editingId = ref<number | null>(null);
-const draft = ref("");
+/** The entry whose full text is open, and the edit drafts for it. */
+const selectedId = ref<number | null>(null);
+const selected = computed(() => rows.value.find((row) => row.id === selectedId.value) ?? null);
+const editing = ref(false);
+const draftTitle = ref("");
+const draftText = ref("");
 const retiredOpen = ref(false);
 
 /** A memory the user writes is theirs from the start — no tool, no model in between. */
+const newTitle = ref("");
 const newMemory = ref("");
 const adding = ref(false);
+
+const TITLE_MAX = 120;
+
+/** Old rows have no heading; their first line stands in until someone gives them one. */
+function titleFor(row: MemoryRow): string {
+  const stored = row.title?.trim();
+  if (stored) return stored;
+  const line = row.text
+    .split("\n")
+    .map((entry) => entry.trim())
+    .find((entry) => entry.length > 0) ?? "";
+  const flat = line.replace(/\s+/g, " ").trim();
+  return flat.length > TITLE_MAX ? `${flat.slice(0, TITLE_MAX - 1)}…` : flat;
+}
+
+function openEntry(row: MemoryRow): void {
+  selectedId.value = row.id;
+  editing.value = false;
+}
+
+function closeEntry(): void {
+  selectedId.value = null;
+  editing.value = false;
+}
 
 async function addMemory() {
   const text = newMemory.value.trim();
   if (!text) return;
   adding.value = true;
   try {
-    await invoke("memory_add", { text });
+    await invoke("memory_add", { text, title: newTitle.value.trim() });
     newMemory.value = "";
+    newTitle.value = "";
   } catch (cause) {
     error.value = String(cause);
   } finally {
@@ -84,22 +118,29 @@ async function load() {
 }
 
 function startEdit(row: MemoryRow) {
-  editingId.value = row.id;
-  draft.value = row.text;
+  selectedId.value = row.id;
+  draftTitle.value = titleFor(row);
+  draftText.value = row.text;
+  editing.value = true;
 }
 
 function cancelEdit() {
-  editingId.value = null;
-  draft.value = "";
+  editing.value = false;
 }
 
 /** Saving a correction is the one thing that marks an entry as the user's own. */
-async function saveEdit(id: number) {
-  const text = draft.value.trim();
+async function saveEdit() {
+  const row = selected.value;
+  if (!row) return;
+  const text = draftText.value.trim();
   if (!text) return;
   try {
-    await invoke("memory_update", { id, text });
-    cancelEdit();
+    await invoke("memory_update", {
+      id: row.id,
+      title: draftTitle.value.trim(),
+      text,
+    });
+    editing.value = false;
   } catch (cause) {
     error.value = String(cause);
   }
@@ -112,6 +153,7 @@ async function retire(id: number) {
   } catch (cause) {
     error.value = String(cause);
   }
+  if (selectedId.value === id) closeEntry();
   await load();
 }
 
@@ -147,9 +189,16 @@ async function prune(ids: number[]) {
   await load();
 }
 
+function onKey(event: KeyboardEvent): void {
+  if (event.key === "Escape" && selectedId.value !== null) closeEntry();
+}
+
 onMounted(() => {
   void load();
+  window.addEventListener("keydown", onKey);
 });
+
+onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
 </script>
 
 <template>
@@ -185,6 +234,13 @@ onMounted(() => {
     </div>
 
     <div class="add">
+      <input
+        v-model="newTitle"
+        class="title-input"
+        type="text"
+        :maxlength="TITLE_MAX"
+        :placeholder="t('memory.titlePlaceholder')"
+      />
       <textarea
         v-model="newMemory"
         class="editor"
@@ -193,6 +249,7 @@ onMounted(() => {
         @keydown.ctrl.enter.prevent="addMemory"
       ></textarea>
       <div class="editor-actions">
+        <span class="counter">{{ newTitle.length }}/{{ TITLE_MAX }}</span>
         <button
           class="mini-text primary"
           type="button"
@@ -208,45 +265,33 @@ onMounted(() => {
     <p v-else-if="error" class="note error">{{ error }}</p>
     <p v-else-if="rows.length === 0" class="note">{{ t("memory.empty") }}</p>
 
-    <ul v-else class="list">
-      <li v-for="row in rows" :key="row.id" class="entry">
-        <div class="entry-head">
-          <span class="chip scope">{{ scopeLabels[row.scope] ?? row.scope }}</span>
-          <span class="chip kind">{{ row.kind }}</span>
-          <span v-if="row.origin === 'user'" class="chip mine">
-            {{ row.editedAt ? t("memory.changedByUser") : t("memory.writtenByUser") }}
+    <ul v-else class="grid">
+      <li v-for="row in rows" :key="row.id" class="memory-card">
+        <button
+          class="memory-card-main"
+          type="button"
+          :title="t('memory.open')"
+          @click="openEntry(row)"
+        >
+          <span class="memory-title">{{ titleFor(row) }}</span>
+          <span class="entry-chips">
+            <span class="chip scope">{{ scopeLabels[row.scope] ?? row.scope }}</span>
+            <span class="chip kind">{{ row.kind }}</span>
+            <span v-if="row.origin === 'user'" class="chip mine">
+              {{ row.editedAt ? t("memory.changedByUser") : t("memory.writtenByUser") }}
+            </span>
           </span>
+          <span class="memory-preview">{{ row.text }}</span>
+        </button>
+        <div class="memory-foot">
           <span class="when">{{ formatDate(row.editedAt ?? row.createdAt) }}</span>
-          <button
-            class="mini"
-            type="button"
-            :title="t('memory.edit')"
-            @click="startEdit(row)"
-          >
+          <button class="mini" type="button" :title="t('memory.edit')" @click="startEdit(row)">
             <Icon name="pencil" :size="12" />
           </button>
-          <button
-            class="mini"
-            type="button"
-            :title="t('memory.retire')"
-            @click="retire(row.id)"
-          >
+          <button class="mini" type="button" :title="t('memory.retire')" @click="retire(row.id)">
             <Icon name="x" :size="12" />
           </button>
         </div>
-
-        <template v-if="editingId === row.id">
-          <textarea v-model="draft" class="editor" rows="2"></textarea>
-          <div class="editor-actions">
-            <button class="mini-text" type="button" @click="cancelEdit">
-              {{ t("memory.cancel") }}
-            </button>
-            <button class="mini-text primary" type="button" @click="saveEdit(row.id)">
-              {{ t("memory.save") }}
-            </button>
-          </div>
-        </template>
-        <p v-else class="text">{{ row.text }}</p>
       </li>
     </ul>
 
@@ -270,6 +315,73 @@ onMounted(() => {
         </li>
       </ul>
     </section>
+
+    <!-- The full text floats above the grid: opening an entry must not push the cards
+         below it around, and the list can stay dense. -->
+    <Teleport to="body">
+      <div v-if="selected" class="modal-backdrop" @click.self="closeEntry">
+        <div class="modal" role="dialog" aria-modal="true">
+          <header class="modal-head">
+            <div class="modal-heading">
+              <h3 class="modal-title">{{ titleFor(selected) }}</h3>
+              <div class="entry-chips">
+                <span class="chip scope">{{ scopeLabels[selected.scope] ?? selected.scope }}</span>
+                <span class="chip kind">{{ selected.kind }}</span>
+                <span v-if="selected.origin === 'user'" class="chip mine">
+                  {{
+                    selected.editedAt
+                      ? t("memory.changedByUser")
+                      : t("memory.writtenByUser")
+                  }}
+                </span>
+              </div>
+            </div>
+            <button class="mini" type="button" :title="t('common.close')" @click="closeEntry">
+              <Icon name="x" :size="14" />
+            </button>
+          </header>
+
+          <div v-if="editing" class="modal-body">
+            <input
+              v-model="draftTitle"
+              class="title-input"
+              type="text"
+              :maxlength="TITLE_MAX"
+              :placeholder="t('memory.titlePlaceholder')"
+            />
+            <textarea v-model="draftText" class="editor" rows="8"></textarea>
+          </div>
+          <div v-else class="modal-body full">{{ selected.text }}</div>
+
+          <footer class="modal-foot">
+            <template v-if="editing">
+              <button class="mini-text" type="button" @click="cancelEdit">
+                {{ t("memory.cancel") }}
+              </button>
+              <button
+                class="mini-text primary"
+                type="button"
+                :disabled="!draftText.trim()"
+                @click="saveEdit"
+              >
+                {{ t("memory.save") }}
+              </button>
+            </template>
+            <template v-else>
+              <span class="modal-date">
+                {{ formatDate(selected.editedAt ?? selected.createdAt) }}
+              </span>
+              <button class="mini-text" type="button" @click="startEdit(selected)">
+                {{ t("memory.edit") }}
+              </button>
+              <button class="mini-text" type="button" @click="retire(selected.id)">
+                {{ t("memory.retire") }}
+              </button>
+            </template>
+          </footer>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -488,5 +600,199 @@ onMounted(() => {
 
 .retired .note {
   margin-bottom: 8px;
+}
+
+.title-input {
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.title-input:focus,
+.editor:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.counter {
+  margin-right: auto;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+/* The list is a grid so the width of the settings page is used instead of one tall
+   column. Each card carries a heading, a short preview and the actions. */
+.grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+
+.memory-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  overflow: hidden;
+}
+
+.memory-card-main {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+  padding: 11px 12px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.memory-card-main:hover {
+  background: var(--bg-hover);
+}
+
+.memory-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.entry-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.memory-preview {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.memory-foot {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px 5px 12px;
+  border-top: 1px solid var(--border);
+}
+
+/* The whole text floats above the grid. */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background: rgb(0 0 0 / 55%);
+}
+
+.modal {
+  display: flex;
+  flex-direction: column;
+  width: min(760px, 100%);
+  max-height: min(82vh, 760px);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--bg-panel);
+  box-shadow: 0 24px 70px rgb(0 0 0 / 55%);
+  overflow: hidden;
+}
+
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.modal-title {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 16px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  padding: 16px 18px;
+  overflow-y: auto;
+}
+
+.modal-body.full {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.modal-body .editor {
+  flex: 1;
+  min-height: 180px;
+}
+
+.modal-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+}
+
+.modal-date {
+  margin-right: auto;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+@media (max-width: 700px) {
+  .modal-backdrop {
+    padding: 12px;
+  }
 }
 </style>

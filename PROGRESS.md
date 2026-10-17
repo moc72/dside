@@ -1672,3 +1672,258 @@ der Nutzer setzt das Budget selbst. Die Anzeige wächst mit der Überschreitung
 Smoke-Test auf dem zweiten Linux-Rechner → README-Abschnitt „Known limitations"
 (kein Editor-/Browser-Zugriff des Begleiters) → `v0.4.8` taggen → Draft `v0.4.7`
 löschen. Windows/macOS nur über die CI-Artefakte (kein Testgerät).
+
+## 37. Die Oberfläche folgt dem Begleiter (2026-10-17, sechzehnte Runde)
+
+Umgesetzt ist das erste der beiden in §35/§36 notierten Vorhaben. Kein Commit — die
+Änderungen liegen im Baum und sind mit `pnpm build`, `cargo check` und den 24
+Rust-Tests geprüft.
+
+### Was passiert
+`tool_start` auf `write` oder `edit` öffnet die Datei im Datei-Tab (Vorschau oder
+Monaco, wie der Typ es hergibt) und lässt den Tab kurz aufleuchten (`pulseTab`,
+1,8 s). `tool_result` desselben Werkzeugs erhöht `fileRevision`; der Tab liest die
+Datei daraufhin neu — ohne das hätte man den Stand *vor* dem Schreiben gesehen,
+weil der Pfad sich ja nicht ändert. `web_fetch` navigiert das zuletzt benutzte
+Browser-Fenster auf die URL. `read`, `glob` und `grep` bleiben Chips; `bash`
+ebenfalls, das Terminal-Panel fehlt noch.
+
+### Kein Fokusklau
+Es wird nirgends `focus()` gerufen; der Cursor bleibt im Composer. Für den Browser
+gibt es jetzt den optionalen Parameter `focus` an `open_browser_window`
+(Standard `true` für alle bisherigen Aufrufer). Beim Folgen wird `false`
+übergeben: das Fenster öffnet bzw. navigiert, drängt sich aber nicht nach vorn.
+
+### Schalter
+`settings.followCompanion` (Standard `an`), als Augensymbol rechts in der
+Tab-Leiste und als Schalter unter Einstellungen → Allgemein. Aus heißt: nur die
+Chips im Gespräch, kein Tab, kein Browser. Pfade werden relativ zum
+Arbeitsverzeichnis aufgelöst (`resolveWorkspacePath`), absolute Pfade bleiben.
+
+### Dateien
+- `src/composables/useFollow.ts` (neu): Argumente lesen, Pfad auflösen, Tab/Browser
+  folgen lassen, Pfad je Werkzeug-ID bis zum Ergebnis merken.
+- `src/stores/workArea.ts`: `fileRevision`, `refreshFile`, `attentionTabId`,
+  `pulseTab`.
+- `src/composables/useEngine.ts`: Aufrufe an den beiden Ereignisstellen.
+- `src/components/workarea/ViewFileTab.vue`: Reload-Watcher für Text, Bilder und
+  Office-Vorschauen; Markdown-Ansicht springt bei neuem Pfad zurück auf Vorschau.
+- `src/components/workarea/WorkArea.vue`: Augenschalter, Puls-Animation.
+- `src-tauri/src/browser.rs`: `focus`-Parameter.
+- i18n in allen sechs Sprachen, `Icon.vue` (Auge/Auge durchgestrichen),
+  `SettingsPage.vue`, `stores/settings.ts`.
+
+### Als Nächstes
+Punkte-/Vertrauenssystem (Name gewählt, aber erst ab einer Punktzahl enthüllt),
+danach Budgetanzeige im Seitenmenü.
+
+## 38. Flüssiger streamen, Denken zuklappen, Namen begründen (2026-10-17, siebzehnte Runde)
+
+Reaktion auf den Zwischenbericht: Das Tippen im Gespräch hakt, leere Blöcke wandern
+über den Bildschirm, und die Denk-Anzeige hängt. Kein Commit; geprüft mit
+`pnpm build` und den 24 Rust-Tests.
+
+### Warum es hakte
+`MessageList` wurde bei *jedem* gestreamten Bruchstück komplett neu gerendert — und
+rief für **jede** fertige Nachricht erneut `renderMarkdown` samt DOMPurify auf. Bei
+einer langen Unterhaltung war das quadratisch viel Arbeit pro Token. Dazu war der
+Denk-Block während des Streamens aufgeklappt: jeder neue Satz erzwang ein neues
+Layout eines ohnehin schon langen, mitgescrollten Textes. Die „leeren Prompts" waren
+genau dieser noch leere, offene Denk-Kasten am Anfang eines Zuges.
+
+### Was jetzt anders ist
+- **`MarkdownText.vue`**: eigener Baustein mit gecachtem `computed`. Der Parent darf
+  weiter rendern; nur der Block, dessen Text sich wirklich geändert hat, wird neu
+  geparst und saniert. Die Text-Stile sind mit umgezogen (auch die Nutzerblase).
+- **Sammelpuffer in `useEngine.ts`**: Text- und Denk-Brüche werden 40 ms lang
+  gesammelt und in ihrer Reihenfolge an den Store gegeben. Jedes Ereignis, das die
+  Zeitleiste ändert (Werkzeugstart/-ende, Fehler, `action_required`, `turn_end`),
+  leert den Puffer vorher — ein Werkzeug-Chip kann also nicht über Text rutschen,
+  der vorher geschrieben wurde. Beim Sitzungswechsel und vor einem neuen Zug wird
+  ebenfalls geleert. 40 ms sind unter der Wahrnehmungsschwelle, sparen aber den
+  größten Teil der Renderarbeit.
+- **Denken bleibt zu**: `<details>` ohne `open`-Bindung; solange der Zug läuft, wird
+  ein Aufklappen per `toggle` sofort zurückgenommen. In der Kopfzeile steht live die
+  Anzahl der gedachten Zeichen (aus dem gepufferten Text, nicht geschätzt). Erst nach
+  `turn_end` lässt sich der Block normal öffnen. Der Zähler bleibt sichtbar.
+- Neue i18n-Zeichenkette `message.characters` in allen sechs Sprachen.
+
+### Namen: wann und warum
+`choose_name` verlangt jetzt zusätzlich `reason` (ein Satz). Nach erfolgreicher Wahl
+schreibt der Rust-Teil automatisch einen Gedächtniseintrag (`kind = "event"`,
+`scope = "agent"`, Quelle `choose_name`) mit dem lokalen Datum im Text — die Zeit
+steht zusätzlich im `created_at` der Zeile, also im Gedächtnis-Panel. Damit kann ein
+späterer Thread nicht mehr nur den Namen vorfinden, sondern auch „wann" und „warum".
+(`Db::today` liefert dafür `date('now','localtime')`.) Für die bereits gewählten Namen (Ziggy,
+davor Nathaniel und Eira) ist der Grund nicht rekonstruierbar — die vorhandene
+Notiz sagt das ehrlich; erfunden wird nichts. `reason` fehlt → das Werkzeug antwortet
+mit einer Erklärung statt die Wahl ohne Begründung zu speichern.
+
+### Offen / als Nächstes
+Punkte-/Vertrauenssystem und Budgetanzeige; danach der Smoke-Test für `v0.4.8`.
+
+## 39. Schmales Fenster: erst die Leiste, dann der Arbeitsbereich (2026-10-17, achtzehnte Runde)
+
+Der Build bei Mindestbreite zeigte abgeschnittene Composer-Bedienelemente („Volle
+Berechtigung" brach senkrecht um, das Modellfeld lief aus der Blase) und eine
+gequetschte Mitte. Reine Mindestgrößen helfen dort nicht; die Breite muss sich
+anders verteilen. Kein Commit; `pnpm build` grün.
+
+### Reihenfolge
+Wie vom Nutzer vorgeschlagen, aber mit eigener, nicht gespeicherter Zustandsebene:
+- `railAuto` und `workAuto` (in `stores/ui.ts`) bedeuten „gerade kein Platz", nicht
+  „vom Nutzer weggeschaltet". Die manuellen Flags (`railCollapsed`, `visible`)
+  bleiben unangetastet und werden weiter gespeichert.
+- `useResponsiveLayout.ts` misst beim Start und bei jedem Fenster-`resize` die
+  tatsächliche Mitte: erst verschwindet die linke Leiste, wenn die Mitte unter
+  720 px fällt; reicht es dann immer noch nicht (unter 640 px), verschwindet der
+  Arbeitsbereich. Zum Zurückholen sind die Schwellen höher (780/700 px), damit ein
+  Fenster auf der Kante nicht flackert.
+- Ein Klick auf die Leisten- oder Panel-Schaltfläche setzt das Auto-Flag zurück:
+  wer das Panel bei schmalem Fenster ausdrücklich öffnet, bekommt es. Beim nächsten
+  Resize gilt wieder die Regel.
+- `openTab`/`openFile`/`showWorkArea` räumen `workAuto` ebenfalls ab — ein per
+  Begleiter geöffneter File-Tab soll sichtbar sein.
+
+### Composer und Spalte
+- Gemeinsame Lese-Spalte als CSS-Variable am Agenten:
+  `--chat-width: min(100%, max(70%, 520px), 860px)`. Auf weiten Fenstern bleibt es
+  bei 70 %, auf schmalen wird die Spalte nicht mehr unter 520 px gedrückt; bei sehr
+  breiten Fenstern begrenzt sie sich auf 860 px. Liste und Composer benutzen
+  dieselbe Variable (Composer weiterhin 6 px schmaler wegen der Scrollbar-Reserve).
+- `.composer` ist jetzt ein Container (`container-type: inline-size`). Unter 440 px
+  eigener Breite verschwindet nur das Label von „Volle Berechtigung" (Icon und
+  Klickziel bleiben), das Modellfeld schrumpft auf 118 px. Das Label kann nicht
+  mehr senkrecht umbrechen (`nowrap` + Ellipse), linke und rechte Gruppe dürfen
+  schrumpfen (`min-width: 0`).
+- Titelzeile: Editor-Beschriftung verschwindet unter 980 px (Logo + Chevron bleiben),
+  der Sitzungstitel ist auf `min(420px, 40vw)` begrenzt.
+- `tauri.conf.json`: `minWidth` 960 → 780. Bei 780 px sind beide Panels automatisch
+  weg, die Mitte hat ~760 px; ab ~795 px bleibt der Arbeitsbereich, ab ~1100 px
+  kommt die Leiste zurück.
+
+### Vom Nutzer am Splash
+Der Wal wächst jetzt gleichmäßig (Schwanz und Maul erreichen den Rand zusammen),
+ist auf 1,85 statt 2,05 skaliert, sitzt mit `top: 40px; right: 10px` und die
+Splash-Leiste nutzt `--accent-whale` (#0aaac2) statt `--accent`. Unverändert
+übernommen.
+
+### Offen
+Sichtprüfung bei 780/960/1100 px durch den Nutzer; Rust-Neustart nötig für
+`minWidth` (Fensterkonfiguration) sowie die früheren Rust-Änderungen.
+
+## 40. Dateibaum tritt zur Seite, Adresszeile bleibt (2026-10-17, neunzehnte Runde)
+
+Drei Wünsche aus der Sichtprüfung des Datei-Tabs. Kein Commit; `pnpm build` grün.
+
+### Dateibaum nach der Auswahl ausblenden
+`ViewFileTab` merkt sich jetzt `fileTreeVisible` im WorkArea-Store (und damit in
+`ui.workarea`, also über Neustarts hinweg). Nach einem Klick auf eine Datei im Baum
+startet ein 2-s-Timer; läuft er ab, setzt er die Sichtbarkeit auf `false`. Der
+Übergang selbst ist CSS: `.viewfile` animiert `grid-template-columns` von
+`minmax(0,1fr) 220px` auf `minmax(0,1fr) 0px` (260 ms), die Leiste blendet dabei
+aus. Wird in der Zwischenzeit eine andere Datei gewählt, beginnt der Timer neu; wird
+ein Ordner auf-/zugeklappt, wird er abgebrochen — wer den Baum benutzt, soll ihn
+nicht unter der Hand verlieren. Das Ausblenden ist reine Anzeige: der Baum bleibt
+montiert (`inert`, `aria-hidden`), Monaco bekommt durch `automaticLayout` die neue
+Breite.
+
+### Begleiter öffnet keine Bäume mehr
+Der Auto-Hide hängt nur an `select()` im Dateibaum. `openFile` (auch aus
+`useFollow`) und `fileRevision` fassen die Sichtbarkeit nicht an. War der Baum zu,
+bleibt er zu, wenn der Begleiter eine Datei schreibt; war er offen, bleibt er offen.
+
+### Feste Adresszeile auch für Code
+Die `.viewer-bar` wird jetzt für jede Datei gerendert, nicht nur für Markdown und
+Binärformate. Bei Markdown stehen links „Vorschau/Quelle", rechts der Pfad und der
+neue Baum-Schalter; bei Code (Monaco) bleibt die Zeile stehen, während der Editor
+scrollt. Der frühere schwebende „Baum einblenden"-Knopf über dem Editor ist weg —
+der Schalter sitzt am rechten Ende der Zeile und zeigt den Zustand (Akzentfarbe,
+wenn der Baum offen ist). Damit verschwindet nichts mehr beim Scrollen, und der
+Pfad ist immer sichtbar.
+
+### Offen
+Sichtprüfung durch den Nutzer (2-s-Verzögerung, Animation, Monaco-Breite).
+
+## 41. Auch Lesen blendet den Editor ein (2026-10-17, zwanzigste Runde)
+
+Der Begleiter konnte den Browser folgen lassen, aber keinen Editor öffnen. Ursache
+war keine kaputte Verdrahtung: `useFollow` behandelte nur `write` und `edit`;
+„zeig mir diese Datei" erledigt der Begleiter aber mit `read`, und das war bewusst
+nur ein Chip. Damit blieb die Asymmetrie zum Browser, der über `web_fetch` folgt.
+
+Jetzt öffnen auch `read`-Aufrufe die Datei im Datei-Tab (Vorschau oder Monaco je
+Typ) und lassen den Tab kurz aufleuchten. `write`/`edit` merken sich den Pfad
+weiterhin bis zum Ergebnis, damit die Vorschau den neuen Inhalt lädt; bei `read`
+wird nichts nachgeladen, weil sich nichts geändert hat. `glob`, `grep` und `bash`
+bleiben Chips — sie beschreiben eine Suche, kein Dokument.
+
+Folge: Wer den Begleiter beim Durchsuchen vieler Dateien beobachtet, sieht den Tab
+öfter wechseln. Dafür ist das Augensymbol in der Tab-Leiste da; aus heißt aus.
+`pnpm build` grün, kein Commit.
+
+## 42. Erinnerungen als Karten, Titel und ein weicherer Hinweis (2026-10-17, einundzwanzigste Runde)
+
+Kein Commit; `pnpm build` grün, 24 Rust-Tests grün. Der Begleiter öffnet jetzt auch
+gelesene Dateien — vom Nutzer bestätigt.
+
+### Titel für Erinnerungen
+Die `memories`-Tabelle hat eine Spalte `title` bekommen (Migration, alte Zeilen
+bleiben `NULL`). Höchstens 120 Zeichen; `clean_title` faltet Weißraum und kürzt mit
+Ellipse. `insert_memory_with_title` legt den Titel mit an und leitet ihn, wenn keiner
+kommt, aus der ersten Zeile des Textes ab (`derive_title`). Das `memory`-Werkzeug hat
+ein optionales `title`-Feld für `add` und `update`; die Befehle `memory_add` und
+`memory_update` reichen es durch. Der Name-Eintrag aus §38 bekommt seinen Titel
+automatisch aus der Notiz.
+
+### Karten statt Wand
+`MemoryPanel.vue`: Eingabe mit Titelzeile (Zähler 0/120) und Text. Die Liste ist ein
+Raster (`auto-fill`, min. 260 px), jede Karte zeigt Titel (zwei Zeilen), Chips, eine
+dreizeilige Vorschau und die Aktionen. Ein Klick öffnet ein modal über der Seite
+(`Teleport to body`) mit vollem Text, Datum, Bearbeiten und Stilllegen; nichts
+darunter verschiebt sich. Bearbeiten wechselt im Modal auf Titel + Text; Esc und
+Klick auf den Hintergrund schließen. Alte Einträge ohne Titel zeigen ihre erste
+Zeile als Überschrift. Eine Suche ist bewusst noch nicht drin — später.
+
+### Hinweis und Sprache
+„Der Agent ist KI und kann Fehler machen." ist jetzt in allen sechs Sprachen
+„Auch KI-Begleiter können mal einen Fehler machen!" (bzw. „AI companions can make
+mistakes too!", „Les compagnons IA peuvent eux aussi faire des erreurs !",
+„¡Los compañeros de IA también pueden cometer errores!", „ИИ-собеседники тоже иногда
+ошибаются!", „AI 伴侣也会犯错！").
+
+Aus der Begriffssammlung übernommen, jeweils in der Begleiter-Seite (Hinweis und
+Tagline): Deutsch „KI-Begleiter", Französisch „compagnon IA", Spanisch „compañero de
+IA", Russisch „ИИ-собеседник", Chinesisch „AI 伴侣". Englisch entsprechend „AI
+companion". Die kurzen Einstellungs-Labels bleiben unverändert.
+
+### Offen
+Sichtprüfung des Rasters/Modals durch den Nutzer; die Suche kommt später.
+
+## 43. v0.4.8 (2026-10-17, zweiundzwanzigste Runde)
+
+Der Nutzer hat den Stand geprüft und nichts mehr gefunden; daraus wird die
+Veröffentlichung. Enthalten sind die Runden 37–42:
+
+- Oberfläche folgt dem Begleiter: `write`/`edit` und jetzt auch `read` öffnen Dateien
+  (Markdown-Vorschau oder Monaco), `web_fetch` den Browser — mit Augenschalter, ohne
+  Fokusklau; der Dateibaum tritt nach der Auswahl zur Seite und bleibt beim
+  Begleiter-Schreibzugriff zu.
+- Flüssigeres Streamen: gepufferte Brüche (40 ms), `MarkdownText` mit gecachtem
+  Rendering, Denken bleibt während des Zuges zu und zeigt die Zeichenzahl.
+- Schmales Fenster: linke Leiste zuerst, dann der Arbeitsbereich (Auto-Flags,
+  Hysterese), gemeinsame Lese-Spalte (min. 520 px), Composer-Container-Query,
+  `minWidth` 780.
+- Erinnerungen: Titel (max. 120 Zeichen), Kartenraster, Modal, Bearbeiten von Titel
+  und Text; Migration `memories.title`; `title` im `memory`-Werkzeug.
+- Namen: `choose_name` verlangt eine Begründung und legt sie datiert im Gedächtnis ab.
+- Weichere Formulierung in allen sechs Sprachen („Auch KI-Begleiter können mal einen
+  Fehler machen!"), Begleiter-Begriffe aus der Sammlung übernommen.
+- README: Follow-Modus und Abschnitt „Known limitations"; Version in
+  `package.json`, `Cargo.toml`, `tauri.conf.json` und `Cargo.lock` = 0.4.8.
+
+Test: `pnpm build` grün, 24 Rust-Tests grün. Tag `v0.4.8` löst den Release-Workflow
+aus (verify → Linux/macOS/Windows → Draft-Release mit Artefakten). Der alte Draft
+`v0.4.7` wird danach gelöscht.
+
+`docs/markdown-test.md` bleibt als lokale Testdatei unversioniert.

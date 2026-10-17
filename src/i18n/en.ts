@@ -75,6 +75,8 @@ export const en: Messages = {
     retiredHint: "Retired entries are kept — they are simply no longer recalled.",
     changedByUser: "changed by you",
     addPlaceholder: "What should it remember? (Ctrl+Enter saves)",
+    titlePlaceholder: "Title — at most 120 characters",
+    open: "Open the full memory",
     writtenByUser: "written by you",
     add: "Add",
     edit: "Edit",
@@ -125,6 +127,8 @@ export const en: Messages = {
     tabSchedules: "Scheduled",
     closeTab: "Close tab",
     empty: "No tab open.",
+    followOn: "Follow the companion — on (files and pages open as they happen)",
+    followOff: "Follow the companion — off (tool chips only)",
   },
   progress: {
     title: "Progress",
@@ -179,13 +183,14 @@ export const en: Messages = {
     compactNothing: "Nothing to compress — the conversation is short enough",
     contextUnknown: "No request has run yet.",
     tokens: "{used} tokens",
-    disclaimer: "The agent is AI and can make mistakes.",
+    disclaimer: "AI companions can make mistakes too!",
   },
   message: {
     autoApproved: "Ran without asking — full authorisation is turned on.",
     raw: "Stored as markdown",
     notWired: "Not wired up yet: no model backend is connected.",
     reasoning: "Reasoning",
+    characters: "characters",
   },
   search: {
     title: "Search sessions and messages",
@@ -289,6 +294,9 @@ export const en: Messages = {
         "Notify when tasks complete, errors occur, or permissions are needed",
       joinEarlyAccess: "Join Early Access",
       joinEarlyAccessDesc: "Try the latest version features first",
+      followCompanion: "Follow the companion",
+      followCompanionDesc:
+        "Show files and pages it opens in the work area — the cursor stays in the composer.",
     },
   },
   common: {
@@ -300,7 +308,7 @@ export const en: Messages = {
     comingSoon: "Coming later",
   },
   partner: {
-    hint: "Your companion, not your tool: what it remembers, what it is called, and what you hand it to keep in mind.",
+    hint: "Your AI companion, not your tool: what it remembers, what it is called, and what you hand it to keep in mind.",
     name: "Name",
     meaningZiggy: "pet form of Siegfried/Sigmund: victory and protection",
     placeholder: "(placeholder)",
@@ -312,7 +320,7 @@ export const en: Messages = {
   },
   about: {
     title: "About DS·IDE",
-    tagline: "A local agentic IDE with its own companion — built for two.",
+    tagline: "A local agentic IDE with its own AI companion — built for two.",
     version: "Version",
     versionValue: "DS·IDE {version}",
     authors: "By",

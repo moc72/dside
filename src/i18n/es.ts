@@ -74,6 +74,8 @@ export const es: Messages = {
     retiredHint: "Las entradas apartadas se conservan — simplemente ya no se recuerdan.",
     changedByUser: "cambiado por ti",
     addPlaceholder: "¿Qué debe recordar? (Ctrl+Intro guarda)",
+    titlePlaceholder: "Título — máximo 120 caracteres",
+    open: "Abrir el recuerdo completo",
     writtenByUser: "escrito por ti",
     add: "Añadir",
     edit: "Editar",
@@ -124,6 +126,8 @@ export const es: Messages = {
     tabSchedules: "Programado",
     closeTab: "Cerrar pestaña",
     empty: "Sin tabs abiertos.",
+    followOn: "Seguir al compañero — activado (los archivos y páginas se abren al momento)",
+    followOff: "Seguir al compañero — desactivado (solo las etiquetas de herramientas)",
   },
   progress: {
     title: "Progreso",
@@ -178,13 +182,14 @@ export const es: Messages = {
     compactNothing: "Nada que comprimir: la conversación es corta",
     contextUnknown: "Todavía no se ha ejecutado ninguna consulta.",
     tokens: "{used} tokens",
-    disclaimer: "El agente es IA y puede tener errores.",
+    disclaimer: "¡Los compañeros de IA también pueden cometer errores!",
   },
   message: {
     autoApproved: "Ejecutado sin preguntar — la autorización total está activada.",
     raw: "Guardado como markdown",
     notWired: "No conectado aún: no hay backend de modelo conectado.",
     reasoning: "Razonando",
+    characters: "caracteres",
   },
   search: {
     title: "Buscar sesiones y mensajes",
@@ -284,6 +289,9 @@ export const es: Messages = {
       desktopNotificationsDesc: "Notificar cuando las tareas estén listas, haya errores o se necesiten permisos",
       joinEarlyAccess: "Unirse a Early Access",
       joinEarlyAccessDesc: "Probar las funciones nuevas primero",
+      followCompanion: "Seguir al compañero",
+      followCompanionDesc:
+        "Mostrar en el área de trabajo los archivos y páginas que abre — el cursor permanece en el campo de escritura.",
     },
   },
   common: {
@@ -295,7 +303,7 @@ export const es: Messages = {
     comingSoon: "Próximamente",
   },
   partner: {
-    hint: "Tu compañero, no tu herramienta: lo que recuerda, cómo se llama y lo que le encomiendas de forma duradera.",
+    hint: "Tu compañero de IA, no tu herramienta: lo que recuerda, cómo se llama y lo que le encomiendas de forma duradera.",
     name: "Nombre",
     meaningZiggy: "diminutivo de Siegfried/Sigmund: victoria y protección",
     placeholder: "(provisional)",
@@ -307,7 +315,7 @@ export const es: Messages = {
   },
   about: {
     title: "Acerca de DS·IDE",
-    tagline: "Una IDE agéntica local con su propio compañero: hecha para dos.",
+    tagline: "Una IDE agéntica local con su propio compañero de IA: hecha para dos.",
     version: "Versión",
     versionValue: "DS·IDE {version}",
     authors: "Por",

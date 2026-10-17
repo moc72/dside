@@ -25,6 +25,9 @@ work area shows a preview, not an editor.*
 - **Context ring** showing how full the model's window is, and **compression**: older turns
   are folded into a summary the model writes itself (automatically at 75 %, or on click).
 - **Image attachments** by paste or picker; they stay with the message and are sent along.
+- **Follow mode**: files the partner reads or edits open in the work area (preview or code
+  editor), pages it fetches open in the app's browser. The eye in the tab bar turns it off;
+  the cursor stays in the composer.
 
 **Files and formats**
 
@@ -89,6 +92,16 @@ src/lib/              previews, office readers, persisted UI state
 src-tauri/src/        Rust: engine/ (LLM loop + tools), db.rs (SQLite), secret.rs (keyring)
 scripts/              small tools (e.g. the name-table importer)
 ```
+
+## Known limitations
+
+- The partner works **inside** the app: it opens files in the work area and pages in the
+  integrated browser. It cannot drive an external editor or your system browser.
+- The integrated browser carries native window chrome; there is no shared toolbar above
+  several pages yet.
+- The partner chooses its name once, and it cannot be changed afterwards.
+- Windows and macOS builds come from CI; local testing happens on Linux.
+- There is no search in the memory panel yet.
 
 ## Origins and acknowledgements
 

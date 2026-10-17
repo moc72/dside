@@ -24,6 +24,7 @@ import { EVERYDAY_DISABLED_TOOLS, everydayMode } from "../engine/mode";
 import { partnerName, refreshPartnerName } from "../stores/partner";
 import { loadModels, modelChoices } from "../stores/models";
 import { saveUiState } from "../lib/uiState";
+import { followToolResult, followToolStart } from "./useFollow";
 import { t } from "../i18n";
 
 interface DbSessionRow {
@@ -116,6 +117,45 @@ export async function clearApiKey(): Promise<void> {
 
 let unlisten: (() => void) | null = null;
 
+/**
+ * Stream chunks are collected briefly before they reach the store: the provider sends
+ * dozens per second, and each one used to re-render the whole conversation and re-parse
+ * every finished answer as markdown. Forty milliseconds is below noticing and cuts the
+ * work by an order of magnitude.
+ */
+const STREAM_FLUSH_MS = 40;
+
+let streamBuffer: { kind: "text" | "reasoning"; text: string }[] = [];
+let streamTimer: number | undefined;
+
+function queueChunk(kind: "text" | "reasoning", chunk: string): void {
+  const last = streamBuffer[streamBuffer.length - 1];
+  if (last?.kind === kind) last.text += chunk;
+  else streamBuffer.push({ kind, text: chunk });
+  if (streamTimer === undefined) {
+    streamTimer = window.setTimeout(flushStream, STREAM_FLUSH_MS);
+  }
+}
+
+/**
+ * Hands the buffer over in its original order. Every event that changes the timeline calls
+ * this first, so a tool chip can never appear above text that was written before it.
+ */
+function flushStream(): void {
+  if (streamTimer !== undefined) {
+    window.clearTimeout(streamTimer);
+    streamTimer = undefined;
+  }
+  if (streamBuffer.length === 0) return;
+  const chunks = streamBuffer;
+  streamBuffer = [];
+  for (const chunk of chunks) {
+    if (chunk.kind === "text") appendAssistantDelta(chunk.text);
+    else appendAssistantReasoning(chunk.text);
+  }
+}
+
+
 export async function configureEngine(): Promise<void> {
   await invoke("engine_set_config", {
     config: {
@@ -155,12 +195,13 @@ function handleEvent(event: EngineEvent): void {
 
   switch (event.kind) {
     case "stream":
-      if (event.text) appendAssistantDelta(event.text);
+      if (event.text) queueChunk("text", event.text);
       break;
     case "reasoning":
-      if (event.text) appendAssistantReasoning(event.text);
+      if (event.text) queueChunk("reasoning", event.text);
       break;
     case "tool_start":
+      flushStream();
       if (event.tool) {
         upsertToolActivity({
           id: event.tool.id,
@@ -168,10 +209,13 @@ function handleEvent(event: EngineEvent): void {
           arguments: event.tool.arguments,
           running: true,
         });
+        followToolStart(event.tool.id, event.tool.name, event.tool.arguments);
       }
       break;
     case "tool_result":
+      flushStream();
       if (event.tool) {
+        followToolResult(event.tool.id);
         upsertToolActivity({
           id: event.tool.id,
           name: event.tool.name,
@@ -184,6 +228,7 @@ function handleEvent(event: EngineEvent): void {
       }
       break;
     case "error":
+      flushStream();
       lastError.value = event.error ?? "unknown engine error";
       // A turn can fail before its first token (a rejected request, a missing key). Without
       // this the error had no bubble to land in — a scheduled run failed silently.
@@ -193,6 +238,7 @@ function handleEvent(event: EngineEvent): void {
       running.value = false;
       break;
     case "action_required":
+      flushStream();
       pendingAction.value = event.action ?? null;
       break;
     case "title": {
@@ -213,6 +259,7 @@ function handleEvent(event: EngineEvent): void {
       break;
 
     case "turn_end":
+      flushStream();
       endAssistantMessage(event.stopReason);
       pendingAction.value = null;
       running.value = false;
@@ -337,11 +384,13 @@ function timelineFor(row: DbHistoryRow, tools: ToolActivity[]): MessagePart[] {
 }
 
 export async function openSession(sessionId: string): Promise<void> {
+  flushStream();
   selectSession(sessionId);
   await loadHistory(sessionId);
 }
 
 export async function createSession(): Promise<void> {
+  flushStream();
   const id = `s${Date.now()}`;
   await invoke("session_create", { id, title: "", workspace: settings.workspace });
   await loadSessions();
@@ -362,6 +411,7 @@ export async function sendPrompt(
 ): Promise<void> {
   if (running.value) return;
   lastError.value = null;
+  flushStream();
 
   await configureEngine();
   if (!engineReady.value) {

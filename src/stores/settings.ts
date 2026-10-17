@@ -11,6 +11,8 @@ export interface SettingsState {
   desktopNotifications: boolean;
   joinEarlyAccess: boolean;
   fullAuthorization: boolean;
+  /** Let the work area follow files and pages the companion opens. */
+  followCompanion: boolean;
   pinnedEditorId: string | null;
   workspace: string;
   baseUrl: string;
@@ -46,6 +48,7 @@ const PERSISTED_KEYS: (keyof SettingsState)[] = [
   "desktopNotifications",
   "joinEarlyAccess",
   "fullAuthorization",
+  "followCompanion",
   "pinnedEditorId",
   "workspace",
   "baseUrl",
@@ -66,6 +69,7 @@ const defaults: SettingsState = {
   desktopNotifications: false,
   joinEarlyAccess: false,
   fullAuthorization: true,
+  followCompanion: true,
   pinnedEditorId: null,
   workspace: "",
   baseUrl: "https://api.deepseek.com",

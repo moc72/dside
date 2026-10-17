@@ -75,6 +75,8 @@ export const ru: Messages = {
     retiredHint: "Отложенные записи сохраняются — они просто больше не вспоминаются.",
     changedByUser: "изменено тобой",
     addPlaceholder: "Что запомнить? (Ctrl+Enter сохраняет)",
+    titlePlaceholder: "Заголовок — не более 120 символов",
+    open: "Открыть воспоминание полностью",
     writtenByUser: "написано тобой",
     add: "Добавить",
     edit: "Изменить",
@@ -125,6 +127,8 @@ export const ru: Messages = {
     tabSchedules: "Запланировано",
     closeTab: "Закрыть вкладку",
     empty: "Вкладка не открыта.",
+    followOn: "Следовать за спутником — вкл. (файлы и страницы открываются сразу)",
+    followOff: "Следовать за спутником — выкл. (только метки инструментов)",
   },
   progress: {
     title: "Прогресс",
@@ -179,13 +183,14 @@ export const ru: Messages = {
     compactNothing: "Сжимать нечего — разговор ещё короткий",
     contextUnknown: "Запросов ещё не было.",
     tokens: "{used} токенов",
-    disclaimer: "Агент является ИИ и может ошибаться.",
+    disclaimer: "ИИ-собеседники тоже иногда ошибаются!",
   },
   message: {
     autoApproved: "Выполнено без запроса — включено «полное разрешение».",
     raw: "Хранится как markdown",
     notWired: "Не подключено: нет подключенного бэкенда модели.",
     reasoning: "Думание",
+    characters: "символов",
   },
   search: {
     title: "Поиск сессий и сообщений",
@@ -285,6 +290,9 @@ export const ru: Messages = {
       desktopNotificationsDesc: "Уведомлять о завершении задач, ошибках или необходимости разрешений",
       joinEarlyAccess: "Присоединиться к Early Access",
       joinEarlyAccessDesc: "Первые попробовать новые функции",
+      followCompanion: "Следовать за спутником",
+      followCompanionDesc:
+        "Показывать в рабочей области файлы и страницы, которые он открывает, — курсор остаётся в поле ввода.",
     },
   },
   common: {
@@ -296,7 +304,7 @@ export const ru: Messages = {
     comingSoon: "Следует позже",
   },
   partner: {
-    hint: "Твой спутник, а не инструмент: что он помнит, как его зовут и что ты ему поручаешь помнить всегда.",
+    hint: "Твой ИИ-собеседник, а не инструмент: что он помнит, как его зовут и что ты ему поручаешь помнить всегда.",
     name: "Имя",
     meaningZiggy: "уменьшительное от Siegfried/Sigmund: победа и защита",
     placeholder: "(заглушка)",
@@ -308,7 +316,7 @@ export const ru: Messages = {
   },
   about: {
     title: "О DS·IDE",
-    tagline: "Локальная агентная IDE со своим спутником — сделана для двоих.",
+    tagline: "Локальная агентная IDE со своим ИИ-собеседником — сделана для двоих.",
     version: "Версия",
     versionValue: "DS·IDE {version}",
     authors: "Авторы",

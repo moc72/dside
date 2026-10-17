@@ -45,8 +45,10 @@ pub fn open_browser_window(
     app: AppHandle,
     url: String,
     new_window: Option<bool>,
+    focus: Option<bool>,
 ) -> Result<String, String> {
     let target = parse(&url)?;
+    let raise_after = focus.unwrap_or(true);
     let open = open_windows(&app);
 
     if !new_window.unwrap_or(false) {
@@ -54,7 +56,9 @@ pub fn open_browser_window(
             window
                 .navigate(target)
                 .map_err(|error| format!("browser: {error}"))?;
-            raise(window);
+            if raise_after {
+                raise(window);
+            }
             return Ok(window.label().to_string());
         }
     }
@@ -69,9 +73,13 @@ pub fn open_browser_window(
         .title("DS.IDE — Webdesign")
         .inner_size(1120.0, 840.0)
         .min_inner_size(520.0, 400.0)
+        // Following the companion must not take the keyboard away from the composer.
+        .focused(raise_after)
         .build()
         .map_err(|error| format!("browser: {error}"))?;
-    raise(&window);
+    if raise_after {
+        raise(&window);
+    }
     Ok(label)
 }
 

@@ -75,6 +75,8 @@ export const zhHans: Messages = {
     retiredHint: "搁置的条目会保留，只是不再被回忆。",
     changedByUser: "由你修改",
     addPlaceholder: "要记住什么？（Ctrl+Enter 保存）",
+    titlePlaceholder: "标题——最多 120 个字符",
+    open: "打开完整记忆",
     writtenByUser: "由你撰写",
     add: "添加",
     edit: "编辑",
@@ -125,6 +127,8 @@ export const zhHans: Messages = {
     tabSchedules: "计划",
     closeTab: "关闭标签页",
     empty: "没有打开的标签页。",
+    followOn: "跟随伙伴——开（文件与网页随之打开）",
+    followOff: "跟随伙伴——关（仅显示工具标签）",
   },
   progress: {
     title: "进度",
@@ -179,13 +183,14 @@ export const zhHans: Messages = {
     compactNothing: "无需压缩——对话还足够短",
     contextUnknown: "尚未发起请求。",
     tokens: "{used} 词元",
-    disclaimer: "代理是 AI 并可能出现错误。",
+    disclaimer: "AI 伴侣也会犯错！",
   },
   message: {
     autoApproved: "未询问即执行——已开启「完全授权」。",
     raw: "以 Markdown 存储",
     notWired: "未连接: 未连接模型后端。",
     reasoning: "思考",
+    characters: "字符",
   },
   search: {
     title: "搜索会话和消息",
@@ -287,6 +292,8 @@ export const zhHans: Messages = {
         "任务完成、出现错误或需要权限时通知你",
       joinEarlyAccess: "加入早期体验",
       joinEarlyAccessDesc: "最先体验最新功能",
+      followCompanion: "跟随伙伴",
+      followCompanionDesc: "在伙伴打开文件或网页时于工作区显示——光标仍留在输入框。",
     },
   },
   common: {
@@ -298,7 +305,7 @@ export const zhHans: Messages = {
     comingSoon: "待定",
   },
   partner: {
-    hint: "你的伙伴，而不是工具：它记住什么、叫什么名字、你交给它哪些长期要求。",
+    hint: "你的 AI 伴侣，而不是工具：它记住什么、叫什么名字、你交给它哪些长期要求。",
     name: "名字",
     meaningZiggy: "Siegfried／Sigmund 的昵称：胜利与守护",
     placeholder: "（占位名）",
@@ -310,7 +317,7 @@ export const zhHans: Messages = {
   },
   about: {
     title: "关于 DS·IDE",
-    tagline: "一个本地智能开发环境，拥有自己的伙伴——为两个人而做。",
+    tagline: "一个本地智能开发环境，拥有自己的 AI 伴侣——为两个人而做。",
     version: "版本",
     versionValue: "DS·IDE {version}",
     authors: "作者",

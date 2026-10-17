@@ -153,6 +153,10 @@ onBeforeUnmount(() => {
   flex-direction: column;
   padding-inline: 16px;
   position: relative;
+  /* One reading column for the list and the composer. It keeps the 70 % feel on a wide
+     window but refuses to shrink below a usable width when the side panels are open —
+     which is what clipped the composer controls at the minimum window size. */
+  --chat-width: min(100%, max(70%, 520px), 860px);
   /* Own stacking context, so the watermark can sit *behind* the content instead of above it:
      a positioned ::before with z-index auto paints over in-flow children — which is why the
      mark showed on top of the supposedly opaque composer. */
@@ -184,7 +188,7 @@ onBeforeUnmount(() => {
   /* No `flex: 1` here: as a flex item its basis would win over the width, and the column
      would quietly stretch to the whole panel. */
   min-height: 0;
-  width: 70%;
+  width: var(--chat-width);
   margin: 0 auto;
   padding: 0 6px;
   overflow-y: auto;

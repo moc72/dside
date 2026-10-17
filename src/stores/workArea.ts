@@ -1,5 +1,6 @@
 import { computed, ref, watch } from "vue";
 import { saveUiState } from "../lib/uiState";
+import { workAuto } from "./ui";
 import type { WorkAreaTab, WorkAreaTabKind } from "../types";
 
 const PROGRESS_TAB: WorkAreaTab = { id: "progress", kind: "progress" };
@@ -16,19 +17,59 @@ export const activeTabId = ref<string>(PROGRESS_TAB.id);
 
 export const visible = ref(true);
 
+/**
+ * The file tree is part of the file tab, so it survives switching tabs and the companion
+ * opening a file. Remembered with the rest of the work area — a tree the user put away
+ * should not be back after a restart or an edit by the partner.
+ */
+export const fileTreeVisible = ref(true);
+
 export const activeTab = computed(
   () => tabs.value.find((tab) => tab.id === activeTabId.value) ?? null,
 );
+
+/**
+ * Bumped when a file the companion just wrote comes back. The file tab watches it and reads
+ * the file again — the path alone does not change, so its own watcher would stay silent.
+ */
+export const fileRevision = ref(0);
+
+/** The tab that recently came into view on its own, so the bar can point at it briefly. */
+export const attentionTabId = ref("");
+
+let attentionTimer: number | undefined;
+
+export function pulseTab(id: string): void {
+  attentionTabId.value = id;
+  if (attentionTimer) window.clearTimeout(attentionTimer);
+  attentionTimer = window.setTimeout(() => {
+    attentionTimer = undefined;
+    attentionTabId.value = "";
+  }, 1800);
+}
+
+/** Reloads the preview only when that exact file is already the open file tab. */
+export function refreshFile(path: string): void {
+  const tab = tabs.value.find((entry) => entry.kind === "file" && entry.filePath === path);
+  if (tab) fileRevision.value += 1;
+}
 
 export function activateTab(id: string): void {
   if (tabs.value.some((tab) => tab.id === id)) activeTabId.value = id;
 }
 
 export function showWorkArea(): void {
+  // An explicit request wins over the narrow-window rule; the next resize re-evaluates it.
+  workAuto.value = false;
   visible.value = true;
 }
 
 export function toggleWorkArea(): void {
+  if (workAuto.value) {
+    workAuto.value = false;
+    visible.value = true;
+    return;
+  }
   visible.value = !visible.value;
 }
 
@@ -38,7 +79,7 @@ export function openTab(kind: WorkAreaTabKind, filePath?: string): string {
   if (!existing) {
     tabs.value.push({ id, kind, filePath: filePath ?? null });
   }
-  visible.value = true;
+  showWorkArea();
   activeTabId.value = id;
   return id;
 }
@@ -48,7 +89,7 @@ export function openFile(path: string): string {
   const existing = tabs.value.find((tab) => tab.id === id);
   if (existing) existing.filePath = path;
   else tabs.value.push({ id, kind: "file", filePath: path });
-  visible.value = true;
+  showWorkArea();
   activeTabId.value = id;
   return id;
 }
@@ -70,6 +111,7 @@ interface StoredWorkArea {
   visible?: boolean;
   activeTabId?: string;
   tabs?: unknown;
+  treeVisible?: boolean;
 }
 
 function isTab(value: unknown): value is WorkAreaTab {
@@ -101,12 +143,13 @@ export function initWorkArea(stored: unknown): void {
   // tab id, or a visibility imported from the old localStorage key, then survives the next
   // launch even if nothing is clicked in between.
   watch(
-    [tabs, activeTabId, visible],
+    [tabs, activeTabId, visible, fileTreeVisible],
     () =>
       saveUiState(UI_KEY, {
         visible: visible.value,
         activeTabId: activeTabId.value,
         tabs: tabs.value,
+        treeVisible: fileTreeVisible.value,
       }),
     { deep: true },
   );
@@ -131,4 +174,6 @@ export function initWorkArea(stored: unknown): void {
     const legacy = takeLegacyVisible();
     if (legacy !== null) visible.value = legacy;
   }
+
+  if (typeof saved.treeVisible === "boolean") fileTreeVisible.value = saved.treeVisible;
 }

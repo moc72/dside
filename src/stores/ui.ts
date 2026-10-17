@@ -27,6 +27,15 @@ export const railCollapsed = ref(stored.railCollapsed ?? false);
 export const railWidth = ref(clamp(stored.railWidth ?? 15, RAIL_MIN, RAIL_MAX));
 export const workWidth = ref(clamp(stored.workWidth ?? 15, WORK_MIN, WORK_MAX));
 
+/**
+ * Set by the responsive layout, never by the user and never persisted: the panel is hidden
+ * because the window is too narrow, not because it was put away. Manual toggles clear the
+ * flag, so a forced-open panel stays open until the window crosses a threshold again.
+ */
+export const railAuto = ref(false);
+export const workAuto = ref(false);
+
+
 watch([railWidth, workWidth, railCollapsed], () => {
   saveJson(STORAGE_KEY, {
     railWidth: railWidth.value,
@@ -48,6 +57,12 @@ export function closeSettings(): void {
 }
 
 export function toggleRail(): void {
+  // An auto-hidden rail is shown on the first click instead of flipping the manual state.
+  if (railAuto.value) {
+    railAuto.value = false;
+    railCollapsed.value = false;
+    return;
+  }
   railCollapsed.value = !railCollapsed.value;
 }
 

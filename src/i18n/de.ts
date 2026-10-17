@@ -73,6 +73,8 @@ export const de = {
     retiredHint: "Stillgelegte Einträge bleiben erhalten — sie werden nur nicht mehr erinnert.",
     changedByUser: "von dir geändert",
     addPlaceholder: "Was soll er sich merken? (Strg+Enter speichert)",
+    titlePlaceholder: "Titel — höchstens 120 Zeichen",
+    open: "Ganze Erinnerung öffnen",
     writtenByUser: "von dir geschrieben",
     add: "Hinzufügen",
     edit: "Bearbeiten",
@@ -123,6 +125,8 @@ export const de = {
     tabSchedules: "Geplant",
     closeTab: "Tab schließen",
     empty: "Kein Tab geöffnet.",
+    followOn: "Dem Begleiter folgen — an (Dateien und Seiten öffnen sich)",
+    followOff: "Dem Begleiter folgen — aus (nur Werkzeug-Hinweise)",
   },
   progress: {
     title: "Fortschritt",
@@ -177,13 +181,14 @@ export const de = {
     compactNothing: "Nichts zu verdichten — der Verlauf ist kurz genug",
     contextUnknown: "Noch keine Anfrage gelaufen.",
     tokens: "{used} Token",
-    disclaimer: "Der Agent ist KI und kann Fehler machen.",
+    disclaimer: "Auch KI-Begleiter können mal einen Fehler machen!",
   },
   message: {
     autoApproved: "Ohne Rückfrage ausgeführt — „Volle Berechtigung“ ist eingeschaltet.",
     raw: "Als Markdown gespeichert",
     notWired: "Noch nicht angebunden: Es ist kein Modell-Backend verbunden.",
     reasoning: "Denken",
+    characters: "Zeichen",
   },
   search: {
     title: "Sitzungen und Nachrichten durchsuchen",
@@ -288,6 +293,9 @@ export const de = {
         "Benachrichtigen, wenn Aufgaben fertig sind, Fehler auftreten oder Berechtigungen nötig sind",
       joinEarlyAccess: "Early Access beitreten",
       joinEarlyAccessDesc: "Die neuesten Funktionen zuerst ausprobieren",
+      followCompanion: "Dem Begleiter folgen",
+      followCompanionDesc:
+        "Dateien und Webseiten, die er öffnet, im Arbeitsbereich zeigen — der Fokus bleibt im Eingabefeld.",
     },
   },
   common: {
@@ -299,7 +307,7 @@ export const de = {
     comingSoon: "Folgt später",
   },
   partner: {
-    hint: "Dein Begleiter, nicht dein Werkzeug: was er sich merkt, wie er heißt und was du ihm mitgibst.",
+    hint: "Dein KI-Begleiter, nicht dein Werkzeug: was er sich merkt, wie er heißt und was du ihm mitgibst.",
     name: "Name",
     meaningZiggy: "Koseform von Siegfried/Sigmund: Sieg und Schutz",
     placeholder: "(Platzhalter)",
@@ -311,7 +319,7 @@ export const de = {
   },
   about: {
     title: "Über DS·IDE",
-    tagline: "Eine lokale agentische IDE mit einem eigenen Begleiter — gebaut für zwei.",
+    tagline: "Eine lokale agentische IDE mit einem eigenen KI-Begleiter — gebaut für zwei.",
     version: "Version",
     versionValue: "DS·IDE {version}",
     authors: "Von",

@@ -15,15 +15,28 @@ import {
   CENTER_MIN,
   closeSearch,
   openSearch,
+  railAuto,
   railCollapsed,
   railWidth,
   searchOpen,
   setRailWidth,
   setWorkWidth,
   view,
+  workAuto,
   workWidth,
 } from "./stores/ui";
 import { visible as workAreaVisible } from "./stores/workArea";
+import { useResponsiveLayout } from "./composables/useResponsiveLayout";
+
+/**
+ * The panels the grid actually draws. The manual flags are what the user chose; the `Auto`
+ * flags mean "there is no room right now". Keeping them apart is what lets a narrow window
+ * drop the rail first without overwriting the preference for the next wide one.
+ */
+const railVisible = computed(() => !railCollapsed.value && !railAuto.value);
+const workVisible = computed(() => workAreaVisible.value && !workAuto.value);
+
+useResponsiveLayout();
 
 const body = ref<HTMLElement | null>(null);
 
@@ -95,9 +108,9 @@ function onKey(event: KeyboardEvent) {
 
 const bodyStyle = computed(() => {
   const columns: string[] = [];
-  if (!railCollapsed.value) columns.push(`${railWidth.value}%`);
+  if (railVisible.value) columns.push(`${railWidth.value}%`);
   columns.push("minmax(0, 1fr)");
-  if (workAreaVisible.value) columns.push(`${workWidth.value}%`);
+  if (workVisible.value) columns.push(`${workWidth.value}%`);
   return { gridTemplateColumns: columns.join(" ") };
 });
 
@@ -117,20 +130,20 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
     const delta = ((move.clientX - startX) / total) * 100;
 
     if (which === "rail") {
-      const available = 100 - CENTER_MIN - (workAreaVisible.value ? workWidth.value : 0);
+      const available = 100 - CENTER_MIN - (workVisible.value ? workWidth.value : 0);
       setRailWidth(Math.min(startRail + delta, available));
       return;
     }
 
     const requested = startWork - delta;
-    const railSpace = railCollapsed.value ? 0 : railWidth.value;
+    const railSpace = railVisible.value ? railWidth.value : 0;
 
     // Free up room by collapsing the left rail when the center would be squeezed.
-    if (requested + railSpace + CENTER_MIN > 100 && !railCollapsed.value) {
+    if (requested + railSpace + CENTER_MIN > 100 && railVisible.value) {
       railCollapsed.value = true;
     }
 
-    const available = 100 - CENTER_MIN - (railCollapsed.value ? 0 : railWidth.value);
+    const available = 100 - CENTER_MIN - (railVisible.value ? railWidth.value : 0);
     setWorkWidth(Math.min(requested, available));
   };
 
@@ -162,18 +175,18 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
     <TitleBar />
     <div class="stage">
       <div ref="body" class="body" :style="bodyStyle">
-        <LeftRail v-if="!railCollapsed" class="card" />
+        <LeftRail v-if="railVisible" class="card" />
         <AgentPanel class="card" />
-        <WorkArea v-if="workAreaVisible" class="card" />
+        <WorkArea v-if="workVisible" class="card" />
 
         <Resizer
-          v-if="!railCollapsed"
+          v-if="railVisible"
           align="left"
           :style="{ left: `calc(${railWidth}% + 5px)` }"
           @start="(event) => startDrag('rail', event)"
         />
         <Resizer
-          v-if="workAreaVisible"
+          v-if="workVisible"
           align="right"
           :style="{ right: `calc(${workWidth}% + 5px)` }"
           @start="(event) => startDrag('work', event)"
@@ -245,6 +258,8 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
   height: auto;
   position: relative;
   z-index: 0;
+  top: 40px;
+  right: 10px;
   /* The whale grows towards the edge of the disc while the progress bar runs — the same 7
      seconds, so the two read as one movement. The disc clips it. */
   animation: whale-zoom 7s linear forwards;
@@ -258,7 +273,7 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
   }
 
   to {
-    transform: scale(2.05);
+    transform: scale(1.85);
   }
 }
 
@@ -297,7 +312,7 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
 .splash-bar span {
   display: block;
   height: 100%;
-  background: var(--accent);
+  background: var(--accent-whale);
   border-radius: 999px;
   animation: splash-progress 7s linear forwards;
 }

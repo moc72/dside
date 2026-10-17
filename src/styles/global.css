@@ -69,6 +69,7 @@
   --accent: #4c8bf5;
   --accent-strong: #0e639c;
   --accent-contrast: #ffffff;
+  --accent-whale: #0aaac2;
   --danger: #f14c4c;
 
   /* Message bubbles. Assistant and user get their own tone so the two sides of a
@@ -115,6 +116,7 @@
   --accent: #0a66c2;
   --accent-strong: #0a66c2;
   --accent-contrast: #ffffff;
+  --accent-whale: #0aaac2;
   --danger: #c62828;
 
   --watermark: url("/deepseek-mark-blue.png");
