@@ -58,7 +58,7 @@ async function finishSplash() {
     const image = new Image();
     image.onload = () => resolve();
     image.onerror = () => resolve();
-    image.src = "/whale-splash.webp";
+    image.src = "/whale-splash.png";
   });
   say("splash: artwork ready");
 
@@ -237,26 +237,36 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
   border-radius: 50%;
   background: var(--bg-app);
   box-shadow: 0 18px 60px rgb(0 0 0 / 45%);
+  overflow: hidden;
 }
 
 .splash-disc .splash-whale {
   width: 150px;
   height: auto;
-  /* The whale used to be a 40-frame WebP. A flat mark does not need frames: a slow bob and a
-     breath of scale read the same, stay smooth at any size and weigh a fifth. */
-  animation: whale-float 3.2s ease-in-out infinite;
+  position: relative;
+  z-index: 0;
+  /* The whale grows towards the edge of the disc while the progress bar runs — the same 7
+     seconds, so the two read as one movement. The disc clips it. */
+  animation: whale-zoom 7s linear forwards;
+  transform-origin: 50% 55%;
   will-change: transform;
 }
 
-@keyframes whale-float {
-  0%,
-  100% {
-    transform: translate3d(0, -4px, 0) scale(1);
+@keyframes whale-zoom {
+  from {
+    transform: scale(1);
   }
 
-  50% {
-    transform: translate3d(0, 5px, 0) scale(1.015);
+  to {
+    transform: scale(2.05);
   }
+}
+
+/* Text and bar stay above the whale, whatever size it reaches. */
+.splash-mark,
+.splash-bar {
+  position: relative;
+  z-index: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {

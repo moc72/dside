@@ -56,12 +56,16 @@ onMounted(async () => {
         <div class="desc">{{ t("about.versionValue", { version: info?.version ?? "—" }) }}</div>
       </div>
     </div>
+  </div>
+  <div class="card">
     <div class="row">
       <div class="text">
         <div class="label">{{ t("about.authors") }}</div>
         <div class="desc">{{ authors.join(" · ") }}</div>
       </div>
     </div>
+  </div>
+  <div class="card">
     <div class="row">
       <div class="text">
         <div class="label">{{ t("about.blueprint") }}</div>
