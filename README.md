@@ -7,6 +7,11 @@ it goes by the placeholder **Seeky**. It is called **Ziggy** now.
 > The authoritative status, every design decision and the open list live in
 > [PROGRESS.md](./PROGRESS.md) — not in this file.
 
+![DS·IDE in Chinese: chat, work area with the README, and the file tree](docs/dside_zh.png)
+
+*The same window in Chinese — one of six languages. The chat runs next to the files; the
+work area shows a preview, not an editor.*
+
 ## What it does
 
 **The partner**
