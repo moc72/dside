@@ -54,15 +54,14 @@ onMounted(async () => {
 
     <div class="row">
       <div class="col">
-        <div class="card" style="">
+        <div class="card">
           <div class="row">
             <div class="text">
               <div class="label">DS·IDE</div>
               <div class="desc larger">{{ info?.version ?? "—" }}</div>
             </div>
           </div>
-        </div>
-        <div class="card">
+          <hr />
           <div class="row">
             <div class="text">
               <div class="label">{{ t("about.authors") }}</div>
@@ -191,16 +190,24 @@ onMounted(async () => {
 <style scoped>
 
 /* The scroll container is the settings content, not this page: an element with auto height
-   cannot scroll. Kept as a plain block so the page measures its content. */
+   cannot scroll. No max-width either — capping it left a wide empty strip on the right. */
 .aboutpage {
-  max-width: 1100px;
+  max-width: none;
 }
 
 .col {
+  display: flex;
+  flex-direction: column;
   flex: 1 1 380px;
   min-width: 300px;
   box-sizing: border-box;
   padding: 0 8px;
+}
+
+/* One card per column, stretched to the row's height: every container in a row ends on the
+   same line, which is what makes the page read as a grid instead of a stack. */
+.col > .card {
+  flex: 1 1 auto;
 }
 
 .desc.larger{
@@ -214,16 +221,16 @@ hr {
 }
 
 .logo {
-  width: 56px;
-  height: 56px;
+  width: 78px;
+  height: 78px;
   object-fit: contain;
 }
 
 .buildgrid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  padding: 6px 0;
+  gap: 18px;
+  padding: 10px 0 6px;
 }
 
 .build {
@@ -243,6 +250,7 @@ hr {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
+  align-items: stretch;
   gap: 10px;
 }
 
@@ -259,6 +267,9 @@ hr {
 }
 
 .card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   width: 100%;
   margin: 10px 0;
   padding: 16px 22px;
