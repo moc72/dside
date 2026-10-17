@@ -316,6 +316,8 @@ export const de = {
     versionValue: "DS·IDE {version}",
     authors: "Von",
     blueprint: "Vorbild",
+    license: "Lizenz",
+    licenseValue: "MIT — siehe LICENSE im Quelltext",
     blueprintValue: "MiniMax Code (MIT) — Aufbau, Werkzeug- und Ereignisverträge",
     fonts: "Schrift",
     fontsValue: "Ubuntu Font Licence 1.0 (Beilage: public/fonts/UFL.txt)",

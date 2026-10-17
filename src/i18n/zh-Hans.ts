@@ -315,6 +315,8 @@ export const zhHans: Messages = {
     versionValue: "DS·IDE {version}",
     authors: "作者",
     blueprint: "蓝本",
+    license: "许可证",
+    licenseValue: "MIT — 见源代码中的 LICENSE",
     blueprintValue: "MiniMax Code（MIT）——结构、工具与事件约定",
     fonts: "字体",
     fontsValue: "Ubuntu 字体许可证 1.0（见 public/fonts/UFL.txt）",

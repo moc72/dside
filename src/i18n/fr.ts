@@ -316,6 +316,8 @@ export const fr: Messages = {
     versionValue: "DS·IDE {version}",
     authors: "Par",
     blueprint: "Modèle",
+    license: "Licence",
+    licenseValue: "MIT — voir LICENSE dans les sources",
     blueprintValue: "MiniMax Code (MIT) — structure, contrats d'outils et d'événements",
     fonts: "Police",
     fontsValue: "Ubuntu Font Licence 1.0 (voir public/fonts/UFL.txt)",

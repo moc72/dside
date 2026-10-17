@@ -95,3 +95,10 @@ Licence 1.0** (`public/fonts/UFL.txt`). Both are credited in the app under Setti
 The reference checkouts this project was built against (`minimax-code-main`,
 `minimax-jarvis`, `kilocode-main`) are **not** part of this repository; where to find them is
 recorded in PROGRESS.md §30–§31.
+
+## Licence
+
+MIT — see [LICENSE](./LICENSE). Protocol formats and tool names that came from MiniMax Code
+carry their MIT notice too; the bundled Ubuntu font keeps its own licence
+(`public/fonts/UFL.txt`). What that means in practice: use it, change it, ship it, even
+commercially — just keep the copyright notice.

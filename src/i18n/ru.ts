@@ -313,6 +313,8 @@ export const ru: Messages = {
     versionValue: "DS·IDE {version}",
     authors: "Авторы",
     blueprint: "Прообраз",
+    license: "Лицензия",
+    licenseValue: "MIT — см. LICENSE в исходниках",
     blueprintValue: "MiniMax Code (MIT) — структура, контракты инструментов и событий",
     fonts: "Шрифт",
     fontsValue: "Ubuntu Font Licence 1.0 (см. public/fonts/UFL.txt)",

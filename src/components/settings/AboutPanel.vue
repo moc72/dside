@@ -70,6 +70,12 @@ onMounted(async () => {
     </div>
     <div class="row">
       <div class="text">
+        <div class="label">{{ t("about.license") }}</div>
+        <div class="desc">{{ t("about.licenseValue") }}</div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="text">
         <div class="label">{{ t("about.fonts") }}</div>
         <div class="desc">{{ t("about.fontsValue") }}</div>
       </div>
