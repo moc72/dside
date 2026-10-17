@@ -127,6 +127,7 @@ function escape(text: string): string {
 .row {
   display: flex;
   align-items: flex-start;
+  min-width: 0;
 }
 
 .avatar {
@@ -145,6 +146,7 @@ function escape(text: string): string {
    an answer: the assistant gets the column, the user 75% of it. */
 .bubble {
   width: 100%;
+  min-width: 0;
   margin-top: 10px;
 }
 
@@ -160,7 +162,38 @@ function escape(text: string): string {
   border-radius: var(--radius);
   background-color: var(--bubble-bg);
   font-size: var(--reading-font-size);
+  /* Anything a model writes must fit the column: long tokens break, wide blocks scroll
+     inside themselves. Without this a markdown table widened the whole list and the chat
+     grew a horizontal scrollbar — which is how text ended up outside its bubble. */
   word-break: break-word;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.text :deep(table) {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+
+.text :deep(th),
+.text :deep(td) {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.text :deep(th) {
+  background: var(--bg-elevated);
+  font-weight: 600;
+}
+
+.text :deep(img) {
+  max-width: 100%;
+  height: auto;
 }
 
 .row.user .text {
