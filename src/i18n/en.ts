@@ -2,7 +2,7 @@ import type { Messages } from "./de";
 
 export const en: Messages = {
   app: {
-    name: "DS.IDE",
+    name: "DS·IDE",
     tagline: "Agentic IDE",
   },
   nav: {
@@ -105,7 +105,7 @@ export const en: Messages = {
   },
   schedules: {
     title: "Scheduled",
-    hint: "Recurring prompts. They only run while DS.IDE is running — no background service.",
+    hint: "Recurring prompts. They only run while DS·IDE is running — no background service.",
     promptPlaceholder: "Task, e.g. \"Summarise the current git state\"",
     interval: "Every (minutes)",
     add: "Add",
@@ -311,10 +311,10 @@ export const en: Messages = {
     promptPlaceholder: "For example: always answer in English and without filler. Ask before deleting files.",
   },
   about: {
-    title: "About DS.IDE",
+    title: "About DS·IDE",
     tagline: "A local agentic IDE with its own companion — built for two.",
     version: "Version",
-    versionValue: "DS.IDE {version}",
+    versionValue: "DS·IDE {version}",
     authors: "By",
     blueprint: "Blueprint",
     blueprintValue: "MiniMax Code (MIT) — structure, tool and event contracts",

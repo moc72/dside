@@ -52,7 +52,7 @@ onMounted(async () => {
   <div class="card">
     <div class="row">
       <div class="text">
-        <div class="label">DS.IDE</div>
+        <div class="label">DS·IDE</div>
         <div class="desc">{{ t("about.versionValue", { version: info?.version ?? "—" }) }}</div>
       </div>
     </div>

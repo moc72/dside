@@ -2,7 +2,7 @@ import type { Messages } from "./de";
 
 export const ru: Messages = {
   app: {
-    name: "DS.IDE",
+    name: "DS·IDE",
     tagline: "Агентская IDE",
   },
   nav: {
@@ -307,10 +307,10 @@ export const ru: Messages = {
     promptPlaceholder: "Например: всегда отвечай по-русски и без воды. Спрашивай перед удалением файлов.",
   },
   about: {
-    title: "О DS.IDE",
+    title: "О DS·IDE",
     tagline: "Локальная агентная IDE со своим спутником — сделана для двоих.",
     version: "Версия",
-    versionValue: "DS.IDE {version}",
+    versionValue: "DS·IDE {version}",
     authors: "Авторы",
     blueprint: "Прообраз",
     blueprintValue: "MiniMax Code (MIT) — структура, контракты инструментов и событий",

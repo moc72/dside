@@ -2,7 +2,7 @@ import type { Messages } from "./de";
 
 export const zhHans: Messages = {
   app: {
-    name: "DS.IDE",
+    name: "DS·IDE",
     tagline: "智能体 IDE",
   },
   nav: {
@@ -105,7 +105,7 @@ export const zhHans: Messages = {
   },
   schedules: {
     title: "计划",
-    hint: "循环任务。仅在 DS.IDE 运行时执行 — 无后台服务。",
+    hint: "循环任务。仅在 DS·IDE 运行时执行 — 无后台服务。",
     promptPlaceholder: "任务，例如 „总结 Git 状态“",
     interval: "间隔 (分钟)",
     add: "添加",
@@ -309,10 +309,10 @@ export const zhHans: Messages = {
     promptPlaceholder: "例如：始终用中文回答，不要客套。删除文件前先问。",
   },
   about: {
-    title: "关于 DS.IDE",
+    title: "关于 DS·IDE",
     tagline: "一个本地智能开发环境，拥有自己的伙伴——为两个人而做。",
     version: "版本",
-    versionValue: "DS.IDE {version}",
+    versionValue: "DS·IDE {version}",
     authors: "作者",
     blueprint: "蓝本",
     blueprintValue: "MiniMax Code（MIT）——结构、工具与事件约定",

@@ -1,6 +1,6 @@
 export const de = {
   app: {
-    name: "DS.IDE",
+    name: "DS·IDE",
     tagline: "Agentische IDE",
   },
   nav: {
@@ -103,7 +103,7 @@ export const de = {
   },
   schedules: {
     title: "Geplant",
-    hint: "Wiederkehrende Aufträge. Sie laufen nur, solange DS.IDE läuft — kein Hintergrunddienst.",
+    hint: "Wiederkehrende Aufträge. Sie laufen nur, solange DS·IDE läuft — kein Hintergrunddienst.",
     promptPlaceholder: "Auftrag, z. B. „Fasse den Git-Stand zusammen“",
     interval: "Alle (Minuten)",
     add: "Hinzufügen",
@@ -310,10 +310,10 @@ export const de = {
     promptPlaceholder: "Zum Beispiel: Antworte immer auf Deutsch und ohne Floskeln. Frag nach, bevor du Dateien löschst.",
   },
   about: {
-    title: "Über DS.IDE",
+    title: "Über DS·IDE",
     tagline: "Eine lokale agentische IDE mit einem eigenen Begleiter — gebaut für zwei.",
     version: "Version",
-    versionValue: "DS.IDE {version}",
+    versionValue: "DS·IDE {version}",
     authors: "Von",
     blueprint: "Vorbild",
     blueprintValue: "MiniMax Code (MIT) — Aufbau, Werkzeug- und Ereignisverträge",

@@ -1,7 +1,7 @@
 import type { Messages } from "./de";
 export const fr: Messages = {
   app: {
-    name: "DS.IDE",
+    name: "DS·IDE",
     tagline: "IDE agentique",
   },
   nav: {
@@ -310,10 +310,10 @@ export const fr: Messages = {
     promptPlaceholder: "Par exemple : réponds toujours en français et sans remplissage. Demande avant de supprimer un fichier.",
   },
   about: {
-    title: "À propos de DS.IDE",
+    title: "À propos de DS·IDE",
     tagline: "Un EDI agentique local avec son propre compagnon — conçu pour deux.",
     version: "Version",
-    versionValue: "DS.IDE {version}",
+    versionValue: "DS·IDE {version}",
     authors: "Par",
     blueprint: "Modèle",
     blueprintValue: "MiniMax Code (MIT) — structure, contrats d'outils et d'événements",

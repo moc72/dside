@@ -1,4 +1,4 @@
-# DS.IDE
+# DS·IDE
 
 An agentic desktop IDE on **Tauri v2** (no Electron) with **DeepSeek** as the model — and a
 partner inside it, not just a tool. The partner chooses its own name, once; until it does,
