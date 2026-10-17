@@ -1,0 +1,118 @@
+# Builds the installers for Linux, macOS and Windows on every version tag.
+#
+# A tag is the version: `v0.1.0` should match the version in package.json, Cargo.toml and
+# tauri.conf.json. The job creates a draft release and uploads the bundles to it; running the
+# workflow by hand uploads them as workflow artifacts instead.
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            bundles: deb,rpm,appimage
+            artifact: linux
+          - os: macos-latest
+            bundles: dmg
+            artifact: macos
+          - os: windows-latest
+            bundles: nsis
+            artifact: windows
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # Tauri v2 needs WebKitGTK 4.1 and libsoup3; the default runner does not have them.
+      - name: Linux build dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libsoup-3.0-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev patchelf
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # On a tag: build and attach the bundles to a draft release. On a manual run there is no
+      # tag to release under, so it only builds — the artifacts are uploaded below either way.
+      - name: Build bundles (tag)
+        if: github.ref_type == 'tag'
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: --bundles ${{ matrix.bundles }}
+          tagName: ${{ github.ref_name }}
+          releaseName: "DS.IDE ${{ github.ref_name }}"
+          releaseDraft: true
+          prerelease: false
+
+      - name: Build bundles (manual run)
+        if: github.ref_type != 'tag'
+        uses: tauri-apps/tauri-action@v0
+        with:
+          args: --bundles ${{ matrix.bundles }}
+
+      # A zip of the plain binary as well: no installer, no questions — the way that works
+      # without a signing certificate.
+      - name: Zip the app (Linux)
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          cd src-tauri/target/release
+          tar -czf "DS.IDE-${GITHUB_REF_NAME}-linux-x86_64.tar.gz" DSIDE
+
+      - name: Zip the app (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          cd src-tauri/target/release/bundle/macos
+          ditto -c -k --keepParent "DS.IDE.app" "DS.IDE-${GITHUB_REF_NAME}-macos.zip"
+
+      - name: Zip the app (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $exe = "src-tauri/target/release/DSIDE.exe"
+          Compress-Archive -Path $exe -DestinationPath "DS.IDE-$env:GITHUB_REF_NAME-windows-x86_64.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ds-ide-${{ matrix.artifact }}
+          path: |
+            src-tauri/target/release/bundle/**/*.deb
+            src-tauri/target/release/bundle/**/*.rpm
+            src-tauri/target/release/bundle/**/*.AppImage
+            src-tauri/target/release/bundle/**/*.dmg
+            src-tauri/target/release/bundle/**/*.exe
+            src-tauri/target/release/*.tar.gz
+            src-tauri/target/release/bundle/macos/*.zip
+            *.zip
+          if-no-files-found: warn
