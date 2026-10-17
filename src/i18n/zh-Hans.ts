@@ -325,6 +325,7 @@ export const zhHans: Messages = {
     source: "源代码",
     contact: "联系",
     packages: "使用的软件包",
+    builtWith: "构建技术",
     packagesFrontend: "界面（JavaScript）",
     packagesBackend: "内核（Rust）",
     packagesCount: "{count} 个软件包",

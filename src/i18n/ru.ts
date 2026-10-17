@@ -323,6 +323,7 @@ export const ru: Messages = {
     source: "Исходный код",
     contact: "Контакт",
     packages: "Использованные пакеты",
+    builtWith: "Создано на",
     packagesFrontend: "Интерфейс (JavaScript)",
     packagesBackend: "Ядро (Rust)",
     packagesCount: "{count} пакетов",

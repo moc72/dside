@@ -327,6 +327,7 @@ export const en: Messages = {
     source: "Source",
     contact: "Contact",
     packages: "Packages used",
+    builtWith: "Built with",
     packagesFrontend: "Interface (JavaScript)",
     packagesBackend: "Core (Rust)",
     packagesCount: "{count} packages",

@@ -326,6 +326,7 @@ export const de = {
     source: "Quelltext",
     contact: "Kontakt",
     packages: "Verwendete Pakete",
+    builtWith: "Gebaut mit",
     packagesFrontend: "Oberfläche (JavaScript)",
     packagesBackend: "Kern (Rust)",
     packagesCount: "{count} Pakete",

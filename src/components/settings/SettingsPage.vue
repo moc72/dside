@@ -581,10 +581,13 @@ watch(activeItem, (value) => {
   color: var(--text-strong);
 }
 
-.content {
+/* `.card` below sets `overflow: hidden`; both classes sit on the same element, so the later
+   rule won and the settings never scrolled. Two classes beat one. */
+.settings .content {
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 28px 40px;
 }
 

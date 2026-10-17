@@ -326,6 +326,7 @@ export const fr: Messages = {
     source: "Code source",
     contact: "Contact",
     packages: "Paquets utilisés",
+    builtWith: "Construit avec",
     packagesFrontend: "Interface (JavaScript)",
     packagesBackend: "Cœur (Rust)",
     packagesCount: "{count} paquets",

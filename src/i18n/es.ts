@@ -322,6 +322,7 @@ export const es: Messages = {
     source: "Código fuente",
     contact: "Contacto",
     packages: "Paquetes usados",
+    builtWith: "Construido con",
     packagesFrontend: "Interfaz (JavaScript)",
     packagesBackend: "Núcleo (Rust)",
     packagesCount: "{count} paquetes",
