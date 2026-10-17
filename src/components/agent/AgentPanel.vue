@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import Icon from "../Icon.vue";
 import MessageList from "./MessageList.vue";
 import Composer from "./Composer.vue";
@@ -23,8 +23,9 @@ async function submitFree() {
 }
 
 const scrollEl = ref<HTMLElement | null>(null);
+const listEl = ref<InstanceType<typeof MessageList> | null>(null);
 const following = ref(true);
-let frame = 0;
+let observer: ResizeObserver | null = null;
 
 const messagesChanged = computed(() => {
   const list = messages.value;
@@ -38,10 +39,13 @@ function isAtBottom(element: HTMLElement): boolean {
   return element.scrollHeight - element.scrollTop - element.clientHeight < 48;
 }
 
+/**
+ * Scrolls to the newest line. Deliberately not `requestAnimationFrame`: in this webview (splash
+ * included) rAF can go quiet, which is why the list stopped following until it was nudged.
+ * `nextTick` runs after Vue has written the DOM, which is exactly the moment we need.
+ */
 function queueFollow(): void {
-  if (frame) return;
-  frame = requestAnimationFrame(() => {
-    frame = 0;
+  void nextTick(() => {
     const element = scrollEl.value;
     if (element) element.scrollTop = element.scrollHeight;
   });
@@ -81,11 +85,21 @@ watch(activeSessionId, () => {
 });
 
 onMounted(() => {
+  // Markdown, images and fonts change the height after the message was appended. As long as
+  // the reader is at the bottom, follow that growth too.
+  const target = (listEl.value?.$el as HTMLElement | undefined) ?? scrollEl.value;
+  if (target && typeof ResizeObserver !== "undefined") {
+    observer = new ResizeObserver(() => {
+      if (following.value) queueFollow();
+    });
+    observer.observe(target);
+  }
   void initEngine().then(() => jumpToBottom(false));
 });
 
 onBeforeUnmount(() => {
-  if (frame) cancelAnimationFrame(frame);
+  observer?.disconnect();
+  observer = null;
 });
 </script>
 
@@ -93,7 +107,7 @@ onBeforeUnmount(() => {
   <section class="agent">
     <div class="scroll-wrap">
       <div ref="scrollEl" class="scroll" @scroll="onScroll">
-        <MessageList :messages="messages" />
+        <MessageList ref="listEl" :messages="messages" />
       </div>
 
       <button
