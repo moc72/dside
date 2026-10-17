@@ -696,6 +696,10 @@ impl Db {
             .map_err(|error| error.to_string())?;
 
         let mut messages = Vec::new();
+        // Tool results are only valid immediately after the assistant message that asked for
+        // them. Older databases can contain orphans (from the per-round bug), so anything
+        // without a matching call is dropped instead of being sent and rejected.
+        let mut pending_calls: std::collections::HashSet<String> = std::collections::HashSet::new();
         if let Some((_, summary)) = summary_of(&conn, session_id)? {
             messages.push(crate::engine::types::ChatMessage::system(format!(
                 "Earlier in this conversation (compressed, keep it in mind):\n{summary}"
@@ -714,6 +718,33 @@ impl Db {
             } else {
                 None
             };
+            // A turn that failed after its row was created leaves an assistant row with
+            // nothing in it. The provider rejects an assistant message without content, and
+            // sending it would poison every later turn of the conversation.
+            let empty_assistant = role == "assistant"
+                && content.as_deref().map(str::trim).unwrap_or("").is_empty()
+                && parsed_calls.as_ref().map(Vec::is_empty).unwrap_or(true);
+            if empty_assistant {
+                continue;
+            }
+
+            if role == "assistant" {
+                pending_calls = parsed_calls
+                    .iter()
+                    .flatten()
+                    .map(|call| call.id.clone())
+                    .collect();
+            } else if role == "tool" {
+                let answered = tool_call_id
+                    .as_deref()
+                    .map(|id| pending_calls.remove(id))
+                    .unwrap_or(false);
+                if !answered {
+                    continue;
+                }
+            } else {
+                pending_calls.clear();
+            }
             messages.push(crate::engine::types::ChatMessage {
                 role,
                 content,

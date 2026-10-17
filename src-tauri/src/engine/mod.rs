@@ -474,6 +474,9 @@ pub async fn send_prompt(
         }
 
         if let Err(error) = outcome {
+            // The user sees it in the chat; the log keeps it after the fact. Without this a
+            // failed turn left only an empty row and no way to tell why.
+            eprintln!("engine: turn failed in {sid}: {error}");
             let mut event = EngineEvent::new(&sid, seq + 1, "error");
             event.error = Some(error);
             emit(&app_handle, event);
@@ -1105,6 +1108,11 @@ async fn run_turn(
         .and_then(|db| db.insert_message(session_id, "assistant", None, None, None).ok());
     let mut parts: Vec<Value> = Vec::new();
     let mut said = String::new();
+    // One row per turn means one tool_calls list for the whole turn. Overwriting it per round
+    // left every earlier round's tool results without their call — the provider rejects that
+    // ("tool must be a response to a preceding tool_calls"), which broke the conversation
+    // permanently after the first multi-round turn.
+    let mut all_tool_calls: Vec<Value> = Vec::new();
 
     for _turn in 0..max_turns {
         if cancel.load(Ordering::SeqCst) {
@@ -1148,10 +1156,13 @@ async fn run_turn(
         };
 
         let has_tool_calls = !outcome.tool_calls.is_empty();
-        let tool_calls_json = if has_tool_calls {
-            serde_json::to_string(&outcome.tool_calls).ok()
-        } else {
+        for call in &outcome.tool_calls {
+            all_tool_calls.push(serde_json::to_value(call).unwrap_or(Value::Null));
+        }
+        let tool_calls_json = if all_tool_calls.is_empty() {
             None
+        } else {
+            serde_json::to_string(&all_tool_calls).ok()
         };
         if !outcome.reasoning.is_empty() {
             parts.push(json!({ "kind": "reasoning", "text": outcome.reasoning }));

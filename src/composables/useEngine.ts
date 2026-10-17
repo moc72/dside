@@ -185,6 +185,9 @@ function handleEvent(event: EngineEvent): void {
       break;
     case "error":
       lastError.value = event.error ?? "unknown engine error";
+      // A turn can fail before its first token (a rejected request, a missing key). Without
+      // this the error had no bubble to land in — a scheduled run failed silently.
+      ensureAssistantMessage();
       failAssistantMessage(lastError.value);
       pendingAction.value = null;
       running.value = false;

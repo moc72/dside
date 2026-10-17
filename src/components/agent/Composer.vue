@@ -244,7 +244,9 @@ function toggleAuthorization() {
   margin-left: calc(15% + 3px);
   padding: 8px 6px 10px;
   border-top: 1px solid var(--border);
-  /* background: var(--bg-app); */
+  /* This layer is what hides the message list behind the composer. Without it the watermark
+     and the last messages show through, which looks like the composer is transparent. */
+  background: var(--bg-app);
 }
 
 .note {
@@ -298,7 +300,7 @@ function toggleAuthorization() {
 .composer {
   border: 1px solid var(--border-strong);
   border-radius: 12px;
-  background: var(--bg);
+  background: var(--bg-composer);
   padding: 10px 12px 8px;
 }
 
