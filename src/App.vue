@@ -149,7 +149,7 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
 <template>
   <div v-if="isSplash" class="splash-window">
     <div class="splash-disc">
-      <img src="/whale-splash.webp" alt="" />
+      <img src="/whale-splash.png" class="splash-whale" alt="" />
       <span class="splash-mark" v-html="deepSeekMark"></span>
       <div class="splash-bar"><span></span></div>
     </div>
@@ -239,9 +239,30 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
   box-shadow: 0 18px 60px rgb(0 0 0 / 45%);
 }
 
-.splash-disc img {
+.splash-disc .splash-whale {
   width: 150px;
   height: auto;
+  /* The whale used to be a 40-frame WebP. A flat mark does not need frames: a slow bob and a
+     breath of scale read the same, stay smooth at any size and weigh a fifth. */
+  animation: whale-float 3.2s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes whale-float {
+  0%,
+  100% {
+    transform: translate3d(0, -4px, 0) scale(1);
+  }
+
+  50% {
+    transform: translate3d(0, 5px, 0) scale(1.015);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash-disc .splash-whale {
+    animation: none;
+  }
 }
 
 .splash-mark {
