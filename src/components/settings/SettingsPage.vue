@@ -131,7 +131,9 @@ async function saveKey() {
   await saveApiKey(apiKeyDraft.value);
   apiKeyDraft.value = "";
   // A fresh key usually means a fresh account: pull models and credits right away.
-  await Promise.all([loadModels(), loadBalance()]);
+  // Serially on purpose: the provider's edge resets one of two simultaneous connections.
+  await loadModels();
+  await loadBalance();
 }
 
 async function removeKey() {
@@ -161,7 +163,8 @@ onMounted(async () => {
     systemName.value = "";
   }
   if (engineReady.value) {
-    await Promise.all([loadModels(), loadBalance()]);
+    await loadModels();
+    await loadBalance();
   }
 });
 

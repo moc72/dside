@@ -217,7 +217,7 @@ mod tests {
         assert!(written.starts_with("---\nname: release-notes\n"), "{written}");
         assert!(written.contains("description: Beim Schreiben von Versionsnotizen"));
         assert!(written.contains("1. Diff lesen"));
-        assert!(path.ends_with("release-notes/SKILL.md"));
+        assert!(Path::new(&path).ends_with("release-notes/SKILL.md"));
 
         // Writing again is editing, and does not create a second folder.
         write_skill_at(&root, "Release Notes", "anders", "neu").unwrap();

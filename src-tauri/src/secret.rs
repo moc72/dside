@@ -47,12 +47,32 @@ impl SecretStore {
 
         if let Some(entry) = Self::entry() {
             if entry.set_password(trimmed).is_ok() {
-                // Keyring won: make sure no stale copy stays behind on disk.
-                let _ = std::fs::remove_file(&self.fallback_path);
-                return SecretStatus {
-                    present: true,
-                    backend: "keyring".to_string(),
+                // `set_password` can succeed while the value lives only inside the entry
+                // that wrote it — keyring's mock store does exactly that, and a missing
+                // platform feature is enough to select it. Read the value back through a
+                // *fresh* entry, which is what the next request will do.
+                let verified = match keyring::Entry::new(SERVICE, ACCOUNT) {
+                    Ok(fresh) => match fresh.get_password() {
+                        Ok(stored) if stored == trimmed => true,
+                        Ok(_) => {
+                            // A wrong value must not win over the file fallback.
+                            let _ = fresh.delete_credential();
+                            false
+                        }
+                        // A transient read failure keeps the entry; the file still works.
+                        Err(_) => false,
+                    },
+                    Err(_) => false,
                 };
+
+                if verified {
+                    // Keyring won: make sure no stale copy stays behind on disk.
+                    let _ = std::fs::remove_file(&self.fallback_path);
+                    return SecretStatus {
+                        present: true,
+                        backend: "keyring".to_string(),
+                    };
+                }
             }
         }
 
@@ -155,7 +175,11 @@ mod tests {
             eprintln!("keyring: write failed ({error}) — skipped");
             return;
         }
-        assert_eq!(entry.get_password().unwrap(), "probe");
+        // Read through a second entry. A backend that keeps the value only inside the
+        // entry (keyring's mock store, which is used when no platform feature applies)
+        // passes the same-entry check and loses the value as soon as the entry drops.
+        let reader = keyring::Entry::new("ds-ide.test", "roundtrip").expect("second entry");
+        assert_eq!(reader.get_password().unwrap(), "probe");
         let _ = entry.delete_credential();
     }
 }

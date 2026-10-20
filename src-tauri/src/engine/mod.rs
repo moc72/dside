@@ -5,7 +5,7 @@ pub mod types;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -124,6 +124,37 @@ pub struct BalanceInfo {
     pub topped_up: String,
 }
 
+/// One client for the short provider requests. Reusing it keeps the TLS connection between
+/// `/models` and `/user/balance` alive instead of opening a new one for each call.
+static PROVIDER_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+
+fn provider_client() -> Result<&'static reqwest::Client, String> {
+    if let Some(client) = PROVIDER_CLIENT.get() {
+        return Ok(client);
+    }
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .map_err(|error| error.to_string())?;
+    let _ = PROVIDER_CLIENT.set(client);
+    PROVIDER_CLIENT
+        .get()
+        .ok_or_else(|| "provider: no HTTP client".to_string())
+}
+
+/// The Display of a reqwest error stops at "error sending request"; the actual cause — a
+/// reset connection, a TLS problem, a timeout — is in the source chain.
+fn describe_request_error(error: &reqwest::Error) -> String {
+    let mut text = error.to_string();
+    let mut source = std::error::Error::source(error);
+    while let Some(cause) = source {
+        text.push_str(": ");
+        text.push_str(&cause.to_string());
+        source = cause.source();
+    }
+    text
+}
+
 async fn provider_request(app: &AppHandle, path: &str) -> Result<Value, String> {
     let base = {
         let state = app.state::<EngineState>();
@@ -141,22 +172,31 @@ async fn provider_request(app: &AppHandle, path: &str) -> Result<Value, String> 
     }
 
     let url = format!("{}/{}", base.trim_end_matches('/'), path.trim_start_matches('/'));
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(20))
-        .build()
-        .map_err(|error| error.to_string())?;
+    let client = provider_client()?;
 
-    let response = client
-        .get(url)
-        .bearer_auth(key)
-        .send()
-        .await
-        .map_err(|error| error.to_string())?;
+    // Some provider edges reset one of two simultaneous connections. A retry after a short
+    // pause covers a reset that still slips through; the UI also sends these calls serially.
+    let response = match client.get(url.as_str()).bearer_auth(&key).send().await {
+        Ok(response) => response,
+        Err(first) => {
+            eprintln!("provider: retrying {url}: {}", describe_request_error(&first));
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            client
+                .get(url.as_str())
+                .bearer_auth(&key)
+                .send()
+                .await
+                .map_err(|second| describe_request_error(&second))?
+        }
+    };
 
     if !response.status().is_success() {
         return Err(format!("HTTP {}", response.status()));
     }
-    response.json::<Value>().await.map_err(|error| error.to_string())
+    response
+        .json::<Value>()
+        .await
+        .map_err(|error| describe_request_error(&error))
 }
 
 /// Asks the provider which models the stored key may use (`GET /models`).

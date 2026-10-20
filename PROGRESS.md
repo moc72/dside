@@ -1927,3 +1927,42 @@ aus (verify → Linux/macOS/Windows → Draft-Release mit Artefakten). Der alte 
 `v0.4.7` wird danach gelöscht.
 
 `docs/markdown-test.md` bleibt als lokale Testdatei unversioniert.
+
+## 44. Der Schlüssel, der nur im Mock lag (2026-10-20, dreiundzwanzigste Runde)
+
+Der Windows-Test hat den ersten echten plattformspezifischen Fehler gefunden: Die
+App meldete „Gespeichert im OS-Schlüsselbund", verlor den API-Key aber sofort
+wieder. Ursache war `keyring` 3 ohne Plattform-Features — die Crate hat keine
+Defaults, und mit nur `sync-secret-service` (Linux) greift auf Windows/macOS der
+plattformunabhängige Mock. Der Mock hält den Wert nur in dem `Entry`, der ihn
+geschrieben hat; der nächste `Entry` in `provider_request` ist leer →
+„API key is missing". Unter Linux (Secret Service) fiel das nie auf.
+
+### Behoben
+- `Cargo.toml`: `apple-native` und `windows-native` ergänzt (Linux behält
+  `sync-secret-service` + `crypto-rust`). `Cargo.lock` zieht die
+  plattformspezifischen Abhängigkeiten nach.
+- `SecretStore::set` liest den Wert nach dem Schreiben über einen **frischen**
+  `Entry` zurück. Nur wenn er exakt passt, gilt der Keyring als erfolgreich und
+  die Datei-Kopie wird entfernt. Bei einem falschen Wert wird der Eintrag
+  gelöscht; bei einem Lesefehler bleibt er stehen, aber der Datei-Fallback wird
+  geschrieben und als `file` gemeldet. Damit ist der Mock nie wieder still.
+- `keyring_roundtrip_or_skip` schreibt mit einem Entry und liest mit einem
+  zweiten. Der alte Test las denselben Entry und war deshalb auch im Mock grün.
+- CI: Windows/macOS führen jetzt `cargo test --lib` aus, bevor sie bauen — dort
+  lebt der native Store, den der Linux-`verify`-Job nicht sehen kann.
+- `skills.rs`: Windows-sichere Pfadprüfung im Test (`Path::ends_with`).
+- Provider: ein gemeinsamer `reqwest::Client` für `/models` und `/user/balance`,
+  ein Retry nach 500 ms bei Transportfehlern, Fehlerkette statt nur „error
+  sending request"; die UI lädt Modelle und Guthaben nacheinander statt parallel
+  (beobachtete Connection-Resets bei zwei gleichzeitigen Verbindungen).
+
+### Stand
+Version 0.4.9. `pnpm build` grün, `cargo test` 24 passed / 12 ignored (der
+Keyring-Test lief auf Linux durch). Der Windows-11-Test mit dem neuen Installer
+steht noch aus; erst danach wird der Draft veröffentlicht. Der v0.4.8-Draft
+enthält den Fehler weiterhin und wird nach dem erfolgreichen Test gelöscht,
+der Tag bleibt als Historie.
+
+Der Editor-Picker und das Account-Pill („modest") bleiben für den nächsten
+Termin liegen.

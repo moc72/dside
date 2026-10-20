@@ -94,6 +94,16 @@ jobs:
         if: github.ref_type == 'tag'
         run: node scripts/set-version.mjs "${{ github.ref_name }}"
 
+      # Linux uses Secret Service; the native keyring bug lived on Windows/macOS. Run the
+      # library tests where those stores actually are, so the two-entry test has teeth.
+      - name: Build frontend for tests (Windows/macOS)
+        if: matrix.os != 'ubuntu-22.04'
+        run: pnpm build
+
+      - name: Test library (Windows/macOS)
+        if: matrix.os != 'ubuntu-22.04'
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+
       # On a tag: build and attach the bundles to a draft release. On a manual run there is no
       # tag to release under, so it only builds — the artifacts are uploaded below either way.
       - name: Build bundles (tag)
