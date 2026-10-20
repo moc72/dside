@@ -1959,10 +1959,13 @@ geschrieben hat; der nächste `Entry` in `provider_request` ist leer →
 
 ### Stand
 Version 0.4.9. `pnpm build` grün, `cargo test` 24 passed / 12 ignored (der
-Keyring-Test lief auf Linux durch). Der Windows-11-Test mit dem neuen Installer
-steht noch aus; erst danach wird der Draft veröffentlicht. Der v0.4.8-Draft
-enthält den Fehler weiterhin und wird nach dem erfolgreichen Test gelöscht,
-der Tag bleibt als Historie.
+Keyring-Test lief auf Linux durch). Der Release-Workflow ist ebenfalls grün:
+verify, Linux, macOS und Windows; der neue Testlauf auf Windows und macOS hat
+den Keyring-Test auf beiden Plattformen wirklich ausgeführt (24 passed, nicht
+übersprungen) und der Draft enthält die sieben Assets. Der Windows-11-Test mit
+dem Installer steht noch aus; erst danach wird der Draft veröffentlicht. Der
+v0.4.8-Draft enthält den Fehler weiterhin und wird nach dem erfolgreichen Test
+gelöscht, der Tag bleibt als Historie.
 
 Der Editor-Picker und das Account-Pill („modest") bleiben für den nächsten
 Termin liegen.
