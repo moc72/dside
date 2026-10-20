@@ -1963,9 +1963,10 @@ Keyring-Test lief auf Linux durch). Der Release-Workflow ist ebenfalls grün:
 verify, Linux, macOS und Windows; der neue Testlauf auf Windows und macOS hat
 den Keyring-Test auf beiden Plattformen wirklich ausgeführt (24 passed, nicht
 übersprungen) und der Draft enthält die sieben Assets. Der Windows-11-Test mit
-dem Installer steht noch aus; erst danach wird der Draft veröffentlicht. Der
-v0.4.8-Draft enthält den Fehler weiterhin und wird nach dem erfolgreichen Test
-gelöscht, der Tag bleibt als Historie.
+dem Installer ist auf dem Arbeitsrechner bereits mit einem lokalen 0.4.9-Build
+durchgelaufen. v0.4.9 ist daher als **Latest** veröffentlicht (sieben Assets,
+Release-Notes); der defekte v0.4.8-Draft wurde gelöscht, der Tag v0.4.8 bleibt
+als Historie.
 
 Der Editor-Picker und das Account-Pill („modest") bleiben für den nächsten
 Termin liegen.
