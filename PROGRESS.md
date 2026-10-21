@@ -2143,3 +2143,18 @@ und die ersten Prüfschritte für neue Betreuer. Der Fresh-Install-Smoke-Test st
   antwortete „Blau. Das steht so in meinen Notizen zu diesem Projekt." Das Panel zeigte
   den Projekt-Chip; die eingefügte Zusammenfassung erschien als sticky
   „Wo waren wir?"-Karte. Die Original-DB wurde danach zurückgespielt.
+
+## 53. Zuhause integriert und geprüft (2026-10-21, zweiunddreißigste Runde)
+
+Das Handover aus Runde 45–52 ist sauber auf `main` (nach v0.4.9) angewendet
+worden: `dside-ui-fix.patch` lief ohne Konflikt durch, die drei neuen Komponenten
+(Erststart, Diagnose, Monaco-Diff), `AGENTS.md` und `HANDOVER.md` sind im Baum.
+
+Geprüft auf Linux: `pnpm build` grün, `cargo test --lib` **29 passed / 12
+ignored** (inklusive Dateiverlauf- und Workspace-Gedächtnis-Test). Version steht
+in allen Manifesten auf 0.4.10. Der v0.4.10-Tag ist gepusht; der Release-Workflow
+ist grün (verify, Linux, macOS, Windows, inklusive der neuen Bibliothekstests auf
+Windows/macOS) und hat den Draft mit sieben Assets angelegt.
+
+**v0.4.9 bleibt der veröffentlichte Stand**; v0.4.10 liegt als Draft bereit und
+wird erst nach der Sichtprüfung veröffentlicht.
