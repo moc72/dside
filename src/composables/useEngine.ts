@@ -1,7 +1,14 @@
-import { ref } from "vue";
+import { reactive, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { EngineEvent, MessagePart, Session, SessionGroup, ToolActivity } from "../types";
+import type {
+  EngineEvent,
+  MessagePart,
+  Session,
+  SessionGroup,
+  SessionResume,
+  ToolActivity,
+} from "../types";
 import {
   activeSessionId,
   appendAssistantDelta,
@@ -9,6 +16,7 @@ import {
   appendUserMessage,
   beginAssistantMessage,
   clearConversation,
+  dropMessage,
   endAssistantMessage,
   ensureAssistantMessage,
   failAssistantMessage,
@@ -284,20 +292,38 @@ export function initLastUsage(stored: unknown): void {
   }
 }
 
+let initialized = false;
+let initializing: Promise<void> | null = null;
+
+/**
+ * One-time boot: listener, workspace, keyring, partner, model list, sessions and the first
+ * history. The chat panel mounts again after Settings; a second run would reload the stored
+ * history and wipe live state such as a failed turn's retry bubble.
+ */
 export async function initEngine(): Promise<void> {
-  if (!unlisten) {
-    unlisten = await listen<EngineEvent>("engine://event", (event) => handleEvent(event.payload));
+  if (initialized) return;
+  if (initializing) return initializing;
+  initializing = (async () => {
+    if (!unlisten) {
+      unlisten = await listen<EngineEvent>("engine://event", (event) => handleEvent(event.payload));
+    }
+    extractLegacyKey();
+    await ensureWorkspace();
+    await refreshSecret();
+    await refreshPartnerName();
+    // Ask the provider which models exist before the first turn: an id it does not know would
+    // fail every request, and the field would look fine while doing it.
+    await loadModels();
+    await configureEngine();
+    await loadSessions();
+    await loadHistory(activeSessionId.value);
+  })();
+  try {
+    await initializing;
+    initialized = true;
+  } finally {
+    initializing = null;
   }
-  extractLegacyKey();
-  await ensureWorkspace();
-  await refreshSecret();
-  await refreshPartnerName();
-  // Ask the provider which models exist before the first turn: an id it does not know would
-  // fail every request, and the field would look fine while doing it.
-  await loadModels();
-  await configureEngine();
-  await loadSessions();
-  await loadHistory(activeSessionId.value);
 }
 
 export async function loadSessions(): Promise<void> {
@@ -327,6 +353,12 @@ export async function loadSessions(): Promise<void> {
   }
 }
 
+/**
+ * The compressed summary per session, for the "where we were" card. `null` until the
+ * conversation has been compressed once.
+ */
+export const resumesBySession = reactive<Record<string, SessionResume | null>>({});
+
 export async function loadHistory(sessionId: string): Promise<void> {
   const rows = await invoke<DbHistoryRow[]>("session_history", { sessionId });
   messagesBySession[sessionId] = rows.filter(hasSomethingToSay).map((row) => {
@@ -348,6 +380,14 @@ export async function loadHistory(sessionId: string): Promise<void> {
       parts: timelineFor(row, tools),
     };
   });
+
+  try {
+    resumesBySession[sessionId] = await invoke<SessionResume | null>("session_resume", {
+      sessionId,
+    });
+  } catch {
+    resumesBySession[sessionId] = null;
+  }
 }
 
 /**
@@ -433,6 +473,30 @@ export async function sendPrompt(
     running.value = false;
     lastError.value = String(error);
     failAssistantMessage(lastError.value);
+  }
+}
+
+export async function retryTurn(messageId: string): Promise<void> {
+  if (running.value) return;
+  const sessionId = activeSessionId.value;
+  const message = messagesBySession[sessionId]?.find((entry) => entry.id === messageId);
+  if (!message?.error) return;
+
+  dropMessage(messageId);
+  lastError.value = null;
+  flushStream();
+  running.value = true;
+
+  try {
+    await configureEngine();
+    await invoke("engine_retry", { sessionId });
+  } catch (error) {
+    // The backend rolls the failed tail back before it starts. If even that failed, reload
+    // what is actually stored and leave the error as a bubble that can be retried again.
+    running.value = false;
+    await loadHistory(sessionId);
+    ensureAssistantMessage();
+    failAssistantMessage(String(error));
   }
 }
 

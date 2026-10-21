@@ -10,7 +10,9 @@ import WebDesignPanel from "./components/WebDesignPanel.vue";
 import AgentPanel from "./components/agent/AgentPanel.vue";
 import WorkArea from "./components/workarea/WorkArea.vue";
 import SettingsPage from "./components/settings/SettingsPage.vue";
+import FirstRunDialog from "./components/FirstRunDialog.vue";
 import { deepSeekMark } from "./components/deepseek-mark";
+import { firstRun } from "./stores/settings";
 import {
   CENTER_MIN,
   closeSearch,
@@ -51,6 +53,8 @@ try {
   // running in a plain browser — treat it as the main window
 }
 const isSplash = ref(windowLabel === "splash");
+/** Set once the window is on screen; the splash animations hang off this class. */
+const splashShown = ref(false);
 
 /**
  * Launch splash. The bar is theatre — nothing is downloaded — but a bar that moves
@@ -76,6 +80,7 @@ async function finishSplash() {
   say("splash: artwork ready");
 
   await invoke("splash_visible").catch(() => undefined);
+  splashShown.value = true;
   say("splash: visible");
 
   await new Promise<void>((resolve) => {
@@ -161,7 +166,7 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
 
 <template>
   <div v-if="isSplash" class="splash-window">
-    <div class="splash-disc">
+    <div class="splash-disc" :class="{ animate: splashShown }">
       <img src="/whale-splash.png" class="splash-whale" alt="" />
       <span class="splash-mark" v-html="deepSeekMark"></span>
       <div class="splash-bar"><span></span></div>
@@ -195,6 +200,7 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
     </div>
   </div>
 
+    <FirstRunDialog v-if="firstRun" />
     <SearchDialog v-if="searchOpen" />
     <WebDesignPanel />
   </template>
@@ -260,11 +266,17 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
   z-index: 0;
   top: 40px;
   right: 10px;
-  /* The whale grows towards the edge of the disc while the progress bar runs — the same 7
-     seconds, so the two read as one movement. The disc clips it. */
-  animation: whale-zoom 7s linear forwards;
   transform-origin: 50% 55%;
   will-change: transform;
+}
+
+/* The whale grows towards the edge of the disc while the progress bar runs — the same 7
+   seconds, so the two read as one movement. The disc clips it. Windows with animation
+   effects off reports `prefers-reduced-motion: reduce`; the splash is the app's one
+   deliberate movement, so it runs regardless. Both animations start only once the window
+   is shown (`animate`), not while the webview is still hidden. */
+.splash-disc.animate .splash-whale {
+  animation: whale-zoom 7s linear forwards;
 }
 
 @keyframes whale-zoom {
@@ -282,12 +294,6 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
 .splash-bar {
   position: relative;
   z-index: 1;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .splash-disc .splash-whale {
-    animation: none;
-  }
 }
 
 .splash-mark {
@@ -314,6 +320,9 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
   height: 100%;
   background: var(--accent-whale);
   border-radius: 999px;
+}
+
+.splash-disc.animate .splash-bar span {
   animation: splash-progress 7s linear forwards;
 }
 

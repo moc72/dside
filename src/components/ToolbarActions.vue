@@ -1,12 +1,19 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { onBeforeUnmount, ref } from "vue";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import Icon from "./Icon.vue";
 import { t } from "../i18n";
 import { settings } from "../stores/settings";
 import { openTab, toggleWorkArea } from "../stores/workArea";
 import { toggleWeb } from "../stores/ui";
-import { activeEditor, detectEditors, detecting, editors, useEditors } from "../composables/useEditors";
+import {
+  activeEditor,
+  detectEditors,
+  detecting,
+  editors,
+  openInEditor,
+  useEditors,
+} from "../composables/useEditors";
 import { everydayMode } from "../engine/mode";
 
 const EDITOR_DOWNLOAD_URL = "https://code.visualstudio.com/download";
@@ -16,18 +23,62 @@ const EDITOR_DOWNLOAD_URL = "https://code.visualstudio.com/download";
 useEditors();
 
 const menuOpen = ref(false);
+const openError = ref<string | null>(null);
+let errorTimer: number | undefined;
+
+function clearError(): void {
+  if (errorTimer !== undefined) {
+    window.clearTimeout(errorTimer);
+    errorTimer = undefined;
+  }
+  openError.value = null;
+}
+
+function showError(message: string): void {
+  clearError();
+  openError.value = message;
+  errorTimer = window.setTimeout(() => {
+    errorTimer = undefined;
+    openError.value = null;
+  }, 5000);
+}
+
+onBeforeUnmount(clearError);
+
+function toggleMenu(): void {
+  clearError();
+  menuOpen.value = !menuOpen.value;
+}
 
 function choose(id: string) {
   settings.pinnedEditorId = id;
   menuOpen.value = false;
+  clearError();
+}
+
+async function openWorkspace(): Promise<void> {
+  // Without an editor the picker is the only useful action — detection and download live there.
+  if (!activeEditor.value) {
+    menuOpen.value = true;
+    return;
+  }
+  menuOpen.value = false;
+  clearError();
+  try {
+    await openInEditor();
+  } catch (error) {
+    showError(String(error));
+  }
 }
 
 function detect() {
+  clearError();
   void detectEditors();
 }
 
 async function openDownload() {
   menuOpen.value = false;
+  clearError();
   await openUrl(EDITOR_DOWNLOAD_URL);
 }
 </script>
@@ -36,16 +87,33 @@ async function openDownload() {
   <div class="toolbar">
     <!-- Everyday mode has no code editor to hand things to, so the picker goes away. -->
     <div v-if="!everydayMode" class="editor-wrap">
-      <button class="editor" type="button" @click="menuOpen = !menuOpen">
-        <span class="logo">&lt;/&gt;</span>
-        <span class="label">
-          {{
-            activeEditor?.label ??
-            (detecting ? t("toolbar.editorSearching") : t("toolbar.editorNone"))
-          }}
-        </span>
-        <Icon name="chevron-down" :size="14" />
-      </button>
+      <div class="editor">
+        <button
+          class="editor-open"
+          type="button"
+          :title="activeEditor ? t('toolbar.editorOpen') : t('toolbar.editorChoose')"
+          @click="openWorkspace"
+        >
+          <span class="logo">&lt;/&gt;</span>
+          <span class="label">
+            {{
+              activeEditor?.label ??
+              (detecting ? t("toolbar.editorSearching") : t("toolbar.editorNone"))
+            }}
+          </span>
+          <Icon v-if="activeEditor" name="external-link" :size="12" class="open-hint" />
+        </button>
+        <button
+          class="editor-toggle"
+          type="button"
+          :title="t('toolbar.editorChoose')"
+          :aria-label="t('toolbar.editorChoose')"
+          :aria-expanded="menuOpen"
+          @click="toggleMenu"
+        >
+          <Icon :name="menuOpen ? 'chevron-up' : 'chevron-down'" :size="14" />
+        </button>
+      </div>
 
       <div v-if="menuOpen" class="backdrop" @click="menuOpen = false"></div>
       <div v-if="menuOpen" class="menu">
@@ -54,6 +122,11 @@ async function openDownload() {
           :key="editor.exec"
           class="menu-item"
           type="button"
+          :title="
+            editor.id === settings.pinnedEditorId
+              ? t('toolbar.editorPinActive')
+              : t('toolbar.editorPin')
+          "
           @click="choose(editor.id)"
         >
           <Icon
@@ -77,6 +150,10 @@ async function openDownload() {
           <span class="grow">{{ t("toolbar.editorDownload") }}</span>
         </button>
       </div>
+
+      <p v-if="openError" class="editor-error">
+        {{ t("toolbar.editorOpenFailed") }}: {{ openError }}
+      </p>
     </div>
 
     <button class="icon-btn" type="button" :title="t('toolbar.browser')" @click="toggleWeb">
@@ -109,31 +186,53 @@ async function openDownload() {
 
 .editor {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: stretch;
   height: 28px;
-  padding: 0 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-panel);
+  overflow: hidden;
+}
+
+.editor-open,
+.editor-toggle {
+  display: flex;
+  align-items: center;
+  border: none;
+  background: transparent;
   color: var(--text-strong);
+  font: inherit;
+}
+
+.editor-open {
+  gap: 8px;
+  padding: 0 6px 0 10px;
   font-size: 12px;
+}
+
+.editor-open:hover,
+.editor-toggle:hover {
+  background: var(--bg-hover);
+}
+
+.editor-toggle {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  border-left: 1px solid var(--border);
+  color: var(--text-muted);
 }
 
 /* Narrow window: the logo and the chevron still open the menu, the label is the only part
    that has to go. Without this the right-hand toolbar pushed the session title out. */
 @media (max-width: 980px) {
-  .editor .label {
+  .editor-open .label {
     display: none;
   }
 
-  .editor {
+  .editor-open {
     padding: 0 8px;
   }
-}
-
-.editor:hover {
-  background: var(--bg-hover);
 }
 
 .logo {
@@ -147,6 +246,10 @@ async function openDownload() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.open-hint {
+  color: var(--text-muted);
 }
 
 .icon-btn {
@@ -222,5 +325,21 @@ async function openDownload() {
   height: 1px;
   margin: 6px 4px;
   background: var(--border);
+}
+
+.editor-error {
+  position: absolute;
+  top: 34px;
+  right: 0;
+  z-index: 32;
+  max-width: 340px;
+  padding: 7px 9px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--danger);
+  font-size: 11px;
+  line-height: 1.35;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
 }
 </style>

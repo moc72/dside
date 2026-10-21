@@ -6,7 +6,14 @@ import ContextRing from "./ContextRing.vue";
 import { t } from "../../i18n";
 import { settings } from "../../stores/settings";
 import { modelChoices, modelLabel } from "../../stores/models";
-import { abortTurn, engineReady, running, sendPrompt } from "../../composables/useEngine";
+import { activeSessionId } from "../../stores/sessions";
+import {
+  abortTurn,
+  engineReady,
+  loadHistory,
+  running,
+  sendPrompt,
+} from "../../composables/useEngine";
 
 const text = ref("");
 
@@ -86,6 +93,8 @@ const note = ref<string | null>(null);
 
 function onCompacted(folded: number | null): void {
   note.value = folded ? t("composer.compacted", { count: folded }) : t("composer.compactNothing");
+  // The summary that just replaced the older turns is the "where we were" card.
+  void loadHistory(activeSessionId.value);
   window.setTimeout(() => {
     note.value = null;
   }, 6000);
@@ -123,6 +132,15 @@ const canSend = computed(() => text.value.trim().length > 0 && !running.value);
 watch(model, (value) => {
   settings.model = value;
 });
+
+// A mode change or the first-start dialog can move the model; the select holds a local ref,
+// so it has to follow or it keeps showing the label it was mounted with.
+watch(
+  () => settings.model,
+  (value) => {
+    if (value !== model.value) model.value = value;
+  },
+);
 
 function submit() {
   const value = text.value.trim();

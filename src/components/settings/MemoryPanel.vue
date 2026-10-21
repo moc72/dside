@@ -25,6 +25,7 @@ interface MemoryRow {
   origin: string;
   editedAt: number | null;
   retiredAt: number | null;
+  workspace: string;
 }
 
 interface MemoryReport {
@@ -276,6 +277,9 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
           <span class="memory-title">{{ titleFor(row) }}</span>
           <span class="entry-chips">
             <span class="chip scope">{{ scopeLabels[row.scope] ?? row.scope }}</span>
+            <span v-if="row.workspace" class="chip project" :title="row.workspace">
+              {{ t("memory.project") }}
+            </span>
             <span class="chip kind">{{ row.kind }}</span>
             <span v-if="row.origin === 'user'" class="chip mine">
               {{ row.editedAt ? t("memory.changedByUser") : t("memory.writtenByUser") }}
@@ -305,6 +309,9 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
         <li v-for="row in retired" :key="row.id" class="entry aside">
           <div class="entry-head">
             <span class="chip scope">{{ scopeLabels[row.scope] ?? row.scope }}</span>
+            <span v-if="row.workspace" class="chip project" :title="row.workspace">
+              {{ t("memory.project") }}
+            </span>
             <span class="chip kind">{{ row.kind }}</span>
             <span class="when">{{ formatDate(row.retiredAt ?? row.createdAt) }}</span>
             <button class="mini-text" type="button" @click="restore(row.id)">
@@ -326,6 +333,9 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
               <h3 class="modal-title">{{ titleFor(selected) }}</h3>
               <div class="entry-chips">
                 <span class="chip scope">{{ scopeLabels[selected.scope] ?? selected.scope }}</span>
+                <span v-if="selected.workspace" class="chip project" :title="selected.workspace">
+                  {{ t("memory.project") }}
+                </span>
                 <span class="chip kind">{{ selected.kind }}</span>
                 <span v-if="selected.origin === 'user'" class="chip mine">
                   {{
@@ -539,6 +549,11 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
 .chip.kind {
   border: 1px solid var(--border-strong);
   color: var(--text-muted);
+}
+
+.chip.project {
+  border: 1px solid var(--accent);
+  color: var(--accent);
 }
 
 .chip.mine {

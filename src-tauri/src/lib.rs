@@ -207,12 +207,20 @@ fn detect_editors_impl() -> Vec<EditorCandidate> {
             for known in KNOWN_EDITORS {
                 let candidate = dir.join(known.bin);
                 if is_executable_file(&candidate) {
-                    let resolved = fs::canonicalize(&candidate).unwrap_or_else(|_| candidate.clone());
+                    // Windows' canonicalize yields a `\\?\` path; the launcher below wants
+                    // a plain path. Unix keeps the resolved target (symlinks, AppImages).
+                    let resolved = if cfg!(windows) {
+                        candidate.clone()
+                    } else {
+                        fs::canonicalize(&candidate).unwrap_or_else(|_| candidate.clone())
+                    };
                     found.push(EditorCandidate {
                         id: known.id.to_string(),
                         label: known.label.to_string(),
                         family: known.family.to_string(),
-                        exec: resolved.to_string_lossy().to_string(),
+                        // Quote it: the exec goes through the same command-line splitter as
+                        // the desktop entries, and `C:\Program Files\…` must stay one part.
+                        exec: format!("\"{}\"", resolved.to_string_lossy()),
                         args: Vec::new(),
                         source: "path".to_string(),
                     });
@@ -388,14 +396,55 @@ fn open_workspace_in_editor(editor_id: String, workspace: String) -> Result<(), 
     let program = parts.remove(0);
     let mut args = parts;
     args.extend(chosen.args);
+    eprintln!(
+        "editor: opening {program} in {}",
+        if workspace.is_empty() {
+            "(no workspace)"
+        } else {
+            &workspace
+        }
+    );
     if !workspace.is_empty() {
         args.push(workspace);
     }
 
-    Command::new(program)
+    #[cfg(windows)]
+    let mut command = {
+        use std::os::windows::process::CommandExt;
+
+        // PATH advertises VS Code and friends as a `code` shim next to `code.cmd`.
+        // Windows cannot execute either directly; prefer the .cmd sibling and hide the
+        // console window the shim would otherwise flash.
+        let extension = Path::new(&program)
+            .extension()
+            .and_then(|value| value.to_str())
+            .map(|value| value.to_ascii_lowercase());
+        let script = match extension.as_deref() {
+            Some("cmd") | Some("bat") => Some(PathBuf::from(&program)),
+            _ if extension.is_none() => {
+                let sibling = PathBuf::from(format!("{program}.cmd"));
+                sibling.is_file().then_some(sibling)
+            }
+            _ => None,
+        };
+        let mut command = match script {
+            Some(shim) => {
+                let mut command = Command::new("cmd");
+                command.arg("/C").arg(shim);
+                command
+            }
+            None => Command::new(&program),
+        };
+        command.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        command
+    };
+    #[cfg(not(windows))]
+    let mut command = Command::new(&program);
+
+    command
         .args(args)
         .spawn()
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| format!("{program}: {error}"))?;
     Ok(())
 }
 
@@ -536,6 +585,79 @@ fn read_file_base64(path: String) -> Result<String, String> {
 
     let bytes = std::fs::read(&target).map_err(|error| error.to_string())?;
     Ok(base64_encode(&bytes))
+}
+
+/// The snapshots of one file, newest first. The path is normalized with the same helper the
+/// engine used when it recorded the snapshot, so separators from the tree and the model agree.
+#[tauri::command]
+fn file_versions(
+    db: tauri::State<'_, db::Db>,
+    path: String,
+    limit: Option<i64>,
+) -> Result<Vec<db::FileVersionInfo>, String> {
+    let path = engine::tools::stable_path(Path::new(&path));
+    db.file_versions(&path, limit.unwrap_or(80))
+}
+
+#[tauri::command]
+fn file_version_content(db: tauri::State<'_, db::Db>, id: i64) -> Result<Option<String>, String> {
+    Ok(db.file_version(id)?.content)
+}
+
+/// Puts a snapshot back. The current state is saved as another snapshot first, so a revert
+/// is itself undoable. A snapshot from before the file existed removes the file again.
+fn revert_file_version(db: &db::Db, id: i64, session_id: &str) -> Result<String, String> {
+    let version = db.file_version(id)?;
+    let path = PathBuf::from(&version.info.path);
+
+    match fs::read_to_string(&path) {
+        Ok(current) => {
+            let _ = db.insert_file_version(
+                &version.info.path,
+                Some(&current),
+                true,
+                session_id,
+                "revert",
+                "",
+            );
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            let _ = db.insert_file_version(
+                &version.info.path,
+                None,
+                false,
+                session_id,
+                "revert",
+                "",
+            );
+        }
+        Err(error) => return Err(error.to_string()),
+    }
+
+    if version.info.existed {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        }
+        fs::write(&path, version.content.unwrap_or_default())
+            .map_err(|error| error.to_string())?;
+    } else {
+        match fs::remove_file(&path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.to_string()),
+        }
+    }
+
+    Ok(version.info.path)
+}
+
+#[tauri::command]
+fn file_revert(
+    db: tauri::State<'_, db::Db>,
+    id: i64,
+    session_id: Option<String>,
+) -> Result<String, String> {
+    revert_file_version(db.inner(), id, &session_id.unwrap_or_default())
 }
 
 /// Hand-rolled to avoid another dependency; sixteen lines and easy to test.
@@ -711,6 +833,81 @@ fn about_info() -> AboutInfo {
     }
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DiagnosticsInfo {
+    app_version: String,
+    os: String,
+    arch: String,
+    keyring_present: bool,
+    keyring_backend: String,
+    workspace: String,
+    base_url: String,
+    model: String,
+    database_path: String,
+    database_bytes: u64,
+    editors: Vec<String>,
+}
+
+/// What the support page shows. Everything here is local; the provider call is the only
+/// network step and the UI triggers it separately, so opening the page stays cheap.
+#[tauri::command]
+fn diagnostics(app: AppHandle) -> DiagnosticsInfo {
+    let (keyring_present, keyring_backend) = app
+        .try_state::<secret::SecretStore>()
+        .map(|store| {
+            let status = store.status();
+            (status.present, status.backend)
+        })
+        .unwrap_or((false, "none".to_string()));
+
+    let (workspace, base_url, model) = app
+        .try_state::<db::Db>()
+        .and_then(|db| db.all_settings().ok())
+        .map(|settings| {
+            let read = |key: &str| {
+                settings
+                    .get(key)
+                    .and_then(|raw| serde_json::from_str::<String>(raw).ok())
+                    .unwrap_or_default()
+            };
+            (read("workspace"), read("baseUrl"), read("model"))
+        })
+        .unwrap_or_default();
+
+    let database = app
+        .path()
+        .app_data_dir()
+        .ok()
+        .map(|directory| directory.join("ds-ide.sqlite3"));
+    let database_path = database
+        .as_ref()
+        .map(|path| path.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let database_bytes = database
+        .as_ref()
+        .and_then(|path| fs::metadata(path).ok())
+        .map(|metadata| metadata.len())
+        .unwrap_or(0);
+
+    DiagnosticsInfo {
+        app_version: env!("CARGO_PKG_VERSION").to_string(),
+        os: std::env::consts::OS.to_string(),
+        arch: std::env::consts::ARCH.to_string(),
+        keyring_present,
+        keyring_backend,
+        workspace,
+        base_url,
+        model,
+        database_path,
+        database_bytes,
+        editors: detect_editors_impl()
+            .into_iter()
+            .map(|candidate| format!("{} ({})", candidate.label, candidate.source))
+            .collect(),
+    }
+}
+
 fn tidy_version(version: &str) -> String {
     version.trim().trim_start_matches(['^', '~', '=']).to_string()
 }
@@ -878,10 +1075,14 @@ pub fn run() {
             read_dir_children,
             read_text_file,
             read_file_base64,
+            file_versions,
+            file_version_content,
+            file_revert,
             default_workspace,
             engine::engine_set_config,
             engine::engine_configured,
             engine::engine_send,
+            engine::engine_retry,
             engine::session_compact,
             engine::engine_models,
             engine::provider_balance,
@@ -900,6 +1101,7 @@ pub fn run() {
             db::session_archive,
             db::session_create,
             db::session_history,
+            db::session_resume,
             db::session_delete,
             db::session_update,
             db::session_todos,
@@ -908,6 +1110,7 @@ pub fn run() {
             db::partner_name,
             db::partner_name_set,
             about_info,
+            diagnostics,
             db::default_display_name,
             db::memories_list,
             db::memories_retired,
@@ -1034,5 +1237,38 @@ mod tests {
 
         assert_eq!(ours, expected.trim(), "encoder differs on {path}");
         println!("{} bytes encoded identically", bytes.len());
+    }
+
+    #[test]
+    fn reverting_a_snapshot_restores_and_backs_up_the_current_state() {
+        let directory =
+            std::env::temp_dir().join(format!("ds-ide-revert-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory).unwrap();
+        let target = directory.join("note.txt");
+        fs::write(&target, "aktuell").unwrap();
+        let db = db::Db::open(&directory.join("test.sqlite3")).unwrap();
+        let path = target.to_string_lossy().to_string();
+
+        let old = db
+            .insert_file_version(&path, Some("vorher"), true, "s1", "edit", "c1")
+            .unwrap();
+        assert_eq!(revert_file_version(&db, old, "s1").unwrap(), path);
+        assert_eq!(fs::read_to_string(&target).unwrap(), "vorher");
+
+        let history = db.file_versions(&path, 10).unwrap();
+        assert_eq!(history.len(), 2, "the current state was backed up");
+        assert_eq!(history[0].origin, "revert");
+        let backup = db.file_version(history[0].id).unwrap();
+        assert_eq!(backup.content.as_deref(), Some("aktuell"));
+
+        // A snapshot from before the file existed removes it again.
+        let created = db
+            .insert_file_version(&path, None, false, "s1", "write", "c2")
+            .unwrap();
+        revert_file_version(&db, created, "s1").unwrap();
+        assert!(!target.exists());
+
+        let _ = fs::remove_dir_all(&directory);
     }
 }

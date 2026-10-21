@@ -140,6 +140,14 @@ export function failAssistantMessage(error: string): void {
   currentAssistantId = null;
 }
 
+/** Drops one message from the open conversation — the failed bubble before a retry. */
+export function dropMessage(id: string): void {
+  const list = bucket();
+  const index = list.findIndex((message) => message.id === id);
+  if (index >= 0) list.splice(index);
+  if (currentAssistantId === id) currentAssistantId = null;
+}
+
 export function clearConversation(): void {
   messagesBySession[activeSessionId.value] = [];
   currentAssistantId = null;

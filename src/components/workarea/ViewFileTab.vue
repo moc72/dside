@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import Icon from "../Icon.vue";
 import FileTree from "../FileTree.vue";
 import MonacoEditor from "../MonacoEditor.vue";
+import MonacoDiff from "../MonacoDiff.vue";
 import { everydayMode } from "../../engine/mode";
 import PdfView from "./PdfView.vue";
 import { t } from "../../i18n";
-import type { FileNode } from "../../types";
+import type { FileNode, FileVersionInfo } from "../../types";
 import { languageFromPath } from "../../lib/language";
 import { escapeHtml, mimeFor, previewKindFor, renderMarkdown, rtfToText } from "../../lib/preview";
 import { renderDocx, renderSheet, renderSlides } from "../../lib/office";
@@ -21,7 +22,14 @@ import {
   treeError,
   treeLoading,
 } from "../../composables/useWorkspace";
-import { fileRevision, fileTreeVisible, openFile } from "../../stores/workArea";
+import {
+  fileRevision,
+  fileTreeVisible,
+  historyPath,
+  historyRequest,
+  openFile,
+} from "../../stores/workArea";
+import { activeSessionId } from "../../stores/sessions";
 import { resolvedTheme } from "../../stores/settings";
 
 const props = defineProps<{ path?: string | null }>();
@@ -37,10 +45,25 @@ const editorTheme = computed(() => (resolvedTheme.value === "light" ? "vs" : "vs
 const kind = computed(() => (props.path ? previewKindFor(props.path) : "text"));
 const markdownMode = ref<"preview" | "source">("preview");
 
+/** The snapshot history: the list, the selected version and the diff against the file. */
+const historyOpen = ref(false);
+const historyLoading = ref(false);
+const historyError = ref<string | null>(null);
+const versions = ref<FileVersionInfo[]>([]);
+const selectedVersionId = ref<number | null>(null);
+const originalContent = ref<string | null>(null);
+const restoring = ref(false);
+const historyAvailable = computed(() => kind.value === "text" || kind.value === "markdown");
+
 watch(
   () => props.path,
   () => {
     markdownMode.value = "preview";
+    historyOpen.value = false;
+    historyError.value = null;
+    versions.value = [];
+    selectedVersionId.value = null;
+    originalContent.value = null;
   },
 );
 
@@ -144,13 +167,98 @@ async function load(path: string) {
   }
 }
 
+function originLabel(origin: string): string {
+  if (origin === "write") return t("viewFile.historyWrite");
+  if (origin === "edit") return t("viewFile.historyEdit");
+  return t("viewFile.historyRevert");
+}
+
+function formatVersionTime(seconds: number): string {
+  return new Date(seconds * 1000).toLocaleString();
+}
+
+async function loadVersion(id: number): Promise<void> {
+  const body = await invoke<string | null>("file_version_content", { id });
+  originalContent.value = body ?? "";
+}
+
+async function loadVersions(): Promise<void> {
+  const path = selectedPath.value;
+  if (!path || !historyAvailable.value) return;
+  historyLoading.value = true;
+  historyError.value = null;
+  try {
+    versions.value = await invoke<FileVersionInfo[]>("file_versions", { path });
+    const stillThere = versions.value.some((version) => version.id === selectedVersionId.value);
+    if (!stillThere) selectedVersionId.value = versions.value[0]?.id ?? null;
+    if (selectedVersionId.value) await loadVersion(selectedVersionId.value);
+    else originalContent.value = null;
+  } catch (error) {
+    historyError.value = `${t("viewFile.historyError")} ${String(error)}`;
+  } finally {
+    historyLoading.value = false;
+  }
+}
+
+async function openHistory(): Promise<void> {
+  if (!historyAvailable.value) return;
+  historyOpen.value = true;
+  await loadVersions();
+}
+
+function toggleHistory(): void {
+  if (historyOpen.value) {
+    historyOpen.value = false;
+    return;
+  }
+  void openHistory();
+}
+
+async function selectVersion(id: number): Promise<void> {
+  selectedVersionId.value = id;
+  historyError.value = null;
+  try {
+    await loadVersion(id);
+  } catch (error) {
+    historyError.value = `${t("viewFile.historyError")} ${String(error)}`;
+  }
+}
+
+async function restoreSelected(): Promise<void> {
+  const id = selectedVersionId.value;
+  if (!id || restoring.value || !selectedPath.value) return;
+  if (!window.confirm(t("viewFile.restoreConfirm"))) return;
+  restoring.value = true;
+  historyError.value = null;
+  try {
+    await invoke("file_revert", { id, sessionId: activeSessionId.value ?? "" });
+    await load(selectedPath.value);
+    historyOpen.value = false;
+    versions.value = [];
+    selectedVersionId.value = null;
+    originalContent.value = null;
+  } catch (error) {
+    historyError.value = `${t("viewFile.restoreFailed")} ${String(error)}`;
+  } finally {
+    restoring.value = false;
+  }
+}
+
 watch(
   [() => props.path, fileRevision],
   ([value]) => {
     if (value) void load(value);
+    if (value && historyOpen.value) void loadVersions();
   },
   { immediate: true },
 );
+
+watch(historyRequest, async () => {
+  const requestPath = historyPath.value;
+  if (!requestPath) return;
+  await nextTick();
+  if (requestPath === selectedPath.value) await openHistory();
+});
 
 onMounted(() => {
   if (tree.value.length === 0) void initWorkspace();
@@ -228,6 +336,15 @@ async function toggle(node: FileNode) {
               {{ t("viewFile.source") }}
             </button>
           </template>
+          <button
+            v-if="historyAvailable"
+            class="mode"
+            :class="{ active: historyOpen }"
+            type="button"
+            @click="toggleHistory"
+          >
+            {{ t("viewFile.history") }}
+          </button>
           <!-- The same fixed line for every kind: markdown's mode switch, code's path, and
                the tree toggle. It does not scroll with Monaco, so the path stays visible. -->
           <span class="path">{{ selectedPath }}</span>
@@ -243,7 +360,55 @@ async function toggle(node: FileNode) {
           </button>
         </div>
 
-        <img v-if="kind === 'image'" class="image" :src="imageSrc" :alt="selectedPath ?? ''" />
+        <div v-if="historyOpen" class="history">
+          <div class="history-list">
+            <p v-if="historyLoading" class="note">{{ t("viewFile.loading") }}</p>
+            <p v-else-if="historyError" class="note warn">{{ historyError }}</p>
+            <p v-else-if="!versions.length" class="note">{{ t("viewFile.historyEmpty") }}</p>
+            <button
+              v-for="version in versions"
+              :key="version.id"
+              class="history-item"
+              :class="{ active: version.id === selectedVersionId }"
+              type="button"
+              @click="selectVersion(version.id)"
+            >
+              <span class="history-time">{{ formatVersionTime(version.createdAt) }}</span>
+              <span class="history-origin">
+                {{ originLabel(version.origin) }}
+                <span v-if="!version.existed" class="history-new">
+                  · {{ t("viewFile.historyCreated") }}
+                </span>
+              </span>
+            </button>
+          </div>
+          <div class="history-view">
+            <div class="history-actions">
+              <span class="history-hint">{{ t("viewFile.historyHint") }}</span>
+              <button
+                class="restore"
+                type="button"
+                :disabled="!selectedVersionId || restoring"
+                @click="restoreSelected"
+              >
+                <Icon name="reload" :size="13" />
+                <span>{{ t("viewFile.restore") }}</span>
+              </button>
+            </div>
+            <div v-if="originalContent !== null" class="history-diff">
+              <MonacoDiff
+                :original="originalContent"
+                :modified="content"
+                :language="language"
+                :theme="editorTheme"
+              />
+            </div>
+            <p v-else class="note">{{ t("viewFile.historyHint") }}</p>
+          </div>
+        </div>
+
+        <template v-else>
+          <img v-if="kind === 'image'" class="image" :src="imageSrc" :alt="selectedPath ?? ''" />
 
         <PdfView v-else-if="kind === 'pdf'" :path="selectedPath" />
 
@@ -275,6 +440,7 @@ async function toggle(node: FileNode) {
           :theme="editorTheme"
           :options="viewerOptions"
         />
+        </template>
       </template>
 
       <div v-else class="placeholder">
@@ -618,5 +784,114 @@ async function toggle(node: FileNode) {
   margin: 0;
   color: var(--text-muted);
   font-size: 12px;
+}
+
+.note.warn {
+  color: var(--danger);
+}
+
+.history {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.history-list {
+  width: 220px;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 6px;
+  border-right: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+
+.history-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.history-item:hover {
+  background: var(--bg-hover);
+}
+
+.history-item.active {
+  background: var(--bg-active);
+  color: var(--text-strong);
+}
+
+.history-time {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.history-origin {
+  font-size: 12px;
+}
+
+.history-new {
+  color: var(--accent);
+  font-size: 11px;
+}
+
+.history-view {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.history-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+
+.history-hint {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.restore {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-strong);
+  font-size: 12px;
+}
+
+.restore:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.restore:disabled {
+  opacity: 0.5;
+}
+
+.history-diff {
+  flex: 1;
+  min-height: 0;
 }
 </style>

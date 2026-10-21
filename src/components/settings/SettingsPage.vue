@@ -7,6 +7,7 @@ import ToggleRow from "./ToggleRow.vue";
 import MemoryPanel from "./MemoryPanel.vue";
 import PartnerPanel from "./PartnerPanel.vue";
 import AboutPanel from "./AboutPanel.vue";
+import DiagnosticsPanel from "./DiagnosticsPanel.vue";
 import { locale, localeLabel, locales, setLocale, t } from "../../i18n";
 import type { Locale, MessageKey } from "../../i18n";
 import { links } from "../../engine/links";
@@ -73,6 +74,7 @@ const groups = computed<NavGroup[]>(() => [
     key: "settings.groups.management",
     items: [
       { id: "account", label: "settings.items.account", icon: "user" },
+      { id: "diagnostics", label: "settings.items.diagnostics", icon: "monitor" },
       { id: "about", label: "settings.items.about", icon: "doc" },
     ],
   },
@@ -398,6 +400,14 @@ watch(activeItem, (value) => {
 
           <div class="row">
             <div class="text">
+              <div class="label">{{ t("model.baseUrl") }}</div>
+              <div class="desc">{{ t("model.baseUrlDesc") }}</div>
+            </div>
+            <input v-model="settings.baseUrl" class="input" type="url" spellcheck="false" />
+          </div>
+
+          <div class="row">
+            <div class="text">
               <div class="label">{{ t("model.model") }}</div>
               <!-- The name is what a person recognises; the id is what actually gets sent, so
                    both are on screen instead of only the one that looked wrong. -->
@@ -460,6 +470,10 @@ watch(activeItem, (value) => {
 
       <template v-else-if="activeItem === 'partner'">
         <PartnerPanel />
+      </template>
+
+      <template v-else-if="activeItem === 'diagnostics'">
+        <DiagnosticsPanel />
       </template>
 
       <template v-else-if="activeItem === 'about'">

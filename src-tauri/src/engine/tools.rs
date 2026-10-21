@@ -298,12 +298,43 @@ pub fn definitions() -> Vec<Value> {
     ]
 }
 
-fn resolve(workspace: &Path, input: &str) -> PathBuf {
+pub(crate) fn resolve(workspace: &Path, input: &str) -> PathBuf {
     let path = Path::new(input);
     if path.is_absolute() {
         path.to_path_buf()
     } else {
         workspace.join(path)
+    }
+}
+
+/// An absolute, separator-stable key for the file history. The file tree and the model can
+/// address the same file with different separators; the snapshot lookup needs one key.
+pub(crate) fn stable_path(path: &Path) -> String {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map(|directory| directory.join(path))
+            .unwrap_or_else(|_| path.to_path_buf())
+    };
+    let stable = match (absolute.parent(), absolute.file_name()) {
+        (Some(parent), Some(name)) => match parent.canonicalize() {
+            Ok(parent) => parent.join(name),
+            Err(_) => absolute.clone(),
+        },
+        _ => absolute.clone(),
+    };
+    let text = stable.to_string_lossy();
+    #[cfg(windows)]
+    {
+        return text
+            .strip_prefix(r"\\?\")
+            .unwrap_or(&text)
+            .replace('/', "\\");
+    }
+    #[cfg(not(windows))]
+    {
+        text.to_string()
     }
 }
 

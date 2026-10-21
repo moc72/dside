@@ -3,7 +3,7 @@ pub mod tools;
 pub mod types;
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -97,7 +97,18 @@ pub async fn engine_send(
     prompt: String,
     attachments: Option<Vec<AttachmentRef>>,
 ) -> Result<(), String> {
-    send_prompt(&app, &session_id, &prompt, &attachments.unwrap_or_default()).await
+    send_prompt(&app, &session_id, &prompt, &attachments.unwrap_or_default(), false).await
+}
+
+/// Retries the last request after a failed turn: removes the failed tail and starts the
+/// same user message again, without inserting a duplicate.
+#[tauri::command]
+pub async fn engine_retry(app: AppHandle, session_id: String) -> Result<(), String> {
+    let db = app
+        .try_state::<Db>()
+        .ok_or_else(|| "engine: database unavailable".to_string())?;
+    db.rollback_failed_turn(&session_id)?;
+    send_prompt(&app, &session_id, "", &[], true).await
 }
 
 /// What the provider reports for one model. The API knows friendlier names than the id,
@@ -419,6 +430,7 @@ pub async fn send_prompt(
     session_id: &str,
     prompt: &str,
     attachments: &[AttachmentRef],
+    retry: bool,
 ) -> Result<(), String> {
     let mut config = {
         let state = app.state::<EngineState>();
@@ -436,31 +448,34 @@ pub async fn send_prompt(
         return Err("engine: API key is missing".to_string());
     }
 
-    // Persist the user turn first: the conversation must survive a crash or restart.
+    // Persist the user turn first: the conversation must survive a crash or restart. A retry
+    // starts from the user message that is already there and must not insert it twice.
     let messages = match app.try_state::<Db>() {
         Some(db) => {
             db.ensure_session(session_id, "", "project", &config.workspace)?;
-            // The images belong to this message, so they are stored with it — as a timeline,
-            // exactly like an answer (see §24).
-            let mut parts: Vec<Value> = attachments
-                .iter()
-                .map(|attachment| {
-                    json!({
-                        "kind": "image",
-                        "path": attachment.path,
-                        "name": attachment.name,
-                        "mime": attachment.mime,
-                        "preview": attachment.preview,
+            if !retry {
+                // The images belong to this message, so they are stored with it — as a timeline,
+                // exactly like an answer (see §24).
+                let mut parts: Vec<Value> = attachments
+                    .iter()
+                    .map(|attachment| {
+                        json!({
+                            "kind": "image",
+                            "path": attachment.path,
+                            "name": attachment.name,
+                            "mime": attachment.mime,
+                            "preview": attachment.preview,
+                        })
                     })
-                })
-                .collect();
-            if !prompt.is_empty() {
-                parts.push(json!({ "kind": "text", "text": prompt }));
-            }
-            let timeline = serde_json::to_string(&parts).ok();
-            db.insert_message(session_id, "user", Some(prompt), None, None)?;
-            if let (Some(timeline), Some(id)) = (timeline.as_deref(), db.last_message_id(session_id).ok().flatten()) {
-                let _ = db.update_message(id, Some(prompt), None, Some(timeline));
+                    .collect();
+                if !prompt.is_empty() {
+                    parts.push(json!({ "kind": "text", "text": prompt }));
+                }
+                let timeline = serde_json::to_string(&parts).ok();
+                db.insert_message(session_id, "user", Some(prompt), None, None)?;
+                if let (Some(timeline), Some(id)) = (timeline.as_deref(), db.last_message_id(session_id).ok().flatten()) {
+                    let _ = db.update_message(id, Some(prompt), None, Some(timeline));
+                }
             }
             db.touch_session(session_id)?;
             let mut loaded = db.load_llm_messages(session_id)?;
@@ -483,7 +498,12 @@ pub async fn send_prompt(
             }
             loaded
         }
-        None => vec![ChatMessage::user(prompt.to_string())],
+        None => {
+            if retry {
+                return Err("engine: a retry needs the database".to_string());
+            }
+            vec![ChatMessage::user(prompt.to_string())]
+        }
     };
 
     let cancel = Arc::new(AtomicBool::new(false));
@@ -495,8 +515,10 @@ pub async fn send_prompt(
         session.seq
     };
 
-    // A brand-new session is named after its first message.
-    maybe_generate_title(app, session_id, prompt, config.clone());
+    // A brand-new session is named after its first message; a retry keeps the title.
+    if !retry {
+        maybe_generate_title(app, session_id, prompt, config.clone());
+    }
 
     let app_handle = app.clone();
     let sid = session_id.to_string();
@@ -546,7 +568,7 @@ pub async fn run_due_schedules(app: &AppHandle) {
 
     for schedule in due {
         let _ = db.mark_schedule_run(schedule.id, now + schedule.interval_seconds);
-        if let Err(error) = send_prompt(app, &schedule.session_id, &schedule.prompt, &[]).await {
+        if let Err(error) = send_prompt(app, &schedule.session_id, &schedule.prompt, &[], false).await {
             eprintln!("scheduler: schedule {} failed: {error}", schedule.id);
         }
     }
@@ -579,7 +601,12 @@ fn recall_block(rows: &[crate::db::MemoryRow]) -> String {
             ("user", false) => " (written by the user)",
             _ => "",
         };
-        block.push_str(&format!("- [{scope}] {}{marker}\n", row.text));
+        let project = if row.workspace.trim().is_empty() {
+            ""
+        } else {
+            " (project)"
+        };
+        block.push_str(&format!("- [{scope}]{project} {}{marker}\n", row.text));
     }
     block
 }
@@ -668,7 +695,7 @@ fn choose_name_tool(app: &AppHandle, args: &Value) -> tools::ToolOutcome {
 
 /// Long-term memory lives in the database, so it is handled here rather than in
 /// `tools::execute`, which stays storage-free.
-fn memory_tool(app: &AppHandle, args: &Value) -> tools::ToolOutcome {
+fn memory_tool(app: &AppHandle, args: &Value, workspace: &str) -> tools::ToolOutcome {
     let Some(db) = app.try_state::<Db>() else {
         return tools::ToolOutcome::err("memory: database unavailable");
     };
@@ -689,7 +716,17 @@ fn memory_tool(app: &AppHandle, args: &Value) -> tools::ToolOutcome {
             let title = args.get("title").and_then(Value::as_str);
             // Seeky's own note. Entries the user rewrote in the UI carry origin 'user'.
             match db.insert_memory_with_title(kind, scope, title, text, None, "seeky") {
-                Ok(id) => tools::ToolOutcome::ok(format!("remembered as #{id} ({scope}/{kind})")),
+                Ok(id) => {
+                    let _ = db.set_memory_workspace(id, workspace.trim());
+                    let place = if workspace.trim().is_empty() {
+                        ""
+                    } else {
+                        ", project"
+                    };
+                    tools::ToolOutcome::ok(format!(
+                        "remembered as #{id} ({scope}/{kind}{place})"
+                    ))
+                }
                 Err(error) => tools::ToolOutcome::err(format!("memory: {error}")),
             }
         }
@@ -812,13 +849,81 @@ async fn ask_user(
     }
 }
 
+/// The file state before a `write`/`edit`, captured before the tool runs. The snapshot is
+/// only recorded when the tool succeeds — a failed edit must not leave a history entry.
+struct PendingFileSnapshot {
+    path: String,
+    content: Option<String>,
+    existed: bool,
+}
+
+fn pending_file_snapshot(
+    workspace: &Path,
+    name: &str,
+    args: &Value,
+) -> Option<PendingFileSnapshot> {
+    if name != "write" && name != "edit" {
+        return None;
+    }
+    let raw = args.get("path").and_then(Value::as_str)?.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    let target = tools::resolve(workspace, raw);
+    let path = tools::stable_path(&target);
+    match std::fs::read_to_string(&target) {
+        Ok(content) => Some(PendingFileSnapshot {
+            path,
+            content: Some(content),
+            existed: true,
+        }),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Some(PendingFileSnapshot {
+            path,
+            content: None,
+            existed: false,
+        }),
+        Err(_) => None,
+    }
+}
+
+fn record_file_snapshot(
+    app: &AppHandle,
+    session_id: &str,
+    before: Option<PendingFileSnapshot>,
+    origin: &str,
+    call_id: &str,
+) {
+    let Some(before) = before else { return };
+    if let Some(db) = app.try_state::<Db>() {
+        let _ = db.insert_file_version(
+            &before.path,
+            before.content.as_deref(),
+            before.existed,
+            session_id,
+            origin,
+            call_id,
+        );
+    }
+}
+
 /// A sub-agent: a fresh conversation with the same model and tools, returning only its
 /// final answer. Its work is deliberately invisible in the UI — only the tool card shows —
 /// so the point is to keep the parent context clean.
 ///
 /// Guards: no nested `task` (no recursion), no `ask_user` (it could not reach the user
 /// through the parent's UI), and a hard inner turn cap.
+#[cfg(test)]
 pub async fn task_tool(config: &EngineConfig, args: &Value) -> tools::ToolOutcome {
+    task_tool_with_snapshots(None, "", config, args).await
+}
+
+/// The implementation. `app` is `None` in tests, where there is no database to write to.
+async fn task_tool_with_snapshots(
+    app: Option<&AppHandle>,
+    session_id: &str,
+    config: &EngineConfig,
+    args: &Value,
+) -> tools::ToolOutcome {
     const MAX_INNER_TURNS: u32 = 8;
     const MAX_ANSWER_CHARS: usize = 20_000;
 
@@ -856,13 +961,20 @@ pub async fn task_tool(config: &EngineConfig, args: &Value) -> tools::ToolOutcom
         })
         .collect();
 
+    let mut sub_system = "You are a sub-agent inside DS.IDE, working on one self-contained task. \
+         You have tools (read, write, edit, bash, glob, grep, web_fetch, skill). \
+         Do the work and answer with the result and the evidence needed to trust it. \
+         Do not ask questions — nobody can answer them here."
+        .to_string();
+    if let Some(rules) = project_instructions(&workspace) {
+        sub_system.push_str(
+            "\n\n## Project instructions\n\
+             These come from the repository (AGENTS.md or .dside/rules.md). Follow them.\n\n",
+        );
+        sub_system.push_str(&rules);
+    }
     let mut messages = vec![
-        ChatMessage::system(
-            "You are a sub-agent inside DS.IDE, working on one self-contained task. \
-             You have tools (read, write, edit, bash, glob, grep, web_fetch, skill). \
-             Do the work and answer with the result and the evidence needed to trust it. \
-             Do not ask questions — nobody can answer them here.",
-        ),
+        ChatMessage::system(sub_system),
         ChatMessage::user(prompt.to_string()),
     ];
     let mut todos: Vec<Value> = Vec::new();
@@ -903,7 +1015,14 @@ pub async fn task_tool(config: &EngineConfig, args: &Value) -> tools::ToolOutcom
         for call in &outcome.tool_calls {
             let arguments: Value =
                 serde_json::from_str(&call.function.arguments).unwrap_or(Value::Null);
+            let before_file =
+                pending_file_snapshot(&ctx.workspace, &call.function.name, &arguments);
             let result = tools::execute(&call.function.name, &arguments, &ctx, &mut todos).await;
+            if !result.is_error {
+                if let Some(app) = app {
+                    record_file_snapshot(app, session_id, before_file, &call.function.name, &call.id);
+                }
+            }
             messages.push(ChatMessage::tool(call.id.clone(), result.content));
         }
     }
@@ -937,6 +1056,19 @@ mod tests {
         })
     }
 
+    #[test]
+    fn project_instructions_are_read_from_the_workspace() {
+        let directory =
+            std::env::temp_dir().join(format!("ds-ide-agents-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(directory.join("AGENTS.md"), "  Use pnpm 10.  \n").unwrap();
+        let rules = project_instructions(&directory.to_string_lossy()).expect("project rules");
+        assert!(rules.contains("Use pnpm 10."));
+        assert!(rules.contains("AGENTS.md"));
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
     /// The recall has to say whose words these are — that marker is the whole point of the
     /// companion rows, and it is easy to lose in a prompt refactor.
     #[test]
@@ -950,8 +1082,9 @@ mod tests {
             importance: 1,
             created_at: 0,
             origin: origin.to_string(),
-            edited_at: if edited { Some(1) } else { None },
+            edited_at: if edited { Some(0) } else { None },
             retired_at: None,
+            workspace: String::new(),
         };
 
         assert!(recall_block(&[]).is_empty(), "no memory, no block");
@@ -1103,6 +1236,30 @@ fn maybe_generate_title(
     });
 }
 
+/// Project-level instructions the repository carries for the partner. `AGENTS.md` is the
+/// convention; `.dside/rules.md` is the quiet fallback. Capped, so a runaway file cannot
+/// push the conversation out of the model's context.
+fn project_instructions(workspace: &str) -> Option<String> {
+    const CAP: usize = 20_000;
+    let root = if workspace.trim().is_empty() {
+        std::env::current_dir().ok()?
+    } else {
+        PathBuf::from(workspace)
+    };
+    for name in ["AGENTS.md", ".dside/rules.md"] {
+        let Ok(content) = std::fs::read_to_string(root.join(name)) else {
+            continue;
+        };
+        let content = content.trim();
+        if content.is_empty() {
+            continue;
+        }
+        let capped: String = content.chars().take(CAP).collect();
+        return Some(format!("Source: {name}\n\n{capped}"));
+    }
+    None
+}
+
 async fn run_turn(
     app: &AppHandle,
     config: &EngineConfig,
@@ -1157,13 +1314,22 @@ async fn run_turn(
     // Recall: hand the partner what it already knows. This is the difference between
     // a persona and a personality — see PROGRESS.md section 12.
     if let Some(db) = app.try_state::<Db>() {
-        if let Ok(recall) = db.memory_context(40) {
+        if let Ok(recall) = db.memory_context(40, &config.workspace) {
             if !recall.is_empty() {
                 system_prompt.push_str(&recall_block(&recall));
                 let ids: Vec<i64> = recall.iter().map(|row| row.id).collect();
                 let _ = db.touch_memories(&ids);
             }
         }
+    }
+
+    if let Some(rules) = project_instructions(&config.workspace) {
+        system_prompt.push_str(
+            "\n\n## Project instructions\n\
+             These come from the repository (AGENTS.md or .dside/rules.md). Follow them; \
+             they take precedence over general habits.\n\n",
+        );
+        system_prompt.push_str(&rules);
     }
 
     messages.insert(0, ChatMessage::system(system_prompt));
@@ -1298,6 +1464,8 @@ async fn run_turn(
             });
             emit(app, start);
 
+            let before_file =
+                pending_file_snapshot(&ctx.workspace, &call.function.name, &arguments);
             let started = std::time::Instant::now();
             let tool_outcome = if config
                 .disabled_tools
@@ -1310,7 +1478,7 @@ async fn run_turn(
                     call.function.name
                 ))
             } else if call.function.name == "memory" {
-                memory_tool(app, &arguments)
+                memory_tool(app, &arguments, &config.workspace)
             } else if call.function.name == "name_ideas" {
                 let ideas = crate::search_names(
                     arguments.get("meaning").and_then(Value::as_str),
@@ -1327,10 +1495,13 @@ async fn run_turn(
             } else if call.function.name == "ask_user" {
                 ask_user(app, session_id, &arguments, &mut seq).await
             } else if call.function.name == "task" {
-                task_tool(config, &arguments).await
+                task_tool_with_snapshots(Some(app), session_id, config, &arguments).await
             } else {
                 tools::execute(&call.function.name, &arguments, &ctx, &mut todos).await
             };
+            if !tool_outcome.is_error {
+                record_file_snapshot(app, session_id, before_file, &call.function.name, &call.id);
+            }
             let duration_ms = started.elapsed().as_millis() as i64;
 
             seq += 1;

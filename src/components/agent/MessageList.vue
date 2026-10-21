@@ -1,14 +1,21 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import Icon from "../Icon.vue";
 import MarkdownText from "./MarkdownText.vue";
 import { t } from "../../i18n";
 import { settings } from "../../stores/settings";
+import { activeSessionId } from "../../stores/sessions";
+import { openFileHistory } from "../../stores/workArea";
+import { resolveWorkspacePath } from "../../composables/useFollow";
+import { resumesBySession, retryTurn } from "../../composables/useEngine";
 import type { ChatMessage } from "../../types";
 
 defineProps<{
   messages: ChatMessage[];
 }>();
+
+/** The compressed summary of the open session, if it has been compressed. */
+const resume = computed(() => resumesBySession[activeSessionId.value] ?? null);
 
 /**
  * Tool rows open on demand. The chip alone says "bash ran" — which is exactly what makes
@@ -34,10 +41,35 @@ function keepClosed(event: Event, streaming?: boolean): void {
   const element = event.target as HTMLDetailsElement;
   if (streaming && element.open) element.open = false;
 }
+
+/** Opens the file tab with the snapshot history for a write/edit tool call. */
+function showChange(tool: { name: string; arguments?: string }): void {
+  if (!tool.arguments) return;
+  try {
+    const args = JSON.parse(tool.arguments) as { path?: unknown };
+    if (typeof args.path !== "string" || !args.path.trim()) return;
+    openFileHistory(resolveWorkspacePath(args.path));
+  } catch {
+    // The model can emit invalid JSON; there is nothing to open then.
+  }
+}
+
+function retryMessage(id: string): void {
+  void retryTurn(id);
+}
 </script>
 
 <template>
   <div class="messages">
+    <details v-if="resume" class="resume">
+      <summary>
+        <Icon name="clock" :size="13" />
+        <span class="resume-title">{{ t("resume.title") }}</span>
+        <span class="resume-hint">{{ t("resume.hint") }}</span>
+      </summary>
+      <div class="resume-body">{{ resume.summary }}</div>
+    </details>
+
     <div v-for="message in messages" :key="message.id" class="row" :class="message.role">
       <!-- <img v-if="message.role === 'assistant'" class="avatar" src="/whale.png" alt="" />
       <span v-else class="avatar spacer"></span> -->
@@ -108,6 +140,19 @@ function keepClosed(event: Event, streaming?: boolean): void {
             <div v-if="isOpen(part.tool.id)" class="tool-detail">
               <div v-if="part.tool.arguments" class="tool-command">{{ part.tool.arguments }}</div>
               <pre v-if="part.tool.output" class="tool-output">{{ part.tool.output }}</pre>
+              <button
+                v-if="
+                  (part.tool.name === 'write' || part.tool.name === 'edit') &&
+                  !part.tool.isError &&
+                  part.tool.arguments
+                "
+                class="tool-diff"
+                type="button"
+                @click="showChange(part.tool)"
+              >
+                <Icon name="clock" :size="13" />
+                <span>{{ t("viewFile.history") }}</span>
+              </button>
               <p v-if="settings.fullAuthorization" class="tool-note">
                 {{ t("message.autoApproved") }}
               </p>
@@ -120,7 +165,12 @@ function keepClosed(event: Event, streaming?: boolean): void {
           <span class="dot"></span><span class="dot"></span><span class="dot"></span>
         </div>
 
-        <div v-if="message.error" class="error">{{ message.error }}</div>
+        <div v-if="message.error" class="error">
+          <span class="error-text">{{ message.error }}</span>
+          <button class="retry" type="button" @click="retryMessage(message.id)">
+            {{ t("engine.retry") }}
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -131,6 +181,48 @@ function keepClosed(event: Event, streaming?: boolean): void {
   display: flex;
   flex-direction: column;
   padding: 20px 6px;
+}
+
+/* The compressed past of the conversation, one click away. It sits above the live timeline
+   rather than replacing it: the recent turns are still the context that matters. */
+.resume {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  color: var(--text);
+}
+
+.resume summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--text-strong);
+  font-size: 12px;
+}
+
+.resume-title {
+  font-weight: 600;
+}
+
+.resume-hint {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.resume-body {
+  margin-top: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
 }
 
 .row {
@@ -293,6 +385,23 @@ function keepClosed(event: Event, streaming?: boolean): void {
   font-size: 11px;
 }
 
+.tool-diff {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+}
+
+.tool-diff:hover {
+  background: var(--bg-hover);
+}
+
 .tool {
   display: flex;
   align-items: center;
@@ -336,6 +445,9 @@ function keepClosed(event: Event, streaming?: boolean): void {
 }
 
 .error {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
   margin-top: 10px;
   padding: 8px 10px;
   border-left: 2px solid var(--danger);
@@ -343,5 +455,26 @@ function keepClosed(event: Event, streaming?: boolean): void {
   color: var(--danger);
   font-size: 12px;
   white-space: pre-wrap;
+}
+
+.error-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.retry {
+  flex: none;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--danger);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.retry:hover {
+  background: var(--bg-hover);
 }
 </style>

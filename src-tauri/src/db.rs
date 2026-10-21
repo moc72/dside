@@ -76,7 +76,8 @@ CREATE TABLE IF NOT EXISTS memories (
   last_used_at INTEGER,
   origin       TEXT NOT NULL DEFAULT 'seeky',
   edited_at    INTEGER,
-  retired_at   INTEGER
+  retired_at   INTEGER,
+  workspace    TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope, kind);
 
@@ -98,6 +99,22 @@ CREATE TABLE IF NOT EXISTS schedules (
   created_at       INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_schedules_due ON schedules(enabled, next_run_at);
+
+-- Snapshots of a file before the partner changed it. `content` NULL means the file did
+-- not exist before; reverting then removes it. Kept across sessions on purpose — the user
+-- can undo a change after the conversation that caused it is gone.
+CREATE TABLE IF NOT EXISTS file_versions (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  path        TEXT NOT NULL,
+  content     TEXT,
+  existed     INTEGER NOT NULL DEFAULT 1,
+  session_id  TEXT,
+  origin      TEXT NOT NULL,
+  call_id     TEXT,
+  created_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_file_versions_path ON file_versions(path, id);
+
 PRAGMA user_version = 1;
 ";
 
@@ -132,6 +149,7 @@ fn row_to_memory(row: &rusqlite::Row<'_>) -> rusqlite::Result<MemoryRow> {
         origin: row.get(7)?,
         edited_at: row.get(8)?,
         retired_at: row.get(9)?,
+        workspace: row.get(10)?,
     })
 }
 
@@ -361,10 +379,29 @@ pub struct MemoryRow {
     pub edited_at: Option<i64>,
     /// When the entry was set aside. Only the retired list has this set.
     pub retired_at: Option<i64>,
+    /// The workspace this note belongs to; empty means it applies everywhere.
+    pub workspace: String,
 }
 
 pub struct Db {
     conn: Mutex<Connection>,
+}
+
+/// Metadata for one snapshot; the content is loaded only when a diff is opened.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileVersionInfo {
+    pub id: i64,
+    pub path: String,
+    pub origin: String,
+    pub existed: bool,
+    pub bytes: i64,
+    pub created_at: i64,
+}
+
+pub struct FileVersionRow {
+    pub info: FileVersionInfo,
+    pub content: Option<String>,
 }
 
 impl Db {
@@ -406,6 +443,8 @@ impl Db {
         add_column(conn, "memories", "retired_at", "INTEGER")?;
         // A short heading for the memory panel. Older rows have none and the UI derives one.
         add_column(conn, "memories", "title", "TEXT")?;
+        // Empty means the note is global; a path scopes it to one workspace.
+        add_column(conn, "memories", "workspace", "TEXT NOT NULL DEFAULT ''")?;
         // The ordered timeline of an assistant answer.
         add_column(conn, "messages", "parts", "TEXT")?;
         Ok(())
@@ -536,6 +575,37 @@ impl Db {
             .map_err(|error| error.to_string())?;
         conn.execute("DELETE FROM sessions WHERE id = ?1", params![id])
             .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    /// Removes the failed tail of a turn: everything after the last user message. The user
+    /// message stays, so a retry continues the same request instead of duplicating it.
+    pub fn rollback_failed_turn(&self, session_id: &str) -> Result<(), String> {
+        let conn = self.lock()?;
+        let last_user: Option<i64> = conn
+            .query_row(
+                "SELECT id FROM messages
+                 WHERE session_id = ?1 AND role = 'user'
+                 ORDER BY id DESC LIMIT 1",
+                params![session_id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?;
+        let Some(last_user) = last_user else {
+            return Err("engine: nothing to retry".to_string());
+        };
+        conn.execute(
+            "DELETE FROM tool_calls WHERE session_id = ?1 AND message_id IN
+               (SELECT id FROM messages WHERE session_id = ?1 AND id > ?2)",
+            params![session_id, last_user],
+        )
+        .map_err(|error| error.to_string())?;
+        conn.execute(
+            "DELETE FROM messages WHERE session_id = ?1 AND id > ?2",
+            params![session_id, last_user],
+        )
+        .map_err(|error| error.to_string())?;
         Ok(())
     }
 
@@ -1011,6 +1081,18 @@ impl Db {
         Ok(conn.last_insert_rowid())
     }
 
+    /// Empty means global; the recall includes global notes everywhere and project notes
+    /// only inside their workspace.
+    pub fn set_memory_workspace(&self, id: i64, workspace: &str) -> Result<(), String> {
+        let conn = self.lock()?;
+        conn.execute(
+            "UPDATE memories SET workspace = ?2 WHERE id = ?1",
+            params![id, workspace],
+        )
+        .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
     /// The local calendar date, for notes that should carry their "when" in the text itself
     /// (recalled memories are shown without their timestamps).
     pub fn today(&self) -> Result<String, String> {
@@ -1023,7 +1105,7 @@ impl Db {
 
     pub fn list_memories(&self, limit: usize) -> Result<Vec<MemoryRow>, String> {
         self.select_memories(
-            "SELECT id, kind, scope, title, text, importance, created_at, origin, edited_at, retired_at
+            "SELECT id, kind, scope, title, text, importance, created_at, origin, edited_at, retired_at, workspace
              FROM memories WHERE retired_at IS NULL
              ORDER BY created_at DESC, id DESC LIMIT ?1",
             limit,
@@ -1033,7 +1115,7 @@ impl Db {
     /// Set aside, not erased: these are the entries the user took out of Seeky's memory.
     pub fn list_retired_memories(&self, limit: usize) -> Result<Vec<MemoryRow>, String> {
         self.select_memories(
-            "SELECT id, kind, scope, title, text, importance, created_at, origin, edited_at, retired_at
+            "SELECT id, kind, scope, title, text, importance, created_at, origin, edited_at, retired_at, workspace
              FROM memories WHERE retired_at IS NOT NULL
              ORDER BY retired_at DESC, id DESC LIMIT ?1",
             limit,
@@ -1051,16 +1133,23 @@ impl Db {
     }
 
     /// Most valuable entries first: importance, then freshness. Used for recall.
-    /// Retired entries are never recalled.
-    pub fn memory_context(&self, limit: usize) -> Result<Vec<MemoryRow>, String> {
-        self.select_memories(
-            "SELECT id, kind, scope, title, text, importance, created_at, origin, edited_at, retired_at
-             FROM memories
-             WHERE retired_at IS NULL
-             ORDER BY importance DESC, COALESCE(last_used_at, 0) DESC, created_at DESC
-             LIMIT ?1",
-            limit,
-        )
+    /// Retired entries are never recalled; project notes only inside their workspace.
+    pub fn memory_context(&self, limit: usize, workspace: &str) -> Result<Vec<MemoryRow>, String> {
+        let conn = self.lock()?;
+        let mut statement = conn
+            .prepare(
+                "SELECT id, kind, scope, title, text, importance, created_at, origin, edited_at, retired_at, workspace
+                 FROM memories
+                 WHERE retired_at IS NULL AND (workspace = '' OR workspace = ?1)
+                 ORDER BY importance DESC, COALESCE(last_used_at, 0) DESC, created_at DESC
+                 LIMIT ?2",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map(params![workspace, limit as i64], row_to_memory)
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())
     }
 
     /// Rewrites the words and records who owns them now. A change the user makes in the UI
@@ -1326,6 +1415,84 @@ impl Db {
             stale,
         })
     }
+
+    /// The state a file had *before* the partner changed it. Called after a successful
+    /// write/edit; a failed tool must not leave a history entry behind.
+    pub fn insert_file_version(
+        &self,
+        path: &str,
+        content: Option<&str>,
+        existed: bool,
+        session_id: &str,
+        origin: &str,
+        call_id: &str,
+    ) -> Result<i64, String> {
+        let conn = self.lock()?;
+        conn.execute(
+            "INSERT INTO file_versions
+               (path, content, existed, session_id, origin, call_id, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                path,
+                content,
+                existed as i32,
+                session_id,
+                origin,
+                call_id,
+                now()
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    /// Newest first. `limit` is capped by the caller; the content is deliberately not
+    /// included here — the list should stay cheap even for a long history.
+    pub fn file_versions(&self, path: &str, limit: i64) -> Result<Vec<FileVersionInfo>, String> {
+        let conn = self.lock()?;
+        let mut statement = conn
+            .prepare(
+                "SELECT id, path, origin, existed, COALESCE(length(content), 0), created_at
+                 FROM file_versions WHERE path = ?1 ORDER BY id DESC LIMIT ?2",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map(params![path, limit.max(1)], |row| {
+                Ok(FileVersionInfo {
+                    id: row.get(0)?,
+                    path: row.get(1)?,
+                    origin: row.get(2)?,
+                    existed: row.get::<_, i32>(3)? != 0,
+                    bytes: row.get(4)?,
+                    created_at: row.get(5)?,
+                })
+            })
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn file_version(&self, id: i64) -> Result<FileVersionRow, String> {
+        let conn = self.lock()?;
+        conn.query_row(
+            "SELECT id, path, content, existed, origin, created_at
+             FROM file_versions WHERE id = ?1",
+            params![id],
+            |row| {
+                let content: Option<String> = row.get(2)?;
+                let info = FileVersionInfo {
+                    id: row.get(0)?,
+                    path: row.get(1)?,
+                    origin: row.get(4)?,
+                    existed: row.get::<_, i32>(3)? != 0,
+                    bytes: content.as_ref().map(|value| value.len() as i64).unwrap_or(0),
+                    created_at: row.get(5)?,
+                };
+                Ok(FileVersionRow { info, content })
+            },
+        )
+        .map_err(|error| error.to_string())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1378,6 +1545,28 @@ pub fn session_history(
     session_id: String,
 ) -> Result<Vec<HistoryMessage>, String> {
     db.load_history(&session_id)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionResume {
+    pub summary: String,
+    pub through_message_id: i64,
+}
+
+/// The compressed summary of a session, for the "where we were" card. `None` until the
+/// conversation has been compressed at least once.
+#[tauri::command]
+pub fn session_resume(
+    db: tauri::State<'_, Db>,
+    session_id: String,
+) -> Result<Option<SessionResume>, String> {
+    Ok(db
+        .session_summary(&session_id)?
+        .map(|(through_message_id, summary)| SessionResume {
+            summary,
+            through_message_id,
+        }))
 }
 
 #[tauri::command]
@@ -1581,6 +1770,74 @@ mod tests {
     }
 
     #[test]
+    fn file_versions_round_trip() {
+        let directory =
+            std::env::temp_dir().join(format!("ds-ide-versions-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let db = Db::open(&directory.join("test.sqlite3")).unwrap();
+
+        let older = db
+            .insert_file_version("/tmp/a.txt", Some("alt"), true, "s1", "edit", "c1")
+            .unwrap();
+        let newer = db
+            .insert_file_version("/tmp/a.txt", None, false, "s1", "write", "c2")
+            .unwrap();
+
+        let list = db.file_versions("/tmp/a.txt", 10).unwrap();
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].id, newer, "newest first");
+        assert_eq!(list[0].bytes, 0);
+        assert!(!list[0].existed);
+        assert_eq!(list[1].id, older);
+        assert!(list[1].existed);
+
+        let row = db.file_version(older).unwrap();
+        assert_eq!(row.info.path, "/tmp/a.txt");
+        assert_eq!(row.content.as_deref(), Some("alt"));
+        assert_eq!(row.info.origin, "edit");
+
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn rollback_removes_the_failed_tail_but_keeps_the_user_message() {
+        let directory =
+            std::env::temp_dir().join(format!("ds-ide-rollback-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let db = Db::open(&directory.join("test.sqlite3")).unwrap();
+        db.ensure_session("s1", "Test", "project", "/tmp").unwrap();
+
+        db.insert_message("s1", "user", Some("hallo"), None, None)
+            .unwrap();
+        let assistant = db
+            .insert_message("s1", "assistant", Some(""), Some("[]"), None)
+            .unwrap();
+        db.insert_tool_call(
+            "s1",
+            Some(assistant),
+            "call_1",
+            "write",
+            Some("{}"),
+            Some("ok"),
+            false,
+            Some(1),
+        )
+        .unwrap();
+        db.insert_message("s1", "tool", Some("ok"), None, Some("call_1"))
+            .unwrap();
+
+        db.rollback_failed_turn("s1").unwrap();
+        let history = db.load_history("s1").unwrap();
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].role, "user");
+        assert!(history[0].tools.is_empty());
+
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    #[test]
     fn memories_round_trip() {
         let directory = std::env::temp_dir().join(format!("ds-ide-mem-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&directory);
@@ -1600,13 +1857,39 @@ mod tests {
         assert_eq!(list[0].origin, "seeky");
         assert!(list[0].edited_at.is_none());
 
-        let context = db.memory_context(10).unwrap();
+        let context = db.memory_context(10, "").unwrap();
         assert_eq!(context.len(), 1);
         db.touch_memories(&[id]).unwrap();
 
         db.retire_memory(id).unwrap();
         assert!(db.list_memories(10).unwrap().is_empty());
-        assert!(db.memory_context(10).unwrap().is_empty());
+        assert!(db.memory_context(10, "").unwrap().is_empty());
+
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn memories_are_scoped_to_the_workspace() {
+        let directory =
+            std::env::temp_dir().join(format!("ds-ide-mem-scope-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let db = Db::open(&directory.join("test.sqlite3")).unwrap();
+
+        db.insert_memory("fact", "user", "global note", None, "seeky")
+            .unwrap();
+        let project = db
+            .insert_memory("fact", "user", "project note", None, "seeky")
+            .unwrap();
+        db.set_memory_workspace(project, "/work/project").unwrap();
+
+        let here = db.memory_context(10, "/work/project").unwrap();
+        assert_eq!(here.len(), 2);
+        assert!(here.iter().any(|row| row.text == "project note"));
+
+        let elsewhere = db.memory_context(10, "/elsewhere").unwrap();
+        assert_eq!(elsewhere.len(), 1);
+        assert_eq!(elsewhere[0].text, "global note");
 
         let _ = std::fs::remove_dir_all(&directory);
     }

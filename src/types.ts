@@ -20,6 +20,22 @@ export interface EditorCandidate {
   icon?: string | null;
 }
 
+/** One snapshot of a file before the partner changed it. */
+export interface FileVersionInfo {
+  id: number;
+  path: string;
+  origin: string;
+  existed: boolean;
+  bytes: number;
+  createdAt: number;
+}
+
+/** The compressed summary of a session, shown as the "where we were" card. */
+export interface SessionResume {
+  summary: string;
+  throughMessageId: number;
+}
+
 export type SessionGroup = "pinned" | "scheduled" | "project" | "team";
 
 export interface Session {

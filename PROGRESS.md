@@ -1970,3 +1970,176 @@ als Historie.
 
 Der Editor-Picker und das Account-Pill („modest") bleiben für den nächsten
 Termin liegen.
+
+## 45. Splash-Bewegung und Marke im Rail-Fuß (2026-10-21, vierundzwanzigste Runde)
+
+Zwei Punkte, die im v0.4.9-Release noch fehlten. Kein Commit; geprüft mit
+`pnpm build`, `cargo test --lib` (24 passed, 12 ignored) und einem Windows-Build
+mit `tauri/custom-protocol`.
+
+### Der Walfisch stand unter Windows still
+Ursache war nicht WebView2: Der Testrechner hat die Windows-Animationseffekte aus,
+also meldet Chromium `prefers-reduced-motion: reduce`. Die Splash-Regel schaltete
+daraufhin genau die Wal-Animation ab — der Fortschrittsbalken lief weiter. Der
+Splash ist die einzige bewusste Bewegung der App; die Regel ist entfernt. Wal und
+Balken starten außerdem erst, wenn das Fenster sichtbar ist (`splashShown`), statt
+schon beim Laden der versteckten Webview. Die sieben Sekunden Animation und die
+sieben Sekunden Splash laufen damit exakt zusammen.
+
+### Marke im Rail-Fuß
+Der Fuß war fest auf „modest" und einen Sparkle-Avatar verdrahtet. Walfisch und
+„deepseek"-Schriftzug sind jetzt dort — vom Kopf des Panels dorthin gezogen; der
+Fuß bleibt der Anker für das Konto-Menü (Chevron). Der Benutzername steht
+weiterhin im Menükopf, nicht mehr statisch im Panel.
+
+### Offen
+v0.4.10 taggen.
+
+## 46. Der Editor-Picker öffnet den Workspace (2026-10-21, fünfundzwanzigste Runde)
+
+`open_workspace_in_editor` lag seit §5 ungenutzt im Rust-Teil; `openInEditor()` war
+exportiert, aber niemand rief es auf. Jetzt ist die Pille ein Split-Button: links
+öffnet den Workspace im gewählten Editor, rechts öffnet die Auswahl. Ohne
+gefundenen Editor öffnet der linke Teil die Auswahl, damit Erkennen und Download
+erreichbar bleiben; ein Fehler beim Start erscheint fünf Sekunden unter der Pille.
+`ensureWorkspace()` sorgt dafür, dass ein leerer Workspace nicht als „Editor ohne
+Ordner" endet.
+
+Der Windows-Test hat zwei echte Fehler im alten Befehl gefunden:
+- Der PATH-Eintrag `C:\Program Files\Microsoft VS Code\bin\code` ist ein Pfad mit
+  Leerzeichen, wurde aber durch denselben Command-Splitter wie die Desktop-Einträge
+  geschickt → als Programm blieb `C:\Program` (os error 2). PATH-Kandidaten werden
+  jetzt gequotet; auf Windows bleibt der Pfad außerdem un-canonicalisiert (kein
+  `\\?\`-Präfix).
+- Der gefundene `code` ist der Unix-Shim; daneben liegt `code.cmd`, den Windows
+  nicht direkt startet. Der Launcher nimmt auf Windows den `.cmd`/`.bat`-Shim über
+  `cmd /C` (mit `CREATE_NO_WINDOW`) und nennt sonst den Programmnamen im Fehler.
+
+Geprüft: `pnpm build`, `cargo test --lib` (24 passed, 12 ignored), Windows-Release
+mit `tauri/custom-protocol`; ein kalter VS-Code-Start über den Split-Button öffnete
+`X:\DEV\dside-main` (Fenstertitel „Willkommen - dside-main").
+
+## 47. Dateiverlauf mit Diff und Wiederherstellen (2026-10-21, sechsundzwanzigste Runde)
+
+Der wichtigste Vertrauensbaustein: Der Partner kann jetzt zeigen, was er geschrieben hat,
+und der Nutzer kann es zurücknehmen.
+
+### Snapshots
+- Neue Tabelle `file_versions` (Pfad, Inhalt, existed, Session, Herkunft, Call-ID, Zeit).
+  `content NULL` heißt: Die Datei existierte vorher nicht; Wiederherstellen löscht sie.
+- `engine/mod.rs` liest den alten Stand vor jedem `write`/`edit` und schreibt den
+  Snapshot erst, wenn das Werkzeug erfolgreich war. Das gilt auch für Sub-Agenten
+  (`task`), die dafür AppHandle und Session-ID bekommen.
+- `tools::stable_path` normalisiert Pfade (Windows-Separatoren, kein `\\?\`), damit
+  Dateibaum, Modell und Verlauf denselben Schlüssel benutzen.
+
+### UI
+- Datei-Tab: „Verlauf" öffnet links die Liste (neueste zuerst, mit Zeitpunkt, Herkunft
+  Schreiben/Bearbeiten/Wiederherstellen und „Neu angelegt"), rechts einen read-only
+  Monaco-Diff gegen den aktuellen Stand.
+- „Wiederherstellen" sichert vorher den aktuellen Stand als weiteren Snapshot und
+  schreibt dann die gewählte Fassung; ein Snapshot von vor der Existenz der Datei
+  entfernt sie wieder.
+- Ein `write`/`edit`-Chip hat im aufgeklappten Detail einen „Verlauf"-Knopf; der
+  Datei-Tab öffnet sich mit dem Verlauf.
+- Fehler beim Laden/Wiederherstellen erscheinen im Panel; die Bestätigung fragt vor
+  dem Überschreiben.
+
+### Tests
+- `db::tests::file_versions_round_trip` (Liste, neueste zuerst, NULL/created).
+- `tests::reverting_a_snapshot_restores_and_backs_up_the_current_state` (Restore,
+  Sicherung, Löschen eines vorher nicht existierenden Snapshots).
+- Live auf Windows: Der Partner schrieb `history-test.txt` (Snapshot `write`,
+  existed=0), änderte `eins`→`zwei` (Snapshot `edit`, alter Inhalt `eins`); der Verlauf
+  zeigte beide, der Diff `eins`→`zwei`, der Restore des „Neu angelegt"-Snapshots
+  entfernte die Datei. `cargo test --lib` 26 passed / 12 ignored; `pnpm build` grün.
+
+## 48. AGENTS.md: die Regeln des Repos (2026-10-21, siebenundzwanzigste Runde)
+
+Der Partner kannte bisher Persona, Nutzeranweisungen und Gedächtnis, aber nicht die
+Konventionen des Projekts. Jetzt liest der Engine-Loop beim Start eines Turns `AGENTS.md`
+(Fallback `.dside/rules.md`) aus dem Workspace und hängt sie an den System-Prompt;
+Sub-Agenten bekommen dieselben Regeln. Der Text ist auf 20.000 Zeichen begrenzt, damit
+eine ausufernde Datei nicht das Kontextfenster frisst.
+
+Die Datei im Wurzelverzeichnis ist gleichzeitig die Anleitung für dieses Repository:
+pnpm 10, Build-/Testbefehle, PROGRESS als Chronik, Schlüsselbund, die sechs Sprachen und
+die Lizenzhinweise.
+
+Test: `project_instructions_are_read_from_the_workspace` (Temp-AGENTS.md gelesen, Quelle
+im Prompt). `cargo test --lib` 27 passed / 12 ignored.
+
+## 49. Doctor und Erststart (2026-10-21, achtundzwanzigste Runde)
+
+### Diagnose
+- Einstellungen → Diagnose: Version, System, Keyring-Backend, Workspace, Anbieter/Modell,
+  Datenbankpfad/-größe und erkannte Editoren. „Verbindung testen" lädt Modelle und
+  Guthaben seriell (dieselbe Ursache wie in §44), „Diagnose kopieren" legt den Text in
+  die Zwischenablage.
+- Neuer Rust-Befehl `diagnostics` liest Keyring-Status, Settings und DB-Größe; der
+  Provider-Test bleibt der einzige Netzschritt und wird von der UI ausgelöst.
+
+### Erststart
+- Ist die `settings`-Tabelle leer (frische Installation), erscheint ein Dialog: Modus
+  (Programmierung/Alltag), Workspace (über `read_workspace_tree` validiert) und API-Key
+  (OS-Schlüsselbund). „Später" setzt `onboarded` und zeigt den Dialog nicht wieder.
+- Bestehende Installationen — auch solche ohne den neuen `onboarded`-Schlüssel — sehen
+  den Dialog nie.
+- Dabei einen älteren Sync-Fehler behoben: Der Modell-Select im Composer hing an einem
+  lokalen Ref und folgte einem Moduswechsel oder dem Erststart nicht; er synchronisiert
+  jetzt mit `settings.model`.
+
+### Tests
+- Live auf Windows mit geleerter Settings-Tabelle: Dialog erschien, „Für Programmierung"
+  → „Los"; die Diagnose zeigte Keyring `keyring`, DB 80 KB, VS Code; der Verbindungstest
+  meldete „2 Modelle · 27.58 USD".
+- `pnpm build`/vue-tsc grün, `cargo test --lib` 27 passed / 12 ignored, Windows-Release
+  mit `tauri/custom-protocol`. Die ursprüngliche Datenbank (Settings, Session, Workspace)
+  wurde nach dem Test wiederhergestellt.
+- Das Workspace-Feld wurde nach dem Live-Test ergänzt; die Validierung nutzt denselben
+  `read_workspace_tree`-Befehl wie der Dateibaum.
+
+## 50. Übergabeunterlage (2026-10-21, neunundzwanzigste Runde)
+
+`HANDOVER.md` liegt jetzt im Wurzelverzeichnis: Architektur, Build/Dev/Release (inklusive
+pnpm 10 und dem Windows-`custom-protocol`-Feature), Erststart, Speicherorte (SQLite,
+Keyring, Attachments, Skills), Vertrauensmodell, bekannte Grenzen (kein Terminal/Git,
+keine Signierung oder Updater, macOS-aarch64, keine Memory-Suche, kein Screenshot-Tool)
+und die ersten Prüfschritte für neue Betreuer. Der Fresh-Install-Smoke-Test steht in §49.
+
+## 51. Retry, Basis-URL und der idempotente Boot (2026-10-21, dreißigste Runde)
+
+- Fehlgeschlagene Turns haben jetzt einen **„Erneut versuchen"**-Knopf. `engine_retry`
+  rollt die Nachrichten und Tool-Calls nach der letzten User-Nachricht zurück, lässt die
+  User-Nachricht stehen und startet denselben Turn neu, ohne sie ein zweites Mal
+  einzufügen. Der Titel bleibt; fehlt eine User-Nachricht (Fehler vor dem Persistieren),
+  meldet der Befehl das ehrlich.
+- Die Fehlerblase überlebt jetzt einen Besuch in den Einstellungen: `initEngine` ist
+  idempotent. Vorher lud das erneut montierte AgentPanel die gespeicherte Historie und
+  verlor die Live-Fehlermeldung samt Retry-Knopf.
+- Die **Basis-URL** ist endlich unter Einstellungen → Konto & Modell editierbar. Der Wert
+  war im Engine-Config schon vorhanden, hatte aber kein Feld.
+- Tests: `rollback_removes_the_failed_tail_but_keeps_the_user_message`; insgesamt
+  **28 passed / 12 ignored**. Live auf Windows: Basis-URL auf einen 404-Pfad gestellt,
+  Fehlerblase erschien; URL korrigiert, Settings geschlossen, Retry geklickt → Antwort
+  „RETRY", der fehlgeschlagene Assistant-Row war aus der DB entfernt und die
+  User-Nachricht stand genau einmal. Die ursprüngliche Datenbank wurde danach
+  zurückgespielt.
+
+## 52. Projektgedächtnis und „Wo waren wir" (2026-10-21, einunddreißigste Runde)
+
+- `memories.workspace` (Migration, Default `''`): Notizen ohne Workspace gelten überall,
+  Notizen mit einem Pfad nur in diesem Projekt. Das `memory`-Werkzeug hängt beim `add`
+  den aktuellen `config.workspace` an; der Recall (`memory_context`) nimmt globale plus
+  die des aktuellen Workspace; die Prompt-Zeilen markieren Projektnotizen mit
+  `(project)`. Das Erinnerungs-Panel zeigt einen „Projekt"-Chip, der Pfad steht im
+  Tooltip.
+- `session_resume` liefert die Kompressions-Zusammenfassung. Die Nachrichtenliste zeigt
+  sie als **sticky Karte „Wo waren wir?"** über dem Verlauf; `loadHistory` holt sie, die
+  manuelle Verdichtung lädt neu. Sechs Sprachen.
+- Tests: `memories_are_scoped_to_the_workspace`; **29 passed / 12 ignored**.
+- Live: Der Partner legte „Die Testfarbe … Blau" per memory-Werkzeug mit Workspace
+  `X:\DEV\dside-main` ab (Ausgabe „project"). Eine **neue Session ohne diesen Verlauf**
+  antwortete „Blau. Das steht so in meinen Notizen zu diesem Projekt." Das Panel zeigte
+  den Projekt-Chip; die eingefügte Zusammenfassung erschien als sticky
+  „Wo waren wir?"-Karte. Die Original-DB wurde danach zurückgespielt.

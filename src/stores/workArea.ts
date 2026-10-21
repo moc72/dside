@@ -94,6 +94,19 @@ export function openFile(path: string): string {
   return id;
 }
 
+/**
+ * Opens a file and asks the tab to show its snapshot history. The tool row uses this after
+ * a write/edit; the tab watches the counter so a second click on the same path still acts.
+ */
+export const historyRequest = ref(0);
+export const historyPath = ref<string | null>(null);
+
+export function openFileHistory(path: string): void {
+  openFile(path);
+  historyPath.value = path;
+  historyRequest.value += 1;
+}
+
 export function closeTab(id: string): void {
   const index = tabs.value.findIndex((tab) => tab.id === id);
   if (index === -1) return;

@@ -1,4 +1,4 @@
-import { computed, reactive, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { loadJson } from "../lib/persist";
 import type { AppMode, Appearance } from "../types";
@@ -23,6 +23,8 @@ export interface SettingsState {
   partnerPrompt: string;
   /** How hard the model should think, on the provider's own scale. Empty = provider default. */
   reasoningEffort: string;
+  /** Set once the first-start dialog has been answered or dismissed. */
+  onboarded: boolean;
 }
 
 /**
@@ -57,6 +59,7 @@ const PERSISTED_KEYS: (keyof SettingsState)[] = [
   "fontSize",
   "partnerPrompt",
   "reasoningEffort",
+  "onboarded",
 ];
 
 const LEGACY_KEY = "ds-ide.settings";
@@ -78,9 +81,13 @@ const defaults: SettingsState = {
   fontSize: 14,
   partnerPrompt: "",
   reasoningEffort: "",
+  onboarded: false,
 };
 
 export const settings = reactive<SettingsState>({ ...defaults });
+
+/** True only while the app has no stored settings at all; the dialog clears it. */
+export const firstRun = ref(false);
 
 let loaded = false;
 let timer: number | undefined;
@@ -128,6 +135,8 @@ export async function initSettings(): Promise<void> {
     const legacy = loadJson<Record<string, unknown> | null>(LEGACY_KEY, null);
     if (legacy && typeof legacy === "object") {
       apply(legacy);
+      settings.onboarded = true;
+      firstRun.value = false;
       try {
         localStorage.removeItem(LEGACY_KEY);
       } catch {
@@ -149,6 +158,11 @@ export async function initSettings(): Promise<void> {
     }
   }
   apply(decoded);
+
+  // A database with no settings rows is a fresh install. Existing installations — including
+  // ones from before this flag existed — never see the first-start dialog.
+  firstRun.value = Object.keys(stored).length === 0;
+  if (!firstRun.value) settings.onboarded = true;
 
   loaded = true;
   watch(settings, schedulePersist, { deep: true });

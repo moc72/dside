@@ -185,11 +185,6 @@ function accountSettings() {
         <span>{{ t("session.archive") }}</span>
       </button>
     </div>
-    <div class="rail-head">
-      <img class="brand-mark" src="/whale-anim.webp" :alt="t('app.name')" :title="t('app.name')" />
-      <span class="ds-mark" v-html="deepSeekMark"></span>
-    </div>
-
     <nav class="rail-nav">
       <button
         v-for="item in primaryItems"
@@ -235,16 +230,15 @@ function accountSettings() {
 
     <div class="rail-foot">
       <button class="account" type="button" @click.stop="accountOpen = !accountOpen">
-        <span class="avatar"><Icon name="sparkle" :size="14" /></span>
-        <span class="account-name">modest</span>
-        <Icon name="chevron-down" :size="14" />
+        <img class="brand-mark" src="/whale-anim.webp" :alt="t('app.name')" :title="t('app.name')" />
+        <span class="ds-mark" v-html="deepSeekMark"></span>
+        <Icon name="chevron-down" :size="14" class="account-chevron" />
       </button>
 
       <div v-if="accountOpen" class="backdrop" @click="accountOpen = false"></div>
       <div v-if="accountOpen" class="account-menu">
         <div class="menu-head">
           <span class="menu-name">{{ displayName }}</span>
-          <span class="menu-provider">{{ t("account.provider") }}</span>
         </div>
         <button class="menu-item" type="button" @click="accountSettings">
           <Icon name="gear" :size="14" /><span>{{ t("account.settings") }}</span>
@@ -296,18 +290,8 @@ function accountSettings() {
   overflow: visible;
 }
 
-.rail-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  height: 44px;
-  padding: 0 14px;
-  margin-top: 10px;
-}
-
 .brand-mark {
-  height: 30px;
+  height: 24px;
   width: auto;
   object-fit: contain;
 }
@@ -315,18 +299,19 @@ function accountSettings() {
 .ds-mark {
   display: inline-flex;
   color: var(--text-strong);
+  margin: 0 auto;
 }
 
 .ds-mark :deep(svg) {
   display: block;
-  height: 17px;
+  height: 15px;
   width: auto;
 }
 
 .rail-nav {
   display: flex;
   flex-direction: column;
-  padding: 4px 8px 8px;
+  padding: 14px 8px 8px;
 }
 
 .nav-item,
@@ -452,19 +437,9 @@ function accountSettings() {
   background: var(--bg-hover);
 }
 
-.avatar {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: var(--accent-contrast);
-}
-
-.account-name {
-  flex: 1;
-  text-align: left;
+.account-chevron {
+  margin-left: auto;
+  color: var(--text-muted);
 }
 
 .backdrop {
