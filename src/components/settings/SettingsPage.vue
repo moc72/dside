@@ -8,6 +8,7 @@ import MemoryPanel from "./MemoryPanel.vue";
 import PartnerPanel from "./PartnerPanel.vue";
 import AboutPanel from "./AboutPanel.vue";
 import DiagnosticsPanel from "./DiagnosticsPanel.vue";
+import KeyboardPanel from "./KeyboardPanel.vue";
 import { locale, localeLabel, locales, setLocale, t } from "../../i18n";
 import type { Locale, MessageKey } from "../../i18n";
 import { links } from "../../engine/links";
@@ -334,6 +335,11 @@ watch(activeItem, (value) => {
             :description="t('settings.general.joinEarlyAccessDesc')"
           />
         </div>
+      </template>
+
+      <template v-else-if="activeItem === 'keyboard'">
+        <h1 class="title">{{ t("settings.items.keyboardShortcuts") }}</h1>
+        <KeyboardPanel />
       </template>
 
       <template v-else-if="activeItem === 'account'">

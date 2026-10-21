@@ -193,6 +193,7 @@ onMounted(async () => {
    cannot scroll. No max-width either — capping it left a wide empty strip on the right. */
 .aboutpage {
   max-width: none;
+  container-type: inline-size;
 }
 
 .col {

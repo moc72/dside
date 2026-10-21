@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import Resizer from "./components/Resizer.vue";
@@ -15,8 +15,6 @@ import { deepSeekMark } from "./components/deepseek-mark";
 import { firstRun } from "./stores/settings";
 import {
   CENTER_MIN,
-  closeSearch,
-  openSearch,
   railAuto,
   railCollapsed,
   railWidth,
@@ -29,6 +27,7 @@ import {
 } from "./stores/ui";
 import { visible as workAreaVisible } from "./stores/workArea";
 import { useResponsiveLayout } from "./composables/useResponsiveLayout";
+import { useShortcuts } from "./composables/useShortcuts";
 
 /**
  * The panels the grid actually draws. The manual flags are what the user chose; the `Auto`
@@ -55,6 +54,8 @@ try {
 const isSplash = ref(windowLabel === "splash");
 /** Set once the window is on screen; the splash animations hang off this class. */
 const splashShown = ref(false);
+
+useShortcuts(() => !isSplash.value);
 
 /**
  * Launch splash. The bar is theatre — nothing is downloaded — but a bar that moves
@@ -98,18 +99,7 @@ onMounted(() => {
     return;
   }
   void invoke("log_message", { text: "main window: mounted" }).catch(() => undefined);
-  window.addEventListener("keydown", onKey);
 });
-onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
-
-function onKey(event: KeyboardEvent) {
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
-    event.preventDefault();
-    openSearch();
-    return;
-  }
-  if (event.key === "Escape" && searchOpen.value) closeSearch();
-}
 
 const bodyStyle = computed(() => {
   const columns: string[] = [];

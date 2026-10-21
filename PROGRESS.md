@@ -2158,3 +2158,57 @@ Windows/macOS) und hat den Draft mit sieben Assets angelegt.
 
 **v0.4.9 bleibt der veröffentlichte Stand**; v0.4.10 liegt als Draft bereit und
 wird erst nach der Sichtprüfung veröffentlicht.
+
+## 54. Tastenkürzel: sichtbar, änderbar, konfliktgeprüft (2026-10-21, dreiunddreißigste Runde)
+
+Der Eintrag „Tastenkürzel" in den Einstellungen war bisher nur ein Menüpunkt ohne
+Seite. Jetzt gibt es eine echte Liste — nicht die Vorlage eins zu eins, sondern
+die Befehle, die die App wirklich hat.
+
+### Registry statt verstreuter Handler
+`src/engine/shortcuts.ts` beschreibt jeden Befehl einmal: ID, i18n-Label, Gruppe,
+Geltungsbereich, Standardbelegung. `bindingFor` macht aus einem Tastaturereignis
+eine kanonische Zeichenkette (`Ctrl+Alt+B`, `Alt+ArrowUp`), Cmd zählt auf macOS
+als Ctrl. `activeBindings` liest die Overrides aus `settings.shortcuts`; ohne
+Override gelten die Defaults. `bindingOwner` findet Konflikte, `setBindings` /
+`resetCommand` / `resetAllBindings` schreiben die Overrides.
+
+### Was tatsächlich belegt ist
+Global und editierbar: Suchen (`Ctrl+K`, `Ctrl+Shift+P`), Einstellungen (`Ctrl+,`),
+neue Aufgabe (`Ctrl+N`), Seitenleiste (`Ctrl+B`), Arbeitsbereich an/aus
+(`Ctrl+Alt+B`), Arbeitsbereich öffnen (`Ctrl+O`), Tab schließen (`Ctrl+W`),
+vorherige/nächste Aufgabe (`Alt+ArrowUp/Down`), Modus (`Ctrl+Shift+M`), Denkstufe
+(`Ctrl+T`), Design (`Ctrl+Shift+L`). Fest im Composer: `Enter` sendet,
+`Shift+Enter` macht den Zeilenumbruch. Bewusst **nicht** aufgenommen: Terminal,
+Zoom, Zurück/Vorwärts und Modellmenü — dafür fehlen die Funktionen; tote Kürzel
+wären schlimmer als keine.
+
+### Panel
+`KeyboardPanel.vue` zeigt die Tabelle mit Suche, „Alle auf Standard
+zurücksetzen", Belegungs-Chips und Geltungsbereich. Ein Klick auf einen Chip
+öffnet den Capture-Dialog; die nächste Kombination wird übernommen, `Esc` bricht
+ab, `Backspace` leert die Eingabe. Globale Kürzel brauchen Ctrl/Alt/Cmd, sonst
+würde Tippen sie auslösen. Konflikte mit einem anderen Befehl blockieren das
+Speichern und nennen den Besitzer. Einzelne Belegungen lassen sich über das ×
+entfernen; der Reset stellt die Defaults wieder her. Alles in sechs Sprachen.
+
+`useShortcuts` ist der eine globale Listener (App.vue); der alte harte
+`Ctrl+K`-Handler ist weg. Während der Capture-Dialog offen ist, pausiert er über
+`shortcutCapturing`.
+
+### Geprüft
+`pnpm build` (vue-tsc + Vite) grün. Eine echte Sichtprüfung des Panels und der
+Tastenkombinationen steht noch aus; die Belegungen sind bewusst so gewählt, dass
+sie auf deutschen und US-Layouts funktionieren.
+
+## 55. Der Composer folgt dem hellen Design (2026-10-21, vierunddreißigste Runde)
+
+Im hellen Theme blieb die Eingabeblase dunkel: `--bg-composer` war nur im dunklen
+Root definiert, und die Light-Variablen kannten die Variable nicht. Dadurch fiel sie
+auf `#202020` zurück, während `color-scheme` schon hell war — daher der schwarze
+Kasten mit weißem Placeholder und dem weißen Modell-Select.
+
+Light setzt `--bg-composer` jetzt auf `#f7f7f7` (dieselbe Fläche wie `--bg-panel`);
+Border, Text und der Select bleiben unverändert und passen nun zusammen. Das dunkle
+Theme behält `#202020`. `pnpm build` grün; noch nicht committet, gehört zum
+v0.4.11-Stand.

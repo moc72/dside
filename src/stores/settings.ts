@@ -21,6 +21,8 @@ export interface SettingsState {
   fontSize: number;
   /** The user's own addition to the partner's instructions, verbatim. */
   partnerPrompt: string;
+  /** Per-command overrides of the keyboard defaults; an absent id means the defaults apply. */
+  shortcuts: Record<string, string[]>;
   /** How hard the model should think, on the provider's own scale. Empty = provider default. */
   reasoningEffort: string;
   /** Set once the first-start dialog has been answered or dismissed. */
@@ -58,6 +60,7 @@ const PERSISTED_KEYS: (keyof SettingsState)[] = [
   "displayName",
   "fontSize",
   "partnerPrompt",
+  "shortcuts",
   "reasoningEffort",
   "onboarded",
 ];
@@ -80,6 +83,7 @@ const defaults: SettingsState = {
   displayName: "",
   fontSize: 14,
   partnerPrompt: "",
+  shortcuts: {},
   reasoningEffort: "",
   onboarded: false,
 };
