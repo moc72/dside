@@ -134,6 +134,7 @@ export const fr: Messages = {
     tabTerminal: "Terminal",
     tabGit: "Git",
     tabLogs: "Logs",
+    tabChanges: "Modifications",
 
     closeTab: "Fermer l'onglet",
     empty: "Aucun onglet ouvert.",
@@ -333,6 +334,20 @@ export const fr: Messages = {
       newline: "Insérer un saut de ligne",
     },
   },
+  turnDiff: {
+    title: "Modifications du dernier tour",
+    hint: "L'état avant le tour comparé à l'état actuel. Les fichiers peuvent être annulés ensemble.",
+    undo: "Annuler le tour",
+    undoHint: "Rétablit tous les fichiers de ce tour à leur état d'avant ; l'état actuel est sauvegardé.",
+    undoBlocked: "Au moins un fichier a été modifié plus tard. Utilisez l'historique de ce fichier.",
+    alreadyReverted: "Ce tour a déjà été annulé.",
+    empty: "Le dernier tour n'a modifié aucun fichier.",
+    refresh: "Actualiser",
+    newFile: "nouveau",
+    deletedFile: "supprimé",
+    revertFailed: "Échec de l'annulation :",
+  },
+
   settings: {
     title: "Paramètres",
     search: "Rechercher dans les paramètres…",

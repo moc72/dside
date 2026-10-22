@@ -133,6 +133,7 @@ export const de = {
     tabTerminal: "Terminal",
     tabGit: "Git",
     tabLogs: "Logs",
+    tabChanges: "Änderungen",
 
     closeTab: "Tab schließen",
     empty: "Kein Tab geöffnet.",
@@ -333,6 +334,20 @@ export const de = {
       newline: "Zeilenumbruch einfügen",
     },
   },
+  turnDiff: {
+    title: "Änderungen aus dem letzten Zug",
+    hint: "Der erste Stand vor dem Zug gegen den aktuellen Stand. Dateien lassen sich gemeinsam zurücknehmen.",
+    undo: "Zug zurücknehmen",
+    undoHint: "Alle Dateien dieses Zuges auf den Stand davor zurücksetzen; der aktuelle Stand wird gesichert.",
+    undoBlocked: "Mindestens eine Datei wurde später geändert. Nutze den Dateiverlauf für diese Datei.",
+    alreadyReverted: "Dieser Zug ist bereits zurückgenommen.",
+    empty: "Im letzten Zug wurden keine Dateien geändert.",
+    refresh: "Aktualisieren",
+    newFile: "neu",
+    deletedFile: "gelöscht",
+    revertFailed: "Zurücknehmen fehlgeschlagen:",
+  },
+
   settings: {
     title: "Einstellungen",
     search: "Einstellungen durchsuchen…",

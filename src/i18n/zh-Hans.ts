@@ -135,6 +135,7 @@ export const zhHans: Messages = {
     tabTerminal: "终端",
     tabGit: "Git",
     tabLogs: "日志",
+    tabChanges: "更改",
 
     closeTab: "关闭标签页",
     empty: "没有打开的标签页。",
@@ -330,6 +331,20 @@ export const zhHans: Messages = {
       newline: "插入换行",
     },
   },
+  turnDiff: {
+    title: "上一轮的更改",
+    hint: "对比该轮之前与当前的状态。可以一起还原这些文件。",
+    undo: "撤销本轮",
+    undoHint: "将该轮的所有文件恢复到之前的状态；当前状态会被备份。",
+    undoBlocked: "至少有一个文件之后又被修改。请使用该文件的文件历史。",
+    alreadyReverted: "本轮已经撤销。",
+    empty: "上一轮没有更改文件。",
+    refresh: "刷新",
+    newFile: "新增",
+    deletedFile: "已删除",
+    revertFailed: "撤销失败：",
+  },
+
   settings: {
     title: "设置",
     search: "搜索设置…",

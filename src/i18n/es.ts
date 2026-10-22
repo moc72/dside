@@ -134,6 +134,7 @@ export const es: Messages = {
     tabTerminal: "Terminal",
     tabGit: "Git",
     tabLogs: "Logs",
+    tabChanges: "Cambios",
 
     closeTab: "Cerrar pestaña",
     empty: "Sin tabs abiertos.",
@@ -331,6 +332,20 @@ export const es: Messages = {
       newline: "Insertar salto de línea",
     },
   },
+  turnDiff: {
+    title: "Cambios del último turno",
+    hint: "El estado anterior al turno frente al actual. Los archivos se pueden revertir juntos.",
+    undo: "Deshacer turno",
+    undoHint: "Restaura todos los archivos de este turno a su estado anterior; se guarda el estado actual.",
+    undoBlocked: "Al menos un archivo se modificó después. Usa el historial de ese archivo.",
+    alreadyReverted: "Este turno ya se ha deshecho.",
+    empty: "El último turno no modificó archivos.",
+    refresh: "Actualizar",
+    newFile: "nuevo",
+    deletedFile: "eliminado",
+    revertFailed: "Error al deshacer:",
+  },
+
   settings: {
     title: "Configuración",
     search: "Buscar configuración…",

@@ -1052,6 +1052,7 @@ fn pending_file_snapshot(
 fn record_file_snapshot(
     app: &AppHandle,
     session_id: &str,
+    turn_id: Option<&str>,
     before: Option<PendingFileSnapshot>,
     origin: &str,
     call_id: &str,
@@ -1065,6 +1066,7 @@ fn record_file_snapshot(
             session_id,
             origin,
             call_id,
+            turn_id,
         );
     }
 }
@@ -1077,13 +1079,14 @@ fn record_file_snapshot(
 /// through the parent's UI), and a hard inner turn cap.
 #[cfg(test)]
 pub async fn task_tool(config: &EngineConfig, args: &Value) -> tools::ToolOutcome {
-    task_tool_with_snapshots(None, "", config, args).await
+    task_tool_with_snapshots(None, "", None, config, args).await
 }
 
 /// The implementation. `app` is `None` in tests, where there is no database to write to.
 async fn task_tool_with_snapshots(
     app: Option<&AppHandle>,
     session_id: &str,
+    turn_id: Option<&str>,
     config: &EngineConfig,
     args: &Value,
 ) -> tools::ToolOutcome {
@@ -1186,7 +1189,14 @@ async fn task_tool_with_snapshots(
             let result = tools::execute(&call.function.name, &arguments, &ctx, &mut todos).await;
             if !result.is_error {
                 if let Some(app) = app {
-                    record_file_snapshot(app, session_id, before_file, &call.function.name, &call.id);
+                    record_file_snapshot(
+                        app,
+                        session_id,
+                        turn_id,
+                        before_file,
+                        &call.function.name,
+                        &call.id,
+                    );
                 }
             }
             messages.push(ChatMessage::tool(call.id.clone(), result.content));
@@ -1538,6 +1548,7 @@ async fn run_turn(
     let turn_message_id = app
         .try_state::<Db>()
         .and_then(|db| db.insert_message(session_id, "assistant", None, None, None).ok());
+    let turn_id = turn_message_id.map(|id| id.to_string());
     let mut parts: Vec<Value> = Vec::new();
     let mut said = String::new();
     // One row per turn means one tool_calls list for the whole turn. Overwriting it per round
@@ -1692,7 +1703,14 @@ async fn run_turn(
             } else if call.function.name == "ask_user" {
                 ask_user(app, session_id, &arguments, &mut seq).await
             } else if call.function.name == "task" {
-                task_tool_with_snapshots(Some(app), session_id, config, &arguments).await
+                task_tool_with_snapshots(
+                    Some(app),
+                    session_id,
+                    turn_id.as_deref(),
+                    config,
+                    &arguments,
+                )
+                .await
             } else if call.function.name == "screenshot" {
                 let needs_permission =
                     config.permission == "ask" && !has_session_grant(app, session_id);
@@ -1761,7 +1779,14 @@ async fn run_turn(
                 tools::execute(&call.function.name, &arguments, &ctx, &mut todos).await
             };
             if !tool_outcome.is_error {
-                record_file_snapshot(app, session_id, before_file, &call.function.name, &call.id);
+                record_file_snapshot(
+                    app,
+                    session_id,
+                    turn_id.as_deref(),
+                    before_file,
+                    &call.function.name,
+                    &call.id,
+                );
             }
             let duration_ms = started.elapsed().as_millis() as i64;
 

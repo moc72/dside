@@ -34,6 +34,13 @@ export const activeTab = computed(
  */
 export const fileRevision = ref(0);
 
+/** Bumped when a turn ends; the Changes tab reloads the latest turn diff. */
+export const turnDiffRevision = ref(0);
+
+export function bumpTurnDiff(): void {
+  turnDiffRevision.value += 1;
+}
+
 /** The tab that recently came into view on its own, so the bar can point at it briefly. */
 export const attentionTabId = ref("");
 

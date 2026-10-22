@@ -14,6 +14,7 @@ const SchedulesTab = defineAsyncComponent(() => import("./SchedulesTab.vue"));
 const GitPanel = defineAsyncComponent(() => import("./GitPanel.vue"));
 const TerminalPanel = defineAsyncComponent(() => import("../TerminalPanel.vue"));
 const LogsPanel = defineAsyncComponent(() => import("./LogsPanel.vue"));
+const TurnDiffPanel = defineAsyncComponent(() => import("./TurnDiffPanel.vue"));
 
 const labels: Record<
   WorkAreaTabKind,
@@ -24,6 +25,7 @@ const labels: Record<
   | "workArea.tabTerminal"
   | "workArea.tabGit"
   | "workArea.tabLogs"
+  | "workArea.tabChanges"
 > = {
   progress: "workArea.tabProgress",
   file: "workArea.tabFile",
@@ -32,11 +34,13 @@ const labels: Record<
   terminal: "workArea.tabTerminal",
   git: "workArea.tabGit",
   logs: "workArea.tabLogs",
+  changes: "workArea.tabChanges",
 };
 
 const hasTerminal = computed(() => tabs.value.some((tab) => tab.kind === "terminal"));
 const hasGit = computed(() => tabs.value.some((tab) => tab.kind === "git"));
 const hasLogs = computed(() => tabs.value.some((tab) => tab.kind === "logs"));
+const hasChanges = computed(() => tabs.value.some((tab) => tab.kind === "changes"));
 
 /** Everyday mode keeps the plan, skill and schedule panels out of the way. */
 const shownTabs = computed(() =>
@@ -108,6 +112,15 @@ watch(
       >
         <Icon name="activity" :size="13" />
       </button>
+      <button
+        v-if="!hasChanges"
+        class="open-tool"
+        type="button"
+        :title="t('workArea.tabChanges')"
+        @click="openTab('changes')"
+      >
+        <Icon name="diff" :size="13" />
+      </button>
 
       <span class="spacer"></span>
 
@@ -136,6 +149,7 @@ watch(
         <SchedulesTab v-else-if="activeTab?.kind === 'schedules'" />
         <GitPanel v-else-if="activeTab?.kind === 'git'" />
         <LogsPanel v-else-if="activeTab?.kind === 'logs'" />
+        <TurnDiffPanel v-else-if="activeTab?.kind === 'changes'" />
         <p v-else class="empty">{{ t("workArea.empty") }}</p>
       </template>
     </div>

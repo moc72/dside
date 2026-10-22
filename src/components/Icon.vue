@@ -65,6 +65,7 @@ const shapes: Record<string, string[]> = {
   sparkle: ["M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"],
   "external-link": ["M14 4h6v6", "M20 4l-9 9", "M18 14v5H5V6h5"],
   terminal: ["M4 5h16v14H4z", "M8 10l3 3-3 3", "M13 16h4"],
+  diff: ["M5 3h14v18H5z", "M9 8h6", "M9 12h6", "M9 16h3", "M15 16h3"],
   git: [
     "M6 3v12",
     "M18 9a9 9 0 0 1-9 9",

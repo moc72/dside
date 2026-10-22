@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS file_versions (
   session_id  TEXT,
   origin      TEXT NOT NULL,
   call_id     TEXT,
+  turn_id     TEXT,
   created_at  INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_file_versions_path ON file_versions(path, id);
@@ -404,6 +405,16 @@ pub struct FileVersionRow {
     pub content: Option<String>,
 }
 
+/// The first snapshot of a path inside one turn. Its content is the state before the turn;
+/// the turn review compares it with the file as it is now.
+pub struct TurnVersionRow {
+    pub id: i64,
+    pub path: String,
+    pub content: Option<String>,
+    pub existed: bool,
+    pub origin: String,
+}
+
 impl Db {
     pub fn open(path: &Path) -> Result<Self, String> {
         if let Some(parent) = path.parent() {
@@ -447,6 +458,7 @@ impl Db {
         add_column(conn, "memories", "workspace", "TEXT NOT NULL DEFAULT ''")?;
         // The ordered timeline of an assistant answer.
         add_column(conn, "messages", "parts", "TEXT")?;
+        add_column(conn, "file_versions", "turn_id", "TEXT")?;
         Ok(())
     }
 
@@ -1426,12 +1438,13 @@ impl Db {
         session_id: &str,
         origin: &str,
         call_id: &str,
+        turn_id: Option<&str>,
     ) -> Result<i64, String> {
         let conn = self.lock()?;
         conn.execute(
             "INSERT INTO file_versions
-               (path, content, existed, session_id, origin, call_id, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+               (path, content, existed, session_id, origin, call_id, turn_id, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             params![
                 path,
                 content,
@@ -1439,6 +1452,7 @@ impl Db {
                 session_id,
                 origin,
                 call_id,
+                turn_id,
                 now()
             ],
         )
@@ -1492,6 +1506,77 @@ impl Db {
             },
         )
         .map_err(|error| error.to_string())
+    }
+
+    /// The most recent turn in this session that changed at least one file. A turn is the
+    /// assistant message row the engine used while the tools ran.
+    pub fn latest_turn_id(&self, session_id: &str) -> Result<Option<String>, String> {
+        let conn = self.lock()?;
+        conn.query_row(
+            "SELECT turn_id FROM file_versions
+             WHERE session_id = ?1 AND turn_id IS NOT NULL
+             ORDER BY id DESC LIMIT 1",
+            params![session_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())
+    }
+
+    /// The earliest snapshot per path in one turn; later writes to the same path within the
+    /// turn are covered by the first snapshot and do not appear twice.
+    pub fn turn_versions(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+    ) -> Result<Vec<TurnVersionRow>, String> {
+        let conn = self.lock()?;
+        let mut statement = conn
+            .prepare(
+                "SELECT v.id, v.path, v.content, v.existed, v.origin
+                 FROM file_versions v
+                 JOIN (
+                   SELECT path, MIN(id) AS first_id
+                   FROM file_versions
+                   WHERE session_id = ?1 AND turn_id = ?2
+                   GROUP BY path
+                 ) first ON v.id = first.first_id
+                 ORDER BY v.path",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map(params![session_id, turn_id], |row| {
+                Ok(TurnVersionRow {
+                    id: row.get(0)?,
+                    path: row.get(1)?,
+                    content: row.get(2)?,
+                    existed: row.get::<_, i32>(3)? != 0,
+                    origin: row.get(4)?,
+                })
+            })
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())
+    }
+
+    /// True when the file was changed after this turn (or outside a turn). Undoing an old
+    /// turn would otherwise overwrite work that came later.
+    pub fn has_later_version(
+        &self,
+        path: &str,
+        id: i64,
+        turn_id: &str,
+    ) -> Result<bool, String> {
+        let conn = self.lock()?;
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM file_versions
+                 WHERE path = ?1 AND id > ?2 AND COALESCE(turn_id, '') <> ?3",
+                params![path, id, turn_id],
+                |row| row.get(0),
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(count > 0)
     }
 }
 
@@ -1778,10 +1863,10 @@ mod tests {
         let db = Db::open(&directory.join("test.sqlite3")).unwrap();
 
         let older = db
-            .insert_file_version("/tmp/a.txt", Some("alt"), true, "s1", "edit", "c1")
+            .insert_file_version("/tmp/a.txt", Some("alt"), true, "s1", "edit", "c1", None)
             .unwrap();
         let newer = db
-            .insert_file_version("/tmp/a.txt", None, false, "s1", "write", "c2")
+            .insert_file_version("/tmp/a.txt", None, false, "s1", "write", "c2", None)
             .unwrap();
 
         let list = db.file_versions("/tmp/a.txt", 10).unwrap();
@@ -1796,6 +1881,62 @@ mod tests {
         assert_eq!(row.info.path, "/tmp/a.txt");
         assert_eq!(row.content.as_deref(), Some("alt"));
         assert_eq!(row.info.origin, "edit");
+
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn turn_versions_take_the_first_snapshot_per_path() {
+        let directory =
+            std::env::temp_dir().join(format!("ds-ide-turn-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let db = Db::open(&directory.join("test.sqlite3")).unwrap();
+
+        let first = db
+            .insert_file_version(
+                "/tmp/a.txt",
+                Some("alt"),
+                true,
+                "s1",
+                "edit",
+                "c1",
+                Some("m1"),
+            )
+            .unwrap();
+        db.insert_file_version(
+            "/tmp/a.txt",
+            Some("mittel"),
+            true,
+            "s1",
+            "edit",
+            "c2",
+            Some("m1"),
+        )
+        .unwrap();
+        db.insert_file_version("/tmp/b.txt", None, false, "s1", "write", "c3", Some("m1"))
+            .unwrap();
+
+        assert_eq!(db.latest_turn_id("s1").unwrap().as_deref(), Some("m1"));
+        let versions = db.turn_versions("s1", "m1").unwrap();
+        assert_eq!(versions.len(), 2, "one row per path");
+        let a = versions.iter().find(|row| row.path == "/tmp/a.txt").unwrap();
+        assert_eq!(a.id, first);
+        assert_eq!(a.content.as_deref(), Some("alt"));
+        assert!(!db.has_later_version("/tmp/a.txt", first, "m1").unwrap());
+
+        db.insert_file_version(
+            "/tmp/a.txt",
+            Some("neu"),
+            true,
+            "s1",
+            "edit",
+            "c4",
+            Some("m2"),
+        )
+        .unwrap();
+        assert!(db.has_later_version("/tmp/a.txt", first, "m1").unwrap());
+        assert_eq!(db.latest_turn_id("s1").unwrap().as_deref(), Some("m2"));
 
         let _ = std::fs::remove_dir_all(&directory);
     }

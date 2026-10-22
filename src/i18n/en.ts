@@ -135,6 +135,7 @@ export const en: Messages = {
     tabTerminal: "Terminal",
     tabGit: "Git",
     tabLogs: "Logs",
+    tabChanges: "Changes",
 
     closeTab: "Close tab",
     empty: "No tab open.",
@@ -333,6 +334,20 @@ export const en: Messages = {
       newline: "Insert line break",
     },
   },
+  turnDiff: {
+    title: "Changes from the last turn",
+    hint: "The state before the turn against the current state. Files can be reverted together.",
+    undo: "Undo turn",
+    undoHint: "Reset every file of this turn to its state before it; the current state is backed up.",
+    undoBlocked: "At least one file changed later. Use that file's history instead.",
+    alreadyReverted: "This turn has already been undone.",
+    empty: "The last turn changed no files.",
+    refresh: "Refresh",
+    newFile: "new",
+    deletedFile: "deleted",
+    revertFailed: "Undo failed:",
+  },
+
   settings: {
     title: "Settings",
     search: "Search settings…",

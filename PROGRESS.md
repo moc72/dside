@@ -2413,3 +2413,37 @@ wurde. Mit dem bisherigen top-level `image`-Feld blieb genau dieser Effekt aus.
   Bildeingaben; sehr kleine Bilder (1×1) lehnt der Anbieter ab.
 
 Der Fix ist noch **nicht committet/getaggt**; er ist der Kandidat für v0.4.12.
+
+## 63. Ein ganzer Zug auf einen Blick (2026-10-22, zweiundvierzigste Runde)
+
+Turn-Diff und Turn-Undo sind drin. Die Datei-Historie war bisher pro Datei; jetzt
+lässt sich der ganze Zug prüfen und gemeinsam zurücknehmen.
+
+### Daten
+- `file_versions` hat `turn_id` (Migration). Der Engine-Turn übergibt die ID der
+  Assistant-Zeile an `record_file_snapshot`; Sub-Agenten erben die Turn-ID des
+  Parents, damit ihre Schreibzugriffe im selben Zug landen.
+- `latest_turn_id` findet den letzten Zug mit Dateiänderungen;
+  `turn_versions` nimmt pro Pfad den **ersten** Snapshot (der Stand *vor* dem
+  Zug); `has_later_version` erkennt Änderungen nach dem Zug.
+- `turn_diff` liefert pro Datei before/after (Datei auf der Platte), `canUndo`
+  ist false, wenn später etwas geändert wurde. `turn_revert` prüft das vorher,
+  sichert den aktuellen Stand über die bestehende `revert_file_version`-Logik
+  und stellt dann alle Dateien des Zuges wieder her. Ein Turn-Undo ist damit
+  selbst über die Datei-Historie rückgängig zu machen.
+
+### Oberfläche
+- Neuer Work-Area-Tab **„Änderungen"** (Icon `diff`) mit Dateiliste und
+  Monaco-Diff (before/after, Sprache je Datei), Refresh und „Zug zurücknehmen".
+  Der Tab lädt den letzten Zug mit Änderungen; nach `turn_end` wird eine
+  Revision erhöht, sodass ein offener Tab automatisch nachzieht. Bei späteren
+  Änderungen ist der Undo-Knopf deaktiviert und verweist auf den Dateiverlauf.
+- i18n in allen sechs Sprachen; `turnDiff.*` und `workArea.tabChanges`.
+
+### Geprüft
+`cargo test --lib` **37 passed / 13 ignored** (neuer DB-Test für die
+Erst-Snapshots und ein Integrationstest, der zwei Dateien ändert, den Diff
+prüft und beide zurücksetzt). `pnpm build` grün.
+
+Version 0.4.13; v0.4.12 bleibt der Vision-Fix. Kein Tag in dieser Runde — der
+Tag folgt direkt nach dem Commit.

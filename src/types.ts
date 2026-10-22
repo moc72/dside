@@ -120,12 +120,35 @@ export interface Deliverable {
   done?: boolean;
 }
 
-export type WorkAreaTabKind = "progress" | "file" | "skills" | "schedules" | "terminal" | "git" | "logs";
+export type WorkAreaTabKind =
+  | "progress"
+  | "file"
+  | "skills"
+  | "schedules"
+  | "terminal"
+  | "git"
+  | "logs"
+  | "changes";
 
 export interface WorkAreaTab {
   id: string;
   kind: WorkAreaTabKind;
   filePath?: string | null;
+}
+
+export interface TurnFileDiff {
+  path: string;
+  before: string;
+  after: string;
+  existedBefore: boolean;
+  existsAfter: boolean;
+  origin: string;
+}
+
+export interface TurnDiff {
+  turnId: string;
+  files: TurnFileDiff[];
+  canUndo: boolean;
 }
 
 export type AppView = "chat" | "settings";

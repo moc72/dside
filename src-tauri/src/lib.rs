@@ -623,6 +623,7 @@ fn revert_file_version(db: &db::Db, id: i64, session_id: &str) -> Result<String,
                 session_id,
                 "revert",
                 "",
+                None,
             );
         }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -633,6 +634,7 @@ fn revert_file_version(db: &db::Db, id: i64, session_id: &str) -> Result<String,
                 session_id,
                 "revert",
                 "",
+                None,
             );
         }
         Err(error) => return Err(error.to_string()),
@@ -662,6 +664,107 @@ fn file_revert(
     session_id: Option<String>,
 ) -> Result<String, String> {
     revert_file_version(db.inner(), id, &session_id.unwrap_or_default())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TurnFileDiff {
+    path: String,
+    before: String,
+    after: String,
+    existed_before: bool,
+    exists_after: bool,
+    origin: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TurnDiff {
+    turn_id: String,
+    files: Vec<TurnFileDiff>,
+    can_undo: bool,
+}
+
+/// The changed files of the most recent turn that touched the disk. The first snapshot per
+/// path is the state before the turn; the file on disk is the state after it.
+fn build_turn_diff(db: &db::Db, session_id: &str) -> Result<Option<TurnDiff>, String> {
+    let Some(turn_id) = db.latest_turn_id(session_id)? else {
+        return Ok(None);
+    };
+    let versions = db.turn_versions(session_id, &turn_id)?;
+    if versions.is_empty() {
+        return Ok(None);
+    }
+
+    let mut files = Vec::new();
+    let mut can_undo = true;
+    for version in versions {
+        if db.has_later_version(&version.path, version.id, &turn_id)? {
+            can_undo = false;
+        }
+        let path = PathBuf::from(&version.path);
+        let exists_after = path.exists();
+        let after = if exists_after {
+            fs::read_to_string(&path).map_err(|error| error.to_string())?
+        } else {
+            String::new()
+        };
+        files.push(TurnFileDiff {
+            path: version.path,
+            before: if version.existed {
+                version.content.unwrap_or_default()
+            } else {
+                String::new()
+            },
+            after,
+            existed_before: version.existed,
+            exists_after,
+            origin: version.origin,
+        });
+    }
+
+    Ok(Some(TurnDiff {
+        turn_id,
+        files,
+        can_undo,
+    }))
+}
+
+#[tauri::command]
+fn turn_diff(db: tauri::State<'_, db::Db>, session_id: String) -> Result<Option<TurnDiff>, String> {
+    build_turn_diff(db.inner(), &session_id)
+}
+
+/// Reverts every file of a turn to its first snapshot. The current state is backed up by
+/// `revert_file_version` first, so a turn undo is itself undoable from the file history.
+fn revert_turn(db: &db::Db, session_id: &str, turn_id: &str) -> Result<Vec<String>, String> {
+    let versions = db.turn_versions(session_id, turn_id)?;
+    if versions.is_empty() {
+        return Err("no file changes in this turn".to_string());
+    }
+    for version in &versions {
+        if db.has_later_version(&version.path, version.id, turn_id)? {
+            return Err(format!(
+                "{} changed after this turn; use the file history",
+                version.path
+            ));
+        }
+    }
+
+    let mut restored = Vec::new();
+    for version in versions {
+        restored.push(revert_file_version(db, version.id, session_id)?);
+    }
+    Ok(restored)
+}
+
+#[tauri::command]
+fn turn_revert(
+    db: tauri::State<'_, db::Db>,
+    session_id: String,
+    turn_id: String,
+) -> Result<Vec<String>, String> {
+    revert_turn(db.inner(), &session_id, &turn_id)
 }
 
 /// Hand-rolled to avoid another dependency; sixteen lines and easy to test.
@@ -1083,6 +1186,8 @@ pub fn run() {
             file_versions,
             file_version_content,
             file_revert,
+            turn_diff,
+            turn_revert,
             default_workspace,
             engine::engine_set_config,
             engine::engine_configured,
@@ -1272,7 +1377,7 @@ mod tests {
         let path = target.to_string_lossy().to_string();
 
         let old = db
-            .insert_file_version(&path, Some("vorher"), true, "s1", "edit", "c1")
+            .insert_file_version(&path, Some("vorher"), true, "s1", "edit", "c1", None)
             .unwrap();
         assert_eq!(revert_file_version(&db, old, "s1").unwrap(), path);
         assert_eq!(fs::read_to_string(&target).unwrap(), "vorher");
@@ -1285,10 +1390,65 @@ mod tests {
 
         // A snapshot from before the file existed removes it again.
         let created = db
-            .insert_file_version(&path, None, false, "s1", "write", "c2")
+            .insert_file_version(&path, None, false, "s1", "write", "c2", None)
             .unwrap();
         revert_file_version(&db, created, "s1").unwrap();
         assert!(!target.exists());
+
+        let _ = fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn a_turn_diff_and_undo_cover_all_files() {
+        let directory =
+            std::env::temp_dir().join(format!("ds-ide-turn-revert-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory).unwrap();
+        let note = directory.join("note.txt");
+        let created = directory.join("new.txt");
+        fs::write(&note, "vorher").unwrap();
+        let db = db::Db::open(&directory.join("test.sqlite3")).unwrap();
+        let note_path = note.to_string_lossy().to_string();
+        let created_path = created.to_string_lossy().to_string();
+
+        db.insert_file_version(
+            &note_path,
+            Some("vorher"),
+            true,
+            "s1",
+            "edit",
+            "c1",
+            Some("m1"),
+        )
+        .unwrap();
+        fs::write(&note, "nachher").unwrap();
+        db.insert_file_version(
+            &created_path,
+            None,
+            false,
+            "s1",
+            "write",
+            "c2",
+            Some("m1"),
+        )
+        .unwrap();
+        fs::write(&created, "neu").unwrap();
+
+        let diff = build_turn_diff(&db, "s1").unwrap().expect("a turn diff");
+        assert_eq!(diff.turn_id, "m1");
+        assert_eq!(diff.files.len(), 2);
+        assert!(diff.can_undo);
+        let changed = diff.files.iter().find(|file| file.path == note_path).unwrap();
+        assert_eq!(changed.before, "vorher");
+        assert_eq!(changed.after, "nachher");
+        let added = diff.files.iter().find(|file| file.path == created_path).unwrap();
+        assert!(!added.existed_before);
+        assert_eq!(added.after, "neu");
+
+        let restored = revert_turn(&db, "s1", "m1").unwrap();
+        assert_eq!(restored.len(), 2);
+        assert_eq!(fs::read_to_string(&note).unwrap(), "vorher");
+        assert!(!created.exists());
 
         let _ = fs::remove_dir_all(&directory);
     }

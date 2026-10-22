@@ -26,6 +26,7 @@ import {
   upsertToolActivity,
 } from "../stores/sessions";
 import { defaultModelFor, settings } from "../stores/settings";
+import { bumpTurnDiff } from "../stores/workArea";
 
 // A stage change (Planmodus/Vor Änderungen fragen/Vollzugriff) also ends any "allow for this session" grant.
 watch(
@@ -281,6 +282,7 @@ function handleEvent(event: EngineEvent): void {
     case "turn_end":
       flushStream();
       endAssistantMessage(event.stopReason);
+      bumpTurnDiff();
       pendingAction.value = null;
       running.value = false;
       // The partner may have chosen its name during this turn. Reading it is enough: the
