@@ -2447,3 +2447,18 @@ prüft und beide zurücksetzt). `pnpm build` grün.
 
 Version 0.4.13; v0.4.12 bleibt der Vision-Fix. Kein Tag in dieser Runde — der
 Tag folgt direkt nach dem Commit.
+
+## 64. v0.4.13 veröffentlicht (2026-10-22, dreiundvierzigste Runde)
+
+Der Turn-Diff ist als **v0.4.13** veröffentlicht (Latest) und enthält zugleich den
+Vision-Fix: Bilder gehen als OpenAI-`image_url`-Parts raus, `deepseek-flash` liest
+Text und Layout; der Changes-Tab zeigt den letzten Zug mit Dateiänderungen und
+kann ihn gemeinsam zurücknehmen.
+
+Der separate v0.4.12-Lauf (nur Vision-Fix) war auf dem Ubuntu-Runner im
+apt-Schritt hängen geblieben; v0.4.13 war schneller fertig und enthält denselben
+Fix. Der v0.4.12-**Tag** bleibt als Historie, der redundante Draft wurde gelöscht.
+Die Release-Liste ist damit sauber: v0.4.13 (Latest), v0.4.11, v0.4.9.
+
+**CI v0.4.13:** verify und Linux/macOS/Windows grün; sieben Assets; 37 Rust-Tests
+(13 ignored). Der Vision-Fix ist im Live-Test mit dem Fixture „HALLO 4711" belegt.
