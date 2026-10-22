@@ -2380,3 +2380,36 @@ den Sprachumschalter. Korrekturgelesen und angeglichen:
 
 Kein Code betroffen. Die Dateien sind committed und gepusht; der Tag v0.4.11
 bleibt unverändert.
+
+## 62. Die Augen waren richtig, der Draht war falsch (2026-10-22, einundvierzigste Runde)
+
+Der Test mit dem Schaf-Bild im Chat hat den entscheidenden Hinweis gegeben: Das
+Modell kann sehen. Der Fehler lag in der Leitung, nicht im Auge.
+
+### Befund
+`ChatMessage` schickte Bilder als **top-level Feld** `image: [...]`. Die
+DeepSeek-API akzeptiert das (HTTP 200), ignoriert es aber — das Modell antwortet,
+als wäre kein Bild dabei. KiloCode (OpenAI-kompatibler Pfad) sendet Bilder
+stattdessen als Content-Parts:
+`content: [{type:"text",…}, {type:"image_url", image_url:{url:"data:…"}}]`.
+
+Ein direkter Probe-Aufruf an `https://api.deepseek.com/v1/chat/completions` mit
+`deepseek-flash` und einem 520×180-PNG („HALLO 4711") in dieser Form gab exakt
+`HALLO 4711` zurück; die `prompt_tokens` (232) zeigen, dass das Bild mitgezählt
+wurde. Mit dem bisherigen top-level `image`-Feld blieb genau dieser Effekt aus.
+
+### Behoben
+- `wire_messages` in `deepseek.rs` übersetzt `ChatMessage.image` in OpenAI-
+  `image_url`-Content-Parts; das interne Feld bleibt für Engine/DB unverändert.
+  Text, mehrere Bilder, Tool-Calls und Tool-Results werden weiterhin korrekt
+  serialisiert; ein Test deckt die Form ab.
+- Der Live-Test `live_deepseek_takes_an_image` nutzt jetzt ein echtes Fixture
+  (`src-tauri/tests/fixtures/vision.png`, „HALLO 4711") und prüft, dass das
+  Modell den Text zurückliest.
+- Ergebnis: `cargo test --lib` **35 passed / 13 ignored**; der Live-Test lief
+  mit echtem Key durch (`answer: "HALLO 4711"`).
+- README, HANDOVER und die fünf Übersetzungen korrigiert: Die Aussage aus §56
+  („text-only, kann Bilder nicht sehen") war falsch. Bilder sind echte
+  Bildeingaben; sehr kleine Bilder (1×1) lehnt der Anbieter ab.
+
+Der Fix ist noch **nicht committet/getaggt**; er ist der Kandidat für v0.4.12.

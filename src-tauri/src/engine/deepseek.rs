@@ -30,6 +30,51 @@ fn truncate(text: &str, limit: usize) -> String {
     text.chars().take(limit).collect::<String>() + "…"
 }
 
+/// OpenAI-compatible providers take pictures as content parts, not as a top-level `image`
+/// field: `content: [{type:"text",…}, {type:"image_url",image_url:{url:"data:…"}}]`.
+/// `ChatMessage` keeps the images in their own field for the rest of the engine, so this is
+/// the one place that translates them to the wire shape. Getting this wrong makes the
+/// provider accept the request and ignore the picture — the model then answers as if it were
+/// blind.
+fn wire_messages(messages: &[ChatMessage]) -> Vec<Value> {
+    messages
+        .iter()
+        .map(|message| {
+            let mut wire = json!({ "role": message.role.as_str() });
+
+            let images = message
+                .image
+                .as_ref()
+                .filter(|images| !images.is_empty());
+            if let Some(images) = images {
+                let mut content = Vec::with_capacity(images.len() + 1);
+                if let Some(text) = message.content.as_deref() {
+                    if !text.is_empty() {
+                        content.push(json!({ "type": "text", "text": text }));
+                    }
+                }
+                for url in images {
+                    content.push(json!({
+                        "type": "image_url",
+                        "image_url": { "url": url }
+                    }));
+                }
+                wire["content"] = Value::Array(content);
+            } else if let Some(text) = message.content.as_deref() {
+                wire["content"] = Value::String(text.to_string());
+            }
+
+            if let Some(calls) = &message.tool_calls {
+                wire["tool_calls"] = json!(calls);
+            }
+            if let Some(id) = &message.tool_call_id {
+                wire["tool_call_id"] = json!(id);
+            }
+            wire
+        })
+        .collect()
+}
+
 /// Streams one assistant turn from an OpenAI-compatible chat-completions endpoint
 /// (DeepSeek, `POST /chat/completions`). Text deltas are forwarded to `on_text`.
 pub async fn stream_chat(
@@ -46,7 +91,7 @@ pub async fn stream_chat(
         "model": config.model,
         "stream": true,
         "stream_options": { "include_usage": true },
-        "messages": messages,
+        "messages": wire_messages(messages),
     });
     if !tools.is_empty() {
         body["tools"] = Value::Array(tools.to_vec());
@@ -312,8 +357,9 @@ mod live {
         assert!(!summary.is_empty(), "compression must produce a summary");
     }
 
-    /// Images go as data URLs in the provider's own `image` field, not as the OpenAI content
-    /// parts. A wrong shape here means a 400 on every picture the user attaches.
+    /// Images go in an OpenAI `image_url` content part as a data URL. A top-level `image`
+    /// field is accepted by the API but silently ignored by the model — the exact bug that
+    /// made the eyes look blind.
     #[tokio::test]
     #[ignore = "requires DS_IDE_API_KEY"]
     async fn live_deepseek_takes_an_image() {
@@ -322,52 +368,54 @@ mod live {
             return;
         };
 
-        // A 32x32 PNG, built here so the test needs no fixture file.
-        let png = {
-            let mut bytes = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
-            let mut chunk = |kind: &[u8; 4], data: Vec<u8>| {
-                bytes.extend((data.len() as u32).to_be_bytes());
-                bytes.extend(kind);
-                bytes.extend(&data);
-                bytes.extend([0, 0, 0, 0]); // crc: the provider does not check it
-            };
-            chunk(b"IHDR", {
-                let mut header = Vec::new();
-                header.extend(32u32.to_be_bytes());
-                header.extend(32u32.to_be_bytes());
-                header.extend([8, 2, 0, 0, 0]);
-                header
-            });
-            let mut raw = Vec::new();
-            for y in 0..32u8 {
-                raw.push(0);
-                for x in 0..32u8 {
-                    raw.push(x * 8);
-                    raw.push(y * 8);
-                    raw.push(128);
-                }
-            }
-            chunk(b"IDAT", {
-                let mut encoded = vec![0x78, 0x01];
-                encoded.extend(raw.iter().take(0));
-                encoded
-            });
-            chunk(b"IEND", Vec::new());
-            bytes
-        };
+        // A real 520x180 PNG with "HALLO 4711"; the model must read it back.
+        let png = include_bytes!("../../tests/fixtures/vision.png");
 
-        let mut message = ChatMessage::user("Antworte mit genau: BILD");
+        let mut message = ChatMessage::user("Antworte nur mit dem Text auf dem Bild.");
         message.image = Some(vec![format!(
             "data:image/png;base64,{}",
-            crate::base64_encode(&png)
+            crate::base64_encode(png)
         )]);
         let messages = vec![message];
 
         let mut sink = |_kind: DeltaKind, _chunk: &str| {};
-        match stream_chat(&config, &messages, &[], &mut sink).await {
-            Ok(outcome) => println!("answer: {:?}", outcome.content),
-            Err(error) => panic!("sending an image failed: {error}"),
-        }
+        let outcome = stream_chat(&config, &messages, &[], &mut sink)
+            .await
+            .expect("sending an image must be accepted");
+        println!("answer: {:?}", outcome.content);
+        assert!(
+            outcome.content.contains("HALLO 4711"),
+            "the model did not read the image: {:?}",
+            outcome.content
+        );
+    }
+
+    #[test]
+    fn images_travel_as_openai_content_parts() {
+        let mut message = ChatMessage::user("Schau");
+        message.image = Some(vec![
+            "data:image/png;base64,AAAA".to_string(),
+            "data:image/png;base64,BBBB".to_string(),
+        ]);
+        let wire = wire_messages(&[message]);
+        assert!(wire[0].get("image").is_none());
+        assert_eq!(wire[0]["content"][0]["type"], "text");
+        assert_eq!(wire[0]["content"][1]["type"], "image_url");
+        assert_eq!(
+            wire[0]["content"][1]["image_url"]["url"],
+            "data:image/png;base64,AAAA"
+        );
+        assert_eq!(
+            wire[0]["content"][2]["image_url"]["url"],
+            "data:image/png;base64,BBBB"
+        );
+
+        let plain = wire_messages(&[ChatMessage::user("hallo")]);
+        assert_eq!(plain[0]["content"], "hallo");
+
+        let tool = wire_messages(&[ChatMessage::tool("call-1", "done")]);
+        assert_eq!(tool[0]["tool_call_id"], "call-1");
+        assert_eq!(tool[0]["content"], "done");
     }
 
     /// `reasoning_effort` is a real field with a fixed set of values; a typo in either the

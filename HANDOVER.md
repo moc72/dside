@@ -116,10 +116,11 @@ connection test.
 - **Screen capture:** the composer's eye button captures the virtual desktop and attaches a
   2000px JPEG. The `screenshot` tool lets the companion take a capture itself: Ask before
   changes asks first, Plan mode/Full access run directly, the picture appears in the tool row
-  and is attached as a user image to the next model call. **Limit:** the current DeepSeek
-  models are text-only in this setup and say they cannot see the image; real sight needs a
-  vision-capable model. The full capture is temporary; Windows uses PowerShell, macOS
-  `screencapture`, Linux one of grim/gnome-screenshot/spectacle/scrot/ImageMagick.
+  and is attached as a user image to the next model call. The image travels as an OpenAI
+  `image_url` content part, not as a top-level `image` field; `deepseek-flash` reads text and
+  layout from it (verified with a 520×180 fixture). Very small images are rejected. The full
+  capture is temporary; Windows uses PowerShell, macOS `screencapture`, Linux one of
+  grim/gnome-screenshot/spectacle/scrot/ImageMagick.
 - **Logs:** an in-memory log ring (400 lines) receives the app's and engine's log lines. The
   Logs tab shows them; the `logs` tool lets the companion read them. Nothing is persisted.
 - **Permission stages:** **Plan mode** (read-only), **Ask before changes** (approve every
@@ -147,9 +148,8 @@ connection test.
   those. The terminal and the Git panel are user-initiated tools, not model tools.
 - The **screen capture** button captures the whole virtual desktop; the `screenshot` tool does
   it on the companion's request (Ask before changes asks first). The image reaches the request
-  and the tool row, but the current DeepSeek model reports that it cannot see pictures. On
-  macOS, Screen Recording permission is required; on Linux one of the capture tools must be
-  installed.
+  as an OpenAI `image_url` content part; `deepseek-flash` reads it (tested). On macOS, Screen
+  Recording permission is required; on Linux one of the capture tools must be installed.
 - The API key never reaches the frontend; the database is local. Do not commit
   `secrets.json`; it is gitignored.
 
@@ -161,9 +161,9 @@ connection test.
   (`macos-13`) or a universal build.
 - The Git panel has no push or merge UI; it has branch switching and pull. The terminal has
   one shell per tab and no profile picker.
-- No vision model: screenshots (manual or the `screenshot` tool) reach the provider as image
-  attachments, but the current DeepSeek models say they cannot see them. A vision-capable
-  model is required for actual sight.
+- Screenshots are real image inputs: the tested `deepseek-flash` reads text and layout from
+  them. Very small images (for example 1×1) are rejected; fine visual judgement remains a
+  model limitation.
 - Full access is a per-action approval in Ask before changes, not a sandbox or capability
   layer. The Full access dialog is the consent for full access. The allowlist/workspace-only
   policies are a policy; a real OS sandbox/per-command capability layer is still open.

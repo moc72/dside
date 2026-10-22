@@ -34,7 +34,7 @@ work area shows a preview, not an editor.*
   presentations (pptx, ppt, odp), RTF.
 - **Terminal:** a real PTY in a tab — ConPTY on Windows, the Unix PTY elsewhere. It stays alive while its tab exists; closing the tab stops the shell.
 - **Git:** status, stage/unstage, diff, commit, local branches and `pull --ff-only`. No push or merge UI; the terminal is there for that.
-- **Screen capture:** the eye in the composer captures the virtual desktop and attaches a 2000px JPEG. The `screenshot` tool lets the companion ask for a capture itself. The current DeepSeek models are text-only, so the image arrives but they report that they cannot see it.
+- **Screen capture:** the eye in the composer captures the virtual desktop and attaches a 2000px JPEG. The `screenshot` tool lets the companion ask for a capture itself. The image is sent as an OpenAI `image_url` content part; `deepseek-flash` reads text and layout from it (tested). Very small images (for example 1×1) are rejected by the provider.
 - **Logs:** an in-memory ring of the app's and engine's log lines, with a Logs tab and a read-only `logs` tool for the companion. Nothing is written to disk.
 - Integrated browser.
 - **Skills** live in `~/.ds-ide/skills` and can be written in the app.
@@ -104,8 +104,7 @@ scripts/              small tools (e.g. the name-table importer)
 - The integrated browser carries native window chrome; there is no shared toolbar above several pages yet.
 - The partner chooses its name once, and it cannot be changed afterwards.
 - **Permission stages are a policy, not an OS sandbox.** The allowlist and workspace-only write path restrict the companion, but allowed interpreters (node/python) and your own terminal remain powerful. In Ask before changes, sub-agent writes are denied because the sub-agent cannot reach the question panel.
-- **Screenshots are attachments, not sight:** the current DeepSeek models are text-only and report that they cannot see the image. Real sight needs a vision-capable model. On macOS, Screen Recording permission is required; Linux needs one of grim/gnome-screenshot/
-  spectacle/scrot/ImageMagick.
+- **Screenshots are image parts:** the tested `deepseek-flash` reads text and layout from them. Very small images are rejected; fine visual judgement remains a model limitation. On macOS, Screen Recording permission is required; Linux needs one of grim/gnome-screenshot/spectacle/scrot/ImageMagick.
 - The Git panel has no push or merge UI; it has branch switching and pull. The terminal has
   one shell per tab and no profile picker.
 - The published macOS DMG is **aarch64** (Apple Silicon); Intel needs another CI target or a universal build.
