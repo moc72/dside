@@ -141,7 +141,8 @@ scripts/              small tools (e.g. the name-table importer)
   universal build.
 - No signed installers, no notarization, no auto-updater. Windows SmartScreen and macOS
   Gatekeeper warn; the app is still installable.
-- Windows and macOS builds come from CI; local testing happens on Linux.
+- Windows is tested on Windows 11 and in CI. The macOS build is CI-only and has not
+  been runtime-tested on a Mac.
 - No frontend E2E suite yet; CI runs the build and the Rust unit tests.
 
 ## Origins and acknowledgements

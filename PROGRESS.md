@@ -2347,3 +2347,16 @@ der Draft vor der Matrix einmal angelegt oder nur aus einem Job erzeugt werden.
 
 `v0.4.9` bleibt „Latest"; `v0.4.11` liegt als Draft bereit, bis der Nutzer den
 Windows-/macOS-Test gemacht hat. Der alte `v0.4.10`-Draft ist damit überholt.
+
+## 60. v0.4.11 veröffentlicht (2026-10-22, neununddreißigste Runde)
+
+Nach dem Windows-11-Test (dem Entwicklungsziel) ist v0.4.11 als **Latest**
+veröffentlicht; die Release-Notes nennen Terminal, Git, Freigabestufen,
+Richtlinien, Workspace-Picker, Bildschirmaufnahme, Logs, Tastenkürzel,
+Code-Splitting und Gedächtnis-Suche. Ein Mac steht nicht zur Verfügung: Der
+macOS-Build ist ein unsigniertes aarch64-CI-Artefakt und ausdrücklich als
+**nicht auf echter Hardware getestet** gekennzeichnet (README und Release-Notes).
+Der v0.4.10-Draft ist gelöscht, die Tags v0.4.10 und v0.4.11 bleiben.
+
+Offen für später: Der Release-Workflow legte bei v0.4.11 zwei Drafts an (Race der
+Matrix-Jobs); der Draft sollte künftig vor der Matrix einmal erzeugt werden.
