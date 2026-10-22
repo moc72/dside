@@ -2328,3 +2328,22 @@ beim Wechseln am Leben. Ein separates Dock kann später dazukommen.
 
 `pnpm build` grün. Kein Commit/Tag in dieser Runde; die Änderungen gehören in den
 v0.4.11-Stand.
+
+## 59. v0.4.11 gebaut und geprüft (2026-10-22, achtunddreißigste Runde)
+
+Die Namensrunde und die README sind als `08963c6` auf beiden Remotes; der Tag
+`v0.4.11` zeigt darauf. Der Release-Workflow ist grün:
+
+- verify (pnpm build + `cargo test --lib`) — **34 passed / 13 ignored**
+- Linux, macOS und Windows gebaut; die Bibliothekstests auf Windows/macOS liefen mit.
+- Der Draft enthält alle sieben Assets (`.deb`, `.rpm`, `.AppImage`, Linux-Tar,
+  Windows-Zip und -Setup, macOS-DMG).
+
+Die CI hatte diesmal **zwei** Drafts für denselben Tag angelegt: einen mit dem
+Windows-Setup, einen mit den übrigen sechs Assets (Race zwischen den Matrix-Jobs).
+Das Setup wurde per API in den Haupt-Draft hochgeladen, der doppelte Draft danach
+gelöscht; übrig bleibt ein Draft mit sieben Assets. Für künftige Releases sollte
+der Draft vor der Matrix einmal angelegt oder nur aus einem Job erzeugt werden.
+
+`v0.4.9` bleibt „Latest"; `v0.4.11` liegt als Draft bereit, bis der Nutzer den
+Windows-/macOS-Test gemacht hat. Der alte `v0.4.10`-Draft ist damit überholt.
