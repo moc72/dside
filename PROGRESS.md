@@ -2360,3 +2360,23 @@ Der v0.4.10-Draft ist gelöscht, die Tags v0.4.10 und v0.4.11 bleiben.
 
 Offen für später: Der Release-Workflow legte bei v0.4.11 zwei Drafts an (Race der
 Matrix-Jobs); der Draft sollte künftig vor der Matrix einmal erzeugt werden.
+
+## 61. Übersetzte READMEs für die Webseite (2026-10-22, vierzigste Runde)
+
+Die Webseiten-Fassungen liegen jetzt als `README_de.md`, `README_fr.md`,
+`README_es.md`, `README_ru.md` und `README_zh.md` im Repo; `README.md` hat oben
+den Sprachumschalter. Korrekturgelesen und angeglichen:
+
+- Freigabestufen und Einstellungsnamen entsprechen der App (Planmodus / Vor
+  Änderungen fragen / Vollzugriff; Richtlinien; Tastenkürzel; Diagnose; Konto &
+  Modell).
+- Formatierungsfehler behoben (Logs und „Integrierter Browser" waren in einer
+  Zeile, die Struktur-Überschrift klebte am Testabsatz, signierte Installer und
+  CI-Builds waren ein Bullet).
+- macOS steht auch hier als CI-only und nicht auf echter Hardware getestet;
+  Alt-Text des Screenshots korrigiert.
+- Alle relativen Links (Sprachumschalter, `PROGRESS.md`, `LICENSE`,
+  `docs/dside_zh.png`, Font-Lizenz) geprüft; keine fehlenden Ziele.
+
+Kein Code betroffen. Die Dateien sind committed und gepusht; der Tag v0.4.11
+bleibt unverändert.
