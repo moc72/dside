@@ -803,6 +803,8 @@ watch(activeItem, (value) => {
 
 .segmented {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
 }
 
@@ -816,6 +818,7 @@ watch(activeItem, (value) => {
   background: var(--bg-input);
   color: var(--text-muted);
   font-size: 12px;
+  white-space: nowrap;
 }
 
 .segment.active {

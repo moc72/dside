@@ -482,7 +482,7 @@ pub async fn execute(
     // this branch is the read-only case (and the sub-agent, which cannot ask).
     if !ctx.full_authorization && matches!(name, "write" | "edit" | "bash") {
         return ToolOutcome::err(format!(
-            "permission denied: the user is in read-only mode — ask them to switch to 'Fragen' or to hand over the Ruder"
+            "permission denied: the user is in read-only mode — ask them to switch to 'Ask before changes' or to grant full access"
         ));
     }
 
@@ -923,7 +923,7 @@ async fn bash(args: &Value, ctx: &ToolContext) -> ToolOutcome {
         && !command_allowed(command, &ctx.allowed_commands)
     {
         return ToolOutcome::err(
-            "bash: this command is not in the companion's allowlist (Leitplanken). Ask the user to add it or to switch the policy.",
+            "bash: this command is not in the companion's allowlist (policies). Ask the user to add it or to switch the policy.",
         );
     }
     let timeout_ms = args

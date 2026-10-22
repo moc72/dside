@@ -16,7 +16,7 @@ pub struct EngineConfig {
     pub system_prompt: String,
     #[serde(default)]
     pub workspace: String,
-    /// "read" = no writes/commands, "ask" = approve each write/edit/bash, "full" = Ruder.
+    /// "read" = no writes/commands, "ask" = approve each write/edit/bash, "full" = full access.
     #[serde(default = "default_permission")]
     pub permission: String,
     /// "all" or "allowlist". The allowlist applies to the model's bash tool only.

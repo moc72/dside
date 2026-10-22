@@ -5,7 +5,7 @@ import { t } from "../../i18n";
 import { defaultAllowedCommands, settings } from "../../stores/settings";
 
 /**
- * Guardrails for the companion, not for the user's terminal. The allowlist is a policy:
+ * Policies for the companion, not for the user's terminal. The allowlist is a policy:
  * program names, no paths, no shell redirection; it is deliberately not called a sandbox.
  */
 const allowlist = computed({

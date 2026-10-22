@@ -873,7 +873,7 @@ async fn ask_user(
 }
 
 /// Tools that need the user's explicit approval in "ask" mode. The sub-agent is a separate
-/// story: it cannot ask, so its own write/edit/bash calls stay denied unless the Ruder is on.
+/// story: it cannot ask, so its own write/edit/bash calls stay denied unless full access is on.
 fn requires_approval(name: &str) -> bool {
     matches!(name, "write" | "edit" | "bash")
 }

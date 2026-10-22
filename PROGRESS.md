@@ -2296,3 +2296,35 @@ Enthalten sind Terminal/PTY, Git-Panel, Ruder mit drei Stufen, Leitplanken,
 Workspace-Picker, Augen/Ohren, Code-Splitting und die Gedächtnis-Suche. Die
 Version bleibt 0.4.10. **Kein Tag und keine Veröffentlichung**, bis die
 Namensgebung besprochen ist; danach wird v0.4.11 daraus.
+
+## 58. Klarere Namen: Planmodus, Vollzugriff, Richtlinien (2026-10-22, siebenunddreißigste Runde)
+
+Die Metaphern aus §56 waren im Alltag zu sperrig. Die drei Freigabestufen heißen
+jetzt:
+
+- **Planmodus** (vorher „Mitlesen") — nur lesen und suchen.
+- **Vor Änderungen fragen** (vorher „Fragen") — jede Änderung und jeder Befehl wird
+  bestätigt.
+- **Vollzugriff** (vorher „Ruder: {name}") — ohne Rückfrage, bis der Nutzer ihn
+  zurücknimmt.
+
+Der Dialog heißt entsprechend „Vollzugriff für {name}?" (Checkbox, Bestätigung,
+Zurücknehmen), die Erklärtexte und die Freigabe-Hinweise sind angepasst; die
+gespeicherten Werte (`read`/`ask`/`full`) bleiben unverändert. Der Einstellungs-
+bereich „Leitplanken" heißt jetzt **Richtlinien**; „Sandbox" bleibt in der
+Erklärung, weil der Begriff üblich ist. Die Modell-/Tool-Texte, die den Nutzer auf
+eine Stufe verweisen, nennen die neuen Namen. `HANDOVER.md` ist auf die neuen
+Begriffe umgestellt; „Augen/Ohren" stehen nur noch in §56 als Chronik — die UI
+sagt „Bildschirm aufnehmen" und „Logs".
+
+Weil „Vor Änderungen fragen" länger ist, wurde die gemeinsame Lese-Spalte von
+520–860 px auf **560–900 px** erweitert und der Freigabe-Select bekommt 190 px
+(unter 440 px Composer-Breite 110 px, damit nichts aus der Blase läuft). Die
+Einstellungs-Segmente dürfen umbrechen.
+
+Terminal: bleibt als **Work-Area-Tab**. Ein Dock unter dem Agenten würde dauerhaft
+Höhe kosten und die Tab-Logik doppeln; der Toolbar-Knopf öffnet es, der Tab bleibt
+beim Wechseln am Leben. Ein separates Dock kann später dazukommen.
+
+`pnpm build` grün. Kein Commit/Tag in dieser Runde; die Änderungen gehören in den
+v0.4.11-Stand.

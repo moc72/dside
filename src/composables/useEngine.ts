@@ -27,7 +27,7 @@ import {
 } from "../stores/sessions";
 import { defaultModelFor, settings } from "../stores/settings";
 
-// A stage change (Mitlesen/Fragen/Ruder) also ends any "allow for this session" grant.
+// A stage change (Planmodus/Vor Änderungen fragen/Vollzugriff) also ends any "allow for this session" grant.
 watch(
   () => settings.permission,
   () => {

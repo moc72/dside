@@ -10,7 +10,7 @@ export interface SettingsState {
   launchOnStartup: boolean;
   desktopNotifications: boolean;
   joinEarlyAccess: boolean;
-  /** read = nur lesen, ask = vor Änderungen fragen, full = Ruder übergeben. */
+  /** read = nur lesen, ask = vor Änderungen fragen, full = Vollzugriff. */
   permission: PermissionMode;
   /** Allowlist for the companion's bash tool; the user's own terminal is not affected. */
   commandPolicy: CommandPolicy;

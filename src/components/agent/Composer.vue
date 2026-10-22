@@ -475,7 +475,8 @@ function cancelRudder(): void {
 
 .permission select {
   min-width: 0;
-  max-width: 150px;
+  /* Room for "Vor Änderungen fragen"; the old 150px cut the longer stage name. */
+  max-width: 190px;
   border: none;
   background: transparent;
   color: inherit;
@@ -528,8 +529,9 @@ function cancelRudder(): void {
 /* Narrow composer (both side panels open): the permission label goes, the select keeps a
    readable model name. The controls stay on one row instead of spilling out of the bubble. */
 @container composer (max-width: 440px) {
-  .permission span {
-    display: none;
+  /* Keep the icon and the control; only the long stage label gives way. */
+  .permission select {
+    max-width: 110px;
   }
 
   .model {

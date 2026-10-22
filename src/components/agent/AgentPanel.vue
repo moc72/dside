@@ -185,7 +185,7 @@ onBeforeUnmount(() => {
   /* One reading column for the list and the composer. It keeps the 70 % feel on a wide
      window but refuses to shrink below a usable width when the side panels are open —
      which is what clipped the composer controls at the minimum window size. */
-  --chat-width: min(100%, max(70%, 520px), 860px);
+  --chat-width: min(100%, max(70%, 560px), 900px);
   /* Own stacking context, so the watermark can sit *behind* the content instead of above it:
      a positioned ::before with z-index auto paints over in-flow children — which is why the
      mark showed on top of the supposedly opaque composer. */
