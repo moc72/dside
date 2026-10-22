@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { computed, watch } from "vue";
+import { computed, defineAsyncComponent, watch } from "vue";
 import Icon from "../Icon.vue";
 import { t } from "../../i18n";
 import type { WorkAreaTabKind } from "../../types";
-import { activeTab, activateTab, attentionTabId, closeTab, tabs } from "../../stores/workArea";
+import { activeTab, activateTab, attentionTabId, closeTab, openTab, tabs } from "../../stores/workArea";
 import { settings } from "../../stores/settings";
 import ProgressTab from "./ProgressTab.vue";
-import ViewFileTab from "./ViewFileTab.vue";
-import SkillsTab from "./SkillsTab.vue";
-import SchedulesTab from "./SchedulesTab.vue";
 import { EVERYDAY_HIDDEN_TABS, everydayMode } from "../../engine/mode";
+
+const ViewFileTab = defineAsyncComponent(() => import("./ViewFileTab.vue"));
+const SkillsTab = defineAsyncComponent(() => import("./SkillsTab.vue"));
+const SchedulesTab = defineAsyncComponent(() => import("./SchedulesTab.vue"));
+const GitPanel = defineAsyncComponent(() => import("./GitPanel.vue"));
+const TerminalPanel = defineAsyncComponent(() => import("../TerminalPanel.vue"));
+const LogsPanel = defineAsyncComponent(() => import("./LogsPanel.vue"));
 
 const labels: Record<
   WorkAreaTabKind,
@@ -17,12 +21,22 @@ const labels: Record<
   | "workArea.tabFile"
   | "workArea.tabSkills"
   | "workArea.tabSchedules"
+  | "workArea.tabTerminal"
+  | "workArea.tabGit"
+  | "workArea.tabLogs"
 > = {
   progress: "workArea.tabProgress",
   file: "workArea.tabFile",
   skills: "workArea.tabSkills",
   schedules: "workArea.tabSchedules",
+  terminal: "workArea.tabTerminal",
+  git: "workArea.tabGit",
+  logs: "workArea.tabLogs",
 };
+
+const hasTerminal = computed(() => tabs.value.some((tab) => tab.kind === "terminal"));
+const hasGit = computed(() => tabs.value.some((tab) => tab.kind === "git"));
+const hasLogs = computed(() => tabs.value.some((tab) => tab.kind === "logs"));
 
 /** Everyday mode keeps the plan, skill and schedule panels out of the way. */
 const shownTabs = computed(() =>
@@ -67,6 +81,34 @@ watch(
         </span>
       </button>
 
+      <button
+        v-if="!hasTerminal"
+        class="open-tool"
+        type="button"
+        :title="t('workArea.tabTerminal')"
+        @click="openTab('terminal')"
+      >
+        <Icon name="terminal" :size="13" />
+      </button>
+      <button
+        v-if="!hasGit"
+        class="open-tool"
+        type="button"
+        :title="t('workArea.tabGit')"
+        @click="openTab('git')"
+      >
+        <Icon name="git" :size="13" />
+      </button>
+      <button
+        v-if="!hasLogs"
+        class="open-tool"
+        type="button"
+        :title="t('workArea.tabLogs')"
+        @click="openTab('logs')"
+      >
+        <Icon name="activity" :size="13" />
+      </button>
+
       <span class="spacer"></span>
 
       <button
@@ -82,11 +124,20 @@ watch(
     </div>
 
     <div class="content">
-      <ProgressTab v-if="activeTab?.kind === 'progress'" />
-      <ViewFileTab v-else-if="activeTab?.kind === 'file'" :path="activeTab.filePath ?? null" />
-      <SkillsTab v-else-if="activeTab?.kind === 'skills'" />
-      <SchedulesTab v-else-if="activeTab?.kind === 'schedules'" />
-      <p v-else class="empty">{{ t("workArea.empty") }}</p>
+      <TerminalPanel
+        v-if="hasTerminal"
+        v-show="activeTab?.kind === 'terminal'"
+        :active="activeTab?.kind === 'terminal'"
+      />
+      <template v-if="activeTab?.kind !== 'terminal'">
+        <ProgressTab v-if="activeTab?.kind === 'progress'" />
+        <ViewFileTab v-else-if="activeTab?.kind === 'file'" :path="activeTab.filePath ?? null" />
+        <SkillsTab v-else-if="activeTab?.kind === 'skills'" />
+        <SchedulesTab v-else-if="activeTab?.kind === 'schedules'" />
+        <GitPanel v-else-if="activeTab?.kind === 'git'" />
+        <LogsPanel v-else-if="activeTab?.kind === 'logs'" />
+        <p v-else class="empty">{{ t("workArea.empty") }}</p>
+      </template>
     </div>
   </aside>
 </template>
@@ -187,6 +238,22 @@ watch(
 
 .follow.on {
   color: var(--accent);
+}
+
+.open-tool {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.open-tool:hover {
+  background: var(--bg-hover);
+  color: var(--text-strong);
 }
 
 .content {

@@ -1,4 +1,4 @@
-import { reactive, ref } from "vue";
+import { reactive, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
@@ -26,6 +26,14 @@ import {
   upsertToolActivity,
 } from "../stores/sessions";
 import { defaultModelFor, settings } from "../stores/settings";
+
+// A stage change (Mitlesen/Fragen/Ruder) also ends any "allow for this session" grant.
+watch(
+  () => settings.permission,
+  () => {
+    void invoke("engine_clear_session_grants").catch(() => undefined);
+  },
+);
 import { ensureWorkspace } from "./useWorkspace";
 import { buildPersona } from "../engine/persona";
 import { EVERYDAY_DISABLED_TOOLS, everydayMode } from "../engine/mode";
@@ -175,7 +183,10 @@ export async function configureEngine(): Promise<void> {
         userPrompt: settings.partnerPrompt,
       }),
       workspace: settings.workspace,
-      fullAuthorization: settings.fullAuthorization,
+      permission: settings.permission,
+      commandPolicy: settings.commandPolicy,
+      allowedCommands: settings.allowedCommands,
+      workspaceOnly: settings.workspaceOnly,
       maxTurns: 24,
       reasoningEffort: settings.reasoningEffort || null,
       // Compression needs the window to know when a conversation is too long.
@@ -230,6 +241,7 @@ function handleEvent(event: EngineEvent): void {
           output: event.tool.output,
           isError: event.tool.isError,
           durationMs: event.tool.durationMs,
+          image: event.tool.image,
           running: false,
         });
         if (event.tool.name === "todowrite") todosRevision.value += 1;

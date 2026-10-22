@@ -78,6 +78,8 @@ export interface ToolActivity {
   output?: string;
   isError?: boolean;
   durationMs?: number;
+  /** A data URL for picture-producing tools (screenshot). */
+  image?: string;
   running?: boolean;
 }
 
@@ -93,6 +95,7 @@ export interface EngineEvent {
     output?: string;
     isError?: boolean;
     durationMs?: number;
+    image?: string;
   };
   status?: string;
   stopReason?: string;
@@ -117,7 +120,7 @@ export interface Deliverable {
   done?: boolean;
 }
 
-export type WorkAreaTabKind = "progress" | "file" | "skills" | "schedules";
+export type WorkAreaTabKind = "progress" | "file" | "skills" | "schedules" | "terminal" | "git" | "logs";
 
 export interface WorkAreaTab {
   id: string;
@@ -128,5 +131,11 @@ export interface WorkAreaTab {
 export type AppView = "chat" | "settings";
 
 export type AppMode = "coding" | "everyday";
+
+/** How much the companion may do without asking. */
+export type PermissionMode = "read" | "ask" | "full";
+
+/** The companion's shell policy; the user's terminal is never restricted by this. */
+export type CommandPolicy = "all" | "allowlist";
 
 export type Appearance = "light" | "dark" | "system";

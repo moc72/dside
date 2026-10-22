@@ -168,11 +168,11 @@ mod tests {
     #[test]
     fn keyring_roundtrip_or_skip() {
         let Ok(entry) = keyring::Entry::new("ds-ide.test", "roundtrip") else {
-            eprintln!("keyring: no backend available — skipped");
+            crate::log_line!("keyring: no backend available — skipped");
             return;
         };
         if let Err(error) = entry.set_password("probe") {
-            eprintln!("keyring: write failed ({error}) — skipped");
+            crate::log_line!("keyring: write failed ({error}) — skipped");
             return;
         }
         // Read through a second entry. A backend that keeps the value only inside the

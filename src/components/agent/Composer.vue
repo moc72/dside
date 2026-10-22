@@ -3,8 +3,10 @@ import { computed, nextTick, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import Icon from "../Icon.vue";
 import ContextRing from "./ContextRing.vue";
+import RudderDialog from "../RudderDialog.vue";
 import { t } from "../../i18n";
 import { settings } from "../../stores/settings";
+import { partnerDisplayName } from "../../stores/partner";
 import { modelChoices, modelLabel } from "../../stores/models";
 import { activeSessionId } from "../../stores/sessions";
 import {
@@ -25,26 +27,38 @@ interface PendingAttachment {
   preview: string;
 }
 
+interface ScreenCapture {
+  name: string;
+  mime: string;
+  dataBase64: string;
+}
+
 const attachments = ref<PendingAttachment[]>([]);
 const fileInput = ref<HTMLInputElement | null>(null);
+const capturing = ref(false);
+const rudderOpen = ref(false);
 
 /** Scales the picture down and re-encodes it: the chat shows this, the model gets the original. */
-function makePreview(source: string): Promise<string> {
+function resizeImage(source: string, maxSide: number, quality: number): Promise<string> {
   return new Promise<string>((resolve) => {
     const image = new Image();
     image.onload = () => {
-      const scale = Math.min(1, 480 / Math.max(image.width, image.height));
+      const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
       const canvas = document.createElement("canvas");
       canvas.width = Math.max(1, Math.round(image.width * scale));
       canvas.height = Math.max(1, Math.round(image.height * scale));
       const context = canvas.getContext("2d");
       if (!context) return resolve(source);
       context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL("image/jpeg", 0.72));
+      resolve(canvas.toDataURL("image/jpeg", quality));
     };
     image.onerror = () => resolve(source);
     image.src = source;
   });
+}
+
+function makePreview(source: string): Promise<string> {
+  return resizeImage(source, 480, 0.72);
 }
 
 async function addImages(files: File[]): Promise<void> {
@@ -105,6 +119,44 @@ function removeAttachment(index: number): void {
 }
 
 /**
+ * The companion's eyes. The screen is captured by Rust (PowerShell / screencapture / the
+ * usual Linux tools), saved next to the app data and then attached like a pasted picture.
+ * The model already receives attachments through the normal image path.
+ */
+async function captureScreen(): Promise<void> {
+  if (capturing.value) return;
+  capturing.value = true;
+  note.value = null;
+  try {
+    const shot = await invoke<ScreenCapture>("capture_screen");
+    const source = `data:${shot.mime};base64,${shot.dataBase64}`;
+    const preview = await makePreview(source);
+    // A full 4K PNG is several megabytes; the model gets a readable JPEG, the chat a thumb.
+    const modelImage = await resizeImage(source, 2000, 0.86);
+    const name = shot.name.replace(/\.[^.]+$/, "") + ".jpg";
+    const path = await invoke<string>("attachment_save", {
+      name,
+      mime: "image/jpeg",
+      dataBase64: modelImage.slice(modelImage.indexOf(",") + 1),
+    });
+    attachments.value.push({
+      path,
+      name,
+      mime: "image/jpeg",
+      preview,
+    });
+  } catch (cause) {
+    const message = t("composer.screenshotFailed", { error: String(cause) });
+    note.value = message;
+    window.setTimeout(() => {
+      if (note.value === message) note.value = null;
+    }, 9000);
+  } finally {
+    capturing.value = false;
+  }
+}
+
+/**
  * The field grows with what is typed and stops at ten lines — long enough for a real prompt,
  * short enough that the conversation stays on screen. Beyond that it scrolls.
  */
@@ -149,8 +201,34 @@ function submit() {
   void sendPrompt(value);
 }
 
-function toggleAuthorization() {
-  settings.fullAuthorization = !settings.fullAuthorization;
+/**
+ * The permission select is the three-stage rudder: read-only, ask before each action, or
+ * full access. Choosing full goes through the consent dialog; ask/read apply immediately.
+ * The watcher reverts the select to the previous stage while the dialog is open, and the
+ * flag keeps the confirmed full grant from opening the dialog a second time.
+ */
+let confirmingFull = false;
+
+watch(
+  () => settings.permission,
+  (next, previous) => {
+    if (next !== "full" || confirmingFull) {
+      confirmingFull = false;
+      return;
+    }
+    settings.permission = previous ?? "ask";
+    rudderOpen.value = true;
+  },
+);
+
+function confirmRudder(): void {
+  confirmingFull = true;
+  settings.permission = "full";
+  rudderOpen.value = false;
+}
+
+function cancelRudder(): void {
+  rudderOpen.value = false;
 }
 </script>
 
@@ -190,6 +268,15 @@ function toggleAuthorization() {
           <button class="chip" type="button" :title="t('composer.attach')" @click="fileInput?.click()">
             <Icon name="plus" :size="14" />
           </button>
+          <button
+            class="chip"
+            type="button"
+            :title="t('composer.screenshot')"
+            :disabled="capturing"
+            @click="captureScreen"
+          >
+            <Icon name="eye" :size="14" />
+          </button>
           <input
             ref="fileInput"
             class="file-input"
@@ -198,17 +285,18 @@ function toggleAuthorization() {
             multiple
             @change="onFiles"
           />
-          <button
+          <label
             class="chip permission"
-            :class="{ on: settings.fullAuthorization }"
-            type="button"
-            :title="t('composer.fullAuthorization')"
-            @click="toggleAuthorization"
+            :class="{ on: settings.permission === 'full' }"
+            :title="t('permission.hint')"
           >
-            <Icon name="external-link" :size="14" />
-            <span>{{ t("composer.fullAuthorization") }}</span>
-            <Icon name="chevron-up" :size="12" />
-          </button>
+            <Icon name="rudder" :size="14" />
+            <select v-model="settings.permission">
+              <option value="read">{{ t("permission.read") }}</option>
+              <option value="ask">{{ t("permission.ask") }}</option>
+              <option value="full">{{ t("permission.full", { name: partnerDisplayName }) }}</option>
+            </select>
+          </label>
         </div>
 
         <div class="right">
@@ -250,6 +338,13 @@ function toggleAuthorization() {
     <p class="disclaimer">
       {{ engineReady ? t("composer.disclaimer") : t("engine.needsKey") }}
     </p>
+
+    <RudderDialog
+      :open="rudderOpen"
+      :name="partnerDisplayName"
+      @confirm="confirmRudder"
+      @cancel="cancelRudder"
+    />
   </div>
 </template>
 
@@ -372,22 +467,40 @@ function toggleAuthorization() {
   font-size: 12px;
 }
 
-/* Only the permission chip may shrink: its label is the part that can give way without
-   losing a control. The label itself never wraps into a vertical stack. */
+/* Only the permission control may shrink: its label is the part that can give way without
+   losing a control. The select itself never wraps into a vertical stack. */
 .permission {
   min-width: 0;
 }
 
-.permission span {
+.permission select {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  max-width: 150px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  outline: none;
+  cursor: pointer;
+}
+
+.permission select option {
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+
+.permission.on {
+  color: var(--accent);
 }
 
 .chip:hover {
   background: var(--bg-hover);
   color: var(--text-strong);
+}
+
+.chip:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .chip.on {

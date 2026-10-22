@@ -12,7 +12,8 @@ import { t } from "../../i18n";
  * a row — an entry the user takes out is retired and can be put back.
  *
  * The entries are cards with a heading and a short preview; the whole text opens in a modal
- * rather than pushing the rest of the list down. Search is deliberately still missing.
+ * rather than pushing the rest of the list down. The search field filters the cards without
+ * touching the database; the full text and the project path are part of the match.
  */
 interface MemoryRow {
   id: number;
@@ -36,6 +37,7 @@ interface MemoryReport {
 
 const rows = ref<MemoryRow[]>([]);
 const retired = ref<MemoryRow[]>([]);
+const query = ref("");
 const report = ref<MemoryReport | null>(null);
 const loading = ref(false);
 const error = ref<string | null>(null);
@@ -71,6 +73,19 @@ function openEntry(row: MemoryRow): void {
   selectedId.value = row.id;
   editing.value = false;
 }
+
+const needle = computed(() => query.value.trim().toLowerCase());
+
+function matches(row: MemoryRow): boolean {
+  if (!needle.value) return true;
+  return [titleFor(row), row.text, row.kind, row.scope, row.workspace]
+    .join("\n")
+    .toLowerCase()
+    .includes(needle.value);
+}
+
+const visibleRows = computed(() => rows.value.filter(matches));
+const visibleRetired = computed(() => retired.value.filter(matches));
 
 function closeEntry(): void {
   selectedId.value = null;
@@ -216,6 +231,16 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
       </div>
     </header>
 
+    <label class="search">
+      <Icon name="search" :size="13" />
+      <input
+        v-model="query"
+        type="search"
+        :placeholder="t('memory.search')"
+        :aria-label="t('memory.search')"
+      />
+    </label>
+
     <div v-if="report" class="report">
       <div v-if="report.duplicates.length || report.stale.length">
         <div v-if="report.duplicates.length" class="report-row">
@@ -235,8 +260,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
     </div>
 
     <div class="add">
-      <input
-        v-model="newTitle"
+      <input        v-model="newTitle"
         class="title-input"
         type="text"
         :maxlength="TITLE_MAX"
@@ -265,9 +289,10 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
     <p v-if="loading" class="note">{{ t("viewFile.loading") }}</p>
     <p v-else-if="error" class="note error">{{ error }}</p>
     <p v-else-if="rows.length === 0" class="note">{{ t("memory.empty") }}</p>
+    <p v-else-if="visibleRows.length === 0" class="note">{{ t("memory.noMatch") }}</p>
 
     <ul v-else class="grid">
-      <li v-for="row in rows" :key="row.id" class="memory-card">
+      <li v-for="row in visibleRows" :key="row.id" class="memory-card">
         <button
           class="memory-card-main"
           type="button"
@@ -299,14 +324,14 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
       </li>
     </ul>
 
-    <section v-if="retired.length" class="retired">
+    <section v-if="visibleRetired.length" class="retired">
       <button class="retired-head" type="button" @click="retiredOpen = !retiredOpen">
         <Icon :name="retiredOpen ? 'chevron-down' : 'chevron-right'" :size="12" />
-        <span>{{ t("memory.retired", { count: retired.length }) }}</span>
+        <span>{{ t("memory.retired", { count: visibleRetired.length }) }}</span>
       </button>
       <p v-if="retiredOpen" class="note">{{ t("memory.retiredHint") }}</p>
       <ul v-if="retiredOpen" class="list">
-        <li v-for="row in retired" :key="row.id" class="entry aside">
+        <li v-for="row in visibleRetired" :key="row.id" class="entry aside">
           <div class="entry-head">
             <span class="chip scope">{{ scopeLabels[row.scope] ?? row.scope }}</span>
             <span v-if="row.workspace" class="chip project" :title="row.workspace">
@@ -413,6 +438,29 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
   margin: 0;
   color: var(--text-muted);
   font-size: 12px;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-muted);
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
 }
 
 .actions {

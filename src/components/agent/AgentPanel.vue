@@ -123,24 +123,53 @@ onBeforeUnmount(() => {
 
     <section v-if="pendingAction" class="question">
       <div class="question-head">
-        <Icon name="sparkle" :size="13" />
-        <span>{{ t("question.title") }}</span>
+        <Icon :name="pendingAction.kind === 'permission' ? 'rudder' : 'sparkle'" :size="13" />
+        <span>{{
+          pendingAction.kind === "permission"
+            ? t("permission.requestTitle")
+            : t("question.title")
+        }}</span>
       </div>
-      <p class="question-text">{{ pendingAction.question }}</p>
-      <div v-if="pendingAction.options.length" class="options">
-        <button
-          v-for="option in pendingAction.options"
-          :key="option"
-          type="button"
-          @click="answer(option)"
-        >
-          {{ option }}
-        </button>
-      </div>
-      <form class="free" @submit.prevent="submitFree">
-        <input v-model="freeAnswer" :placeholder="t('question.placeholder')" />
-        <button type="submit" :disabled="!freeAnswer.trim()">{{ t("question.send") }}</button>
-      </form>
+      <p
+        class="question-text"
+        :class="{ technical: pendingAction.kind === 'permission' }"
+      >{{ pendingAction.question }}</p>
+
+      <template v-if="pendingAction.kind === 'permission'">
+        <p class="question-note">{{ t("permission.onceHint") }}</p>
+        <div class="options">
+          <button type="button" @click="answer('allow')">
+            {{ t("permission.allow") }}
+          </button>
+          <button
+            v-if="pendingAction.options.includes('session')"
+            type="button"
+            @click="answer('session')"
+          >
+            {{ t("permission.allowSession") }}
+          </button>
+          <button type="button" class="deny" @click="answer('deny')">
+            {{ t("permission.deny") }}
+          </button>
+        </div>
+      </template>
+
+      <template v-else>
+        <div v-if="pendingAction.options.length" class="options">
+          <button
+            v-for="option in pendingAction.options"
+            :key="option"
+            type="button"
+            @click="answer(option)"
+          >
+            {{ option }}
+          </button>
+        </div>
+        <form class="free" @submit.prevent="submitFree">
+          <input v-model="freeAnswer" :placeholder="t('question.placeholder')" />
+          <button type="submit" :disabled="!freeAnswer.trim()">{{ t("question.send") }}</button>
+        </form>
+      </template>
     </section>
 
     <Composer />
@@ -258,6 +287,22 @@ onBeforeUnmount(() => {
   line-height: 1.5;
 }
 
+.question-text.technical {
+  max-height: 180px;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.question-note {
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
 .options {
   display: flex;
   flex-wrap: wrap;
@@ -277,6 +322,11 @@ onBeforeUnmount(() => {
 .options button:hover {
   border-color: var(--accent);
   color: var(--text-strong);
+}
+
+.options button.deny:hover {
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 .free {

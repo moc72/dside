@@ -6,8 +6,12 @@ use serde::Serialize;
 use tauri::{AppHandle, Manager};
 
 mod browser;
+mod capture;
 mod db;
 mod engine;
+mod git_panel;
+mod logs;
+mod pty;
 mod secret;
 mod skills;
 
@@ -369,7 +373,7 @@ fn detect_editors() -> Vec<EditorCandidate> {
     let found = detect_editors_impl();
     // One line per call: "no editor found" in the UI is otherwise impossible to tell apart
     // from "the scan found nothing in this environment".
-    eprintln!(
+    crate::log_line!(
         "editors: {} found [{}]",
         found.len(),
         found
@@ -396,7 +400,7 @@ fn open_workspace_in_editor(editor_id: String, workspace: String) -> Result<(), 
     let program = parts.remove(0);
     let mut args = parts;
     args.extend(chosen.args);
-    eprintln!(
+    crate::log_line!(
         "editor: opening {program} in {}",
         if workspace.is_empty() {
             "(no workspace)"
@@ -985,7 +989,7 @@ fn backend_packages(manifest: &str) -> Vec<AboutPackage> {
 /// needs one, and "the UI did nothing" is otherwise indistinguishable from "the UI never ran".
 #[tauri::command]
 fn log_message(text: String) {
-    eprintln!("ui: {text}");
+    crate::log_line!("ui: {text}");
 }
 
 /// Shows the splash only once its artwork is on screen — the window is created hidden for
@@ -995,7 +999,7 @@ fn splash_visible(app: AppHandle) {
     if let Some(splash) = app.get_webview_window("splash") {
         let _ = splash.show();
         let _ = splash.set_focus();
-        eprintln!("startup: splash shown");
+        crate::log_line!("startup: splash shown");
     }
 }
 
@@ -1008,13 +1012,13 @@ fn splash_ready(app: AppHandle) {
 fn show_main_window(app: &AppHandle) {
     if let Some(splash) = app.get_webview_window("splash") {
         let _ = splash.close();
-        eprintln!("startup: splash closed");
+        crate::log_line!("startup: splash closed");
     }
     if let Some(main) = app.get_webview_window("main") {
         if !main.is_visible().unwrap_or(false) {
             let _ = main.show();
             let _ = main.set_focus();
-            eprintln!("startup: main window shown");
+            crate::log_line!("startup: main window shown");
         }
     }
 }
@@ -1037,6 +1041,7 @@ pub fn run() {
                 .build(),
         )
         .manage(engine::EngineState::default())
+        .manage(pty::PtyState::default())
         .setup(|app| {
             let directory = app.path().app_data_dir()?;
             let database = db::Db::open(&directory.join("ds-ide.sqlite3"))?;
@@ -1060,7 +1065,7 @@ pub fn run() {
                 tokio::time::sleep(std::time::Duration::from_secs(12)).await;
                 if let Some(main) = fallback_handle.get_webview_window("main") {
                     if !main.is_visible().unwrap_or(false) {
-                        eprintln!("startup: splash fallback fired");
+                        crate::log_line!("startup: splash fallback fired");
                         show_main_window(&fallback_handle);
                     }
                 }
@@ -1081,6 +1086,7 @@ pub fn run() {
             default_workspace,
             engine::engine_set_config,
             engine::engine_configured,
+            engine::engine_clear_session_grants,
             engine::engine_send,
             engine::engine_retry,
             engine::session_compact,
@@ -1134,6 +1140,21 @@ pub fn run() {
             secret::secret_status,
             secret::secret_set,
             secret::secret_clear,
+            pty::pty_open,
+            pty::pty_write,
+            pty::pty_resize,
+            pty::pty_close,
+            git_panel::git_panel_status,
+            git_panel::git_panel_diff,
+            git_panel::git_panel_stage,
+            git_panel::git_panel_unstage,
+            git_panel::git_panel_stage_all,
+            git_panel::git_panel_commit,
+            git_panel::git_panel_branches,
+            git_panel::git_panel_checkout,
+            git_panel::git_panel_pull,
+            capture::capture_screen,
+            logs::log_tail,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

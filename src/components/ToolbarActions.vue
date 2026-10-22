@@ -165,6 +165,14 @@ async function openDownload() {
     <button
       class="icon-btn"
       type="button"
+      :title="t('toolbar.terminal')"
+      @click="openTab('terminal')"
+    >
+      <Icon name="terminal" />
+    </button>
+    <button
+      class="icon-btn"
+      type="button"
       :title="t('toolbar.toggleWorkArea')"
       @click="toggleWorkArea"
     >

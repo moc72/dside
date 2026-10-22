@@ -1,7 +1,7 @@
 import { computed, reactive, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { loadJson } from "../lib/persist";
-import type { AppMode, Appearance } from "../types";
+import type { AppMode, Appearance, CommandPolicy, PermissionMode } from "../types";
 
 export interface SettingsState {
   mode: AppMode;
@@ -10,7 +10,13 @@ export interface SettingsState {
   launchOnStartup: boolean;
   desktopNotifications: boolean;
   joinEarlyAccess: boolean;
-  fullAuthorization: boolean;
+  /** read = nur lesen, ask = vor Änderungen fragen, full = Ruder übergeben. */
+  permission: PermissionMode;
+  /** Allowlist for the companion's bash tool; the user's own terminal is not affected. */
+  commandPolicy: CommandPolicy;
+  allowedCommands: string[];
+  /** Keep write/edit inside the workspace even in full access. */
+  workspaceOnly: boolean;
   /** Let the work area follow files and pages the companion opens. */
   followCompanion: boolean;
   pinnedEditorId: string | null;
@@ -43,6 +49,20 @@ export function defaultModelFor(mode: AppMode): string {
   return MODEL_BY_MODE[mode] ?? MODEL_BY_MODE.coding;
 }
 
+/** The companion's default shell allowlist: build tools plus read-only shell commands.
+ * It is a policy, not an OS sandbox; a path or a shell builtin can still do more. */
+export const defaultAllowedCommands = [
+  "pnpm", "npm", "npx", "yarn", "bun", "node", "deno",
+  "cargo", "rustc", "rustup", "git",
+  "python", "python3", "py", "pip", "pytest", "uv", "poetry",
+  "dotnet", "go", "java", "javac", "mvn", "gradle",
+  "make", "cmake", "gcc", "g++", "clang", "tsc", "tsx", "vite", "vitest",
+  "jest", "eslint", "prettier", "ruff", "black", "mypy", "sqlite3",
+  "ls", "dir", "pwd", "cd", "cat", "type", "head", "tail", "grep", "rg", "find",
+  "where", "which", "echo", "sort", "uniq", "wc", "diff", "cmp", "file", "stat",
+  "du", "df", "tree", "uname", "ver", "whoami", "env", "printenv", "date", "sleep",
+];
+
 /** The API key is deliberately NOT here: it lives in the OS keyring (see secret.rs). */
 const PERSISTED_KEYS: (keyof SettingsState)[] = [
   "mode",
@@ -51,7 +71,10 @@ const PERSISTED_KEYS: (keyof SettingsState)[] = [
   "launchOnStartup",
   "desktopNotifications",
   "joinEarlyAccess",
-  "fullAuthorization",
+  "permission",
+  "commandPolicy",
+  "allowedCommands",
+  "workspaceOnly",
   "followCompanion",
   "pinnedEditorId",
   "workspace",
@@ -74,7 +97,10 @@ const defaults: SettingsState = {
   launchOnStartup: true,
   desktopNotifications: false,
   joinEarlyAccess: false,
-  fullAuthorization: true,
+  permission: "ask",
+  commandPolicy: "allowlist",
+  allowedCommands: [...defaultAllowedCommands],
+  workspaceOnly: true,
   followCompanion: true,
   pinnedEditorId: null,
   workspace: "",
@@ -89,6 +115,21 @@ const defaults: SettingsState = {
 };
 
 export const settings = reactive<SettingsState>({ ...defaults });
+
+/**
+ * Older installations stored a single boolean. `true` was full access; `false` was the
+ * original deny-everything mode. The middle "ask" stage did not exist, so it is only the
+ * default for new installations.
+ */
+function permissionFromLegacy(stored: Record<string, unknown>): PermissionMode {
+  const permission = stored.permission;
+  if (permission === "read" || permission === "ask" || permission === "full") {
+    return permission;
+  }
+  if (stored.fullAuthorization === true) return "full";
+  if (stored.fullAuthorization === false) return "read";
+  return "ask";
+}
 
 /** True only while the app has no stored settings at all; the dialog clears it. */
 export const firstRun = ref(false);
@@ -139,6 +180,7 @@ export async function initSettings(): Promise<void> {
     const legacy = loadJson<Record<string, unknown> | null>(LEGACY_KEY, null);
     if (legacy && typeof legacy === "object") {
       apply(legacy);
+      settings.permission = permissionFromLegacy(legacy);
       settings.onboarded = true;
       firstRun.value = false;
       try {
@@ -162,6 +204,7 @@ export async function initSettings(): Promise<void> {
     }
   }
   apply(decoded);
+  if (!("permission" in decoded)) settings.permission = permissionFromLegacy(decoded);
 
   // A database with no settings rows is a fresh install. Existing installations — including
   // ones from before this flag existed — never see the first-start dialog.

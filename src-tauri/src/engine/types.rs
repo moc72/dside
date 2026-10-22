@@ -16,8 +16,17 @@ pub struct EngineConfig {
     pub system_prompt: String,
     #[serde(default)]
     pub workspace: String,
+    /// "read" = no writes/commands, "ask" = approve each write/edit/bash, "full" = Ruder.
+    #[serde(default = "default_permission")]
+    pub permission: String,
+    /// "all" or "allowlist". The allowlist applies to the model's bash tool only.
+    #[serde(default = "default_command_policy")]
+    pub command_policy: String,
     #[serde(default)]
-    pub full_authorization: bool,
+    pub allowed_commands: Vec<String>,
+    /// Reject write/edit outside the workspace.
+    #[serde(default)]
+    pub workspace_only: bool,
     #[serde(default = "default_max_turns")]
     pub max_turns: u32,
     /// How hard the model thinks: the provider's own scale (`none` … `max`). Empty means
@@ -44,6 +53,14 @@ fn default_model() -> String {
 
 fn default_max_turns() -> u32 {
     24
+}
+
+fn default_permission() -> String {
+    "ask".to_string()
+}
+
+fn default_command_policy() -> String {
+    "all".to_string()
 }
 
 impl EngineConfig {
@@ -166,7 +183,7 @@ impl EngineEvent {
 #[serde(rename_all = "camelCase")]
 pub struct ActionEvent {
     pub id: String,
-    /// "question" for now; "permission" is the planned next one.
+    /// "question" or "permission".
     pub kind: String,
     pub question: String,
     pub options: Vec<String>,
@@ -185,6 +202,9 @@ pub struct ToolEvent {
     pub is_error: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub duration_ms: Option<u64>,
+    /// A data URL for tools that produce a picture (currently only `screenshot`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
 }
 
 #[derive(Clone, Serialize)]

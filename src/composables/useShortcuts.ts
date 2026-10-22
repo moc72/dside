@@ -22,6 +22,16 @@ export function useShortcuts(enabled: () => boolean = () => true): void {
     if (!enabled() || shortcutCapturing.value || firstRun.value) return;
     if (event.defaultPrevented || event.repeat) return;
 
+    // The shell and the commit field own their keys: Ctrl+B/N/O/W are line editing there,
+    // not app commands. Clicking anywhere else restores the global bindings.
+    const target = event.target;
+    if (
+      target instanceof Element &&
+      target.closest("[data-terminal-input], [data-shortcut-passthrough]")
+    ) {
+      return;
+    }
+
     if (event.key === "Escape" && searchOpen.value) {
       closeSearch();
       return;

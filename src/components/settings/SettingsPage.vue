@@ -9,8 +9,12 @@ import PartnerPanel from "./PartnerPanel.vue";
 import AboutPanel from "./AboutPanel.vue";
 import DiagnosticsPanel from "./DiagnosticsPanel.vue";
 import KeyboardPanel from "./KeyboardPanel.vue";
+import RudderDialog from "../RudderDialog.vue";
+import SandboxPanel from "./SandboxPanel.vue";
+import WorkspacePicker from "../WorkspacePicker.vue";
 import { locale, localeLabel, locales, setLocale, t } from "../../i18n";
 import type { Locale, MessageKey } from "../../i18n";
+import type { PermissionMode } from "../../types";
 import { links } from "../../engine/links";
 import { settings } from "../../stores/settings";
 import {
@@ -37,6 +41,38 @@ const emit = defineEmits<{ close: [] }>();
 
 const query = ref("");
 const activeItem = ref<string>(settingsItem.value ?? "general");
+const rudderOpen = ref(false);
+const workspacePickerOpen = ref(false);
+
+function chooseWorkspace(path: string): void {
+  settings.workspace = path;
+  workspacePickerOpen.value = false;
+  void reloadTree();
+}
+
+const permissionModes: { value: PermissionMode; label: MessageKey; hint: MessageKey; icon: string }[] = [
+  { value: "read", label: "permission.read", hint: "permission.readHint", icon: "eye" },
+  { value: "ask", label: "permission.ask", hint: "permission.askHint", icon: "sparkle" },
+  { value: "full", label: "permission.fullSetting", hint: "permission.fullHint", icon: "rudder" },
+];
+
+/** Choosing full in Settings goes through the same consent dialog as the composer. */
+function choosePermission(mode: PermissionMode): void {
+  if (mode === "full") {
+    rudderOpen.value = true;
+    return;
+  }
+  settings.permission = mode;
+}
+
+function confirmRudder(): void {
+  settings.permission = "full";
+  rudderOpen.value = false;
+}
+
+function cancelRudder(): void {
+  rudderOpen.value = false;
+}
 
 interface NavItem {
   id: string;
@@ -75,6 +111,7 @@ const groups = computed<NavGroup[]>(() => [
     key: "settings.groups.management",
     items: [
       { id: "account", label: "settings.items.account", icon: "user" },
+      { id: "sandbox", label: "settings.items.sandbox", icon: "shield" },
       { id: "diagnostics", label: "settings.items.diagnostics", icon: "monitor" },
       { id: "about", label: "settings.items.about", icon: "doc" },
     ],
@@ -303,6 +340,14 @@ watch(activeItem, (value) => {
             </div>
             <div class="workspace">
               <input v-model="settings.workspace" class="input" />
+              <button
+                class="mini"
+                type="button"
+                :title="t('workspacePicker.chooseShort')"
+                @click="workspacePickerOpen = true"
+              >
+                <Icon name="folder" :size="14" />
+              </button>
               <button class="mini" type="button" @click="reloadTree()">
                 <Icon name="reload" :size="14" />
               </button>
@@ -457,11 +502,27 @@ watch(activeItem, (value) => {
             </div>
           </div>
 
-          <ToggleRow
-            v-model="settings.fullAuthorization"
-            :label="t('composer.fullAuthorization')"
-            :description="t('model.fullAuthorizationDesc')"
-          />
+          <div class="row">
+            <div class="text">
+              <div class="label">{{ t("permission.label") }}</div>
+              <div class="desc">{{ t("permission.desc") }}</div>
+            </div>
+            <div class="segmented">
+              <button
+                v-for="mode in permissionModes"
+                :key="mode.value"
+                class="segment"
+                :class="{ active: settings.permission === mode.value }"
+                type="button"
+                :title="t(mode.hint)"
+                @click="choosePermission(mode.value)"
+              >
+                <Icon :name="mode.icon" :size="16" />
+                <span>{{ t(mode.label) }}</span>
+              </button>
+            </div>
+          </div>
+          <p class="hint">{{ t("permission.hint") }}</p>
         </div>
 
         <p class="hint" :class="{ warn: secretBackend === 'file' }">{{ secretHint }}</p>
@@ -472,6 +533,11 @@ watch(activeItem, (value) => {
       <template v-else-if="activeItem === 'memories'">
         <h1 class="title">{{ t("settings.items.memories") }}</h1>
         <MemoryPanel />
+      </template>
+
+      <template v-else-if="activeItem === 'sandbox'">
+        <h1 class="title">{{ t("settings.items.sandbox") }}</h1>
+        <SandboxPanel />
       </template>
 
       <template v-else-if="activeItem === 'partner'">
@@ -509,6 +575,20 @@ watch(activeItem, (value) => {
         <p>{{ t("common.comingSoon") }}</p>
       </div>
     </main>
+
+    <RudderDialog
+      :open="rudderOpen"
+      :name="partnerDisplayName"
+      @confirm="confirmRudder"
+      @cancel="cancelRudder"
+    />
+
+    <WorkspacePicker
+      :open="workspacePickerOpen"
+      :initial="settings.workspace"
+      @choose="chooseWorkspace"
+      @close="workspacePickerOpen = false"
+    />
   </div>
 </template>
 

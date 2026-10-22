@@ -209,7 +209,10 @@ mod live {
             system_prompt: "You are a terse test assistant. Follow instructions exactly."
                 .to_string(),
             workspace: "/tmp".to_string(),
-            full_authorization: true,
+            permission: "full".to_string(),
+            command_policy: "all".to_string(),
+            allowed_commands: Vec::new(),
+            workspace_only: false,
             max_turns: 2,
             reasoning_effort: None,
             context_window: None,
@@ -221,7 +224,7 @@ mod live {
     #[ignore = "requires DS_IDE_API_KEY"]
     async fn live_deepseek_streams_text() {
         let Some(config) = live_config() else {
-            eprintln!("skipped: DS_IDE_API_KEY not set");
+            crate::log_line!("skipped: DS_IDE_API_KEY not set");
             return;
         };
         let messages = vec![ChatMessage::user("Antworte mit exakt einem Wort: PONG")];
@@ -253,7 +256,7 @@ mod live {
     #[ignore = "requires DS_IDE_API_KEY"]
     async fn live_deepseek_emits_tool_calls() {
         let Some(config) = live_config() else {
-            eprintln!("skipped: DS_IDE_API_KEY not set");
+            crate::log_line!("skipped: DS_IDE_API_KEY not set");
             return;
         };
         let messages = vec![ChatMessage::user(
@@ -281,7 +284,7 @@ mod live {
     #[ignore = "requires DS_IDE_API_KEY"]
     async fn live_deepseek_summarises_a_conversation() {
         let Some(config) = live_config() else {
-            eprintln!("skipped: DS_IDE_API_KEY not set");
+            crate::log_line!("skipped: DS_IDE_API_KEY not set");
             return;
         };
 
@@ -315,7 +318,7 @@ mod live {
     #[ignore = "requires DS_IDE_API_KEY"]
     async fn live_deepseek_takes_an_image() {
         let Some(config) = live_config() else {
-            eprintln!("skipped: DS_IDE_API_KEY not set");
+            crate::log_line!("skipped: DS_IDE_API_KEY not set");
             return;
         };
 
@@ -373,7 +376,7 @@ mod live {
     #[ignore = "requires DS_IDE_API_KEY"]
     async fn live_deepseek_accepts_reasoning_effort() {
         let Some(mut config) = live_config() else {
-            eprintln!("skipped: DS_IDE_API_KEY not set");
+            crate::log_line!("skipped: DS_IDE_API_KEY not set");
             return;
         };
         config.model = "deepseek-v4-pro".to_string();
@@ -391,7 +394,7 @@ mod live {
     #[ignore = "requires DS_IDE_API_KEY"]
     async fn live_deepseek_reasoner_streams_thinking() {
         let Some(mut config) = live_config() else {
-            eprintln!("skipped: DS_IDE_API_KEY not set");
+            crate::log_line!("skipped: DS_IDE_API_KEY not set");
             return;
         };
         config.model = "deepseek-v4-pro".to_string();

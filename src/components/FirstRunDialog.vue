@@ -2,6 +2,7 @@
 import { onMounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import Icon from "./Icon.vue";
+import WorkspacePicker from "./WorkspacePicker.vue";
 import { deepSeekMark } from "./deepseek-mark";
 import { t } from "../i18n";
 import { engineReady, saveApiKey } from "../composables/useEngine";
@@ -11,6 +12,7 @@ import type { AppMode } from "../types";
 
 const selected = ref<AppMode>(settings.mode);
 const workspaceDraft = ref(settings.workspace);
+const workspacePickerOpen = ref(false);
 const keyDraft = ref("");
 const saving = ref(false);
 const saved = ref(false);
@@ -104,12 +106,22 @@ function later(): void {
 
       <div class="keys">
         <label class="label" for="first-run-workspace">{{ t("viewFile.workspace") }}</label>
-        <input
-          id="first-run-workspace"
-          v-model="workspaceDraft"
-          class="input full"
-          spellcheck="false"
-        />
+        <div class="workspace-row">
+          <input
+            id="first-run-workspace"
+            v-model="workspaceDraft"
+            class="input"
+            spellcheck="false"
+          />
+          <button
+            class="pick"
+            type="button"
+            :title="t('workspacePicker.chooseShort')"
+            @click="workspacePickerOpen = true"
+          >
+            <Icon name="folder" :size="15" />
+          </button>
+        </div>
         <p class="hint small">{{ t("firstRun.workspaceHint") }}</p>
       </div>
 
@@ -146,6 +158,12 @@ function later(): void {
         </button>
       </div>
     </div>
+    <WorkspacePicker
+      :open="workspacePickerOpen"
+      :initial="workspaceDraft"
+      @choose="workspaceDraft = $event"
+      @close="workspacePickerOpen = false"
+    />
   </div>
 </template>
 
@@ -360,5 +378,33 @@ h2 {
 
 .start:hover {
   filter: brightness(1.08);
+}
+
+.workspace-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.workspace-row .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.pick {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.pick:hover {
+  background: var(--bg-hover);
+  color: var(--text-strong);
 }
 </style>

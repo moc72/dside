@@ -140,6 +140,12 @@ function retryMessage(id: string): void {
             <div v-if="isOpen(part.tool.id)" class="tool-detail">
               <div v-if="part.tool.arguments" class="tool-command">{{ part.tool.arguments }}</div>
               <pre v-if="part.tool.output" class="tool-output">{{ part.tool.output }}</pre>
+              <img
+                v-if="part.tool.image"
+                class="tool-image"
+                :src="part.tool.image"
+                alt="Screenshot"
+              />
               <button
                 v-if="
                   (part.tool.name === 'write' || part.tool.name === 'edit') &&
@@ -153,7 +159,7 @@ function retryMessage(id: string): void {
                 <Icon name="clock" :size="13" />
                 <span>{{ t("viewFile.history") }}</span>
               </button>
-              <p v-if="settings.fullAuthorization" class="tool-note">
+              <p v-if="settings.permission === 'full'" class="tool-note">
                 {{ t("message.autoApproved") }}
               </p>
             </div>
@@ -377,6 +383,14 @@ function retryMessage(id: string): void {
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.tool-image {
+  display: block;
+  max-width: 100%;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
 }
 
 .tool-note {

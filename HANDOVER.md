@@ -35,7 +35,7 @@ Checks and release:
 
 ```sh
 pnpm build                        # vue-tsc + Vite
-cd src-tauri && cargo test --lib  # 27 passed, 12 ignored (live tests need DS_IDE_API_KEY)
+cd src-tauri && cargo test --lib  # 34 passed, 13 ignored (live tests need DS_IDE_API_KEY)
 pnpm tauri build                  # deb/rpm/AppImage, NSIS, dmg
 ```
 
@@ -88,7 +88,7 @@ connection test.
   to Settings. The provider base URL is editable under **Settings → Account & model**.
 - **Follow mode:** files the partner reads/writes open in the work area, `web_fetch` opens
   the page in the integrated browser; the eye in the tab bar turns it off.
-- **Memory:** long-term memory the user can read, correct and retire; notes can be
+- **Memory:** long-term memory the user can read, search, correct and retire; notes can be
   project-scoped (recalled only inside that workspace); context compression folds older
   turns into a summary the model writes.
 - **Where we were:** a compressed conversation shows its summary as a sticky card above
@@ -99,29 +99,73 @@ connection test.
   `code` shim is launched through `code.cmd` without a console flash.
 - **Skills and schedules:** skills on disk; an interval scheduler that runs only while the
   app is open.
+- **Terminal:** a real PTY (portable-pty: ConPTY on Windows, the Unix PTY elsewhere) in the
+  work area. The terminal stays alive while its tab exists; closing the tab stops the shell.
+  Keys go to the shell while it has focus.
+- **Git:** status (porcelain), stage/unstage/stage-all, diff, commit, local branch switching
+  and `pull --ff-only` from the work area. No push or merge UI; the terminal is there for that.
+- **Guardrails:** the companion's bash tool can be restricted to an editable allowlist of
+  program names; chains with unknown programs, redirection, backticks and `$()` are rejected.
+  `write`/`edit` can be kept inside the workspace (including no `..` and no symlink escape).
+  The default is allowlist + workspace-only. Your own terminal is not restricted. This is a
+  policy, not an OS sandbox; allowed interpreters such as node/python remain powerful.
+- **Workspace picker:** a folder browser on the existing `read_dir_children` command (path
+  field, up, folder list, choose) in the first-start dialog and under Settings → General.
+  No native-dialog plugin or new dependency.
+- **Eyes:** the composer's eye button captures the virtual desktop and attaches a 2000px
+  JPEG. The `screenshot` tool lets the companion take a capture itself: Fragen asks first,
+  Mitlesen/Ruder run directly, the picture appears in the tool row and is attached as a user
+  image to the next model call. **Limit:** the current DeepSeek models are text-only in this
+  setup and say they cannot see the image; real sight needs a vision-capable model. The full
+  capture is temporary; Windows uses PowerShell, macOS `screencapture`, Linux one of
+  grim/gnome-screenshot/spectacle/scrot/ImageMagick.
+- **Ears:** an in-memory log ring (400 lines) receives the app's and engine's log lines. The
+  Logs tab shows them; the `logs` tool lets the companion read them. Nothing is persisted.
+- **Rudder:** three permission stages — **Mitlesen** (read-only), **Fragen** (approve every
+  write/edit/bash), **Ruder** (full access). The composer select and Settings use the same
+  three stages; choosing Ruder goes through a warning dialog with a required checkbox. New
+  installations start in Fragen; the old full-authorization boolean is migrated. In Fragen
+  the engine pauses with the concrete command/content before the tool runs and offers
+  once/session/deny; a session grant lives only in memory and is cleared when the stage
+  changes. Scheduled runs are read-only in Fragen (nobody can answer). Even in Ruder, a small
+  danger floor (`rm -rf /`, `sudo`, `mkfs`, `git reset --hard`, `curl | sh`, …) asks once.
 - **Languages:** de, en, es, fr, ru, zh-Hans; light/dark theme and reading size.
 
 ## Trust and safety
 
-- `write`, `edit` and `bash` require **Full Authorization**; the toggle is in the composer.
-  The default for a fresh install is currently **on** — consider changing that default or
-  asking at first start before distributing the app broadly.
-- There is **no sandbox** and no per-command allowlist yet; the partner runs with the user's
-  privileges. `ask_user` exists for questions. File history is the undo net, not a security
-  boundary.
+- `write`, `edit` and `bash` follow the three permission stages. **Mitlesen** denies them,
+  **Fragen** pauses the turn and shows the concrete command or change for allow/deny, and
+  **Ruder** runs them without a prompt after the consent dialog. New installations start in
+  Fragen; the old boolean is migrated.
+- There is **no OS sandbox**. The guardrails are a policy: an allowlist of program names and
+  a workspace-only write path. Allowed interpreters and the user's own terminal are not
+  confined. File history is the undo net, not a security boundary. A small hard floor for
+  destructive shell patterns asks even in Ruder. In Fragen, sub-agent writes are still denied
+  because the sub-agent cannot reach the question panel; use Ruder for those. The terminal
+  and the Git panel are user-initiated tools, not model tools.
+- The **Eyes** button captures the whole virtual desktop; the `screenshot` tool does it on
+  the companion's request (Fragen asks first). The image reaches the request and the tool
+  row, but the current DeepSeek model reports that it cannot see pictures. On macOS, Screen
+  Recording permission is required; on Linux one of the capture tools must be installed.
 - The API key never reaches the frontend; the database is local. Do not commit
   `secrets.json`; it is gitignored.
 
 ## Known limitations
 
-- No integrated terminal and no Git panel yet (`TerminalPanel.vue` and the xterm deps are in
-  the repo; the PTY backend and the Git UI are not).
 - No signed installers, no notarization, no auto-updater. Windows SmartScreen and macOS
   Gatekeeper warn; the app is still installable.
 - The published macOS DMG is **aarch64** (Apple Silicon). Intel needs another CI target
   (`macos-13`) or a universal build.
-- No memory search; no screenshot tool for the model; no workspace picker after onboarding.
-- The main frontend chunk is large (Monaco + PDF + Office); code-splitting is a known task.
+- The Git panel has no push or merge UI; it has branch switching and pull. The terminal has
+  one shell per tab and no profile picker.
+- No vision model: screenshots (manual or the `screenshot` tool) reach the provider as image
+  attachments, but the current DeepSeek models say they cannot see them. A vision-capable
+  model is required for actual sight.
+- Full authorization is a per-action approval in Fragen, not a sandbox or capability layer.
+  The Rudder dialog is the consent for full access. The allowlist/workspace-only guardrails
+  are a policy; a real OS sandbox/per-command capability layer is still open.
+- The main frontend chunk is now ~224 KB; Monaco, PDF, Office, terminal, Git and logs are
+  lazy chunks.
 - No frontend E2E suite yet; CI runs the build and the Rust unit tests.
 
 ## Testing

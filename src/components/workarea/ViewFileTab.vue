@@ -1,19 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import Icon from "../Icon.vue";
 import FileTree from "../FileTree.vue";
-import MonacoEditor from "../MonacoEditor.vue";
-import MonacoDiff from "../MonacoDiff.vue";
 import { everydayMode } from "../../engine/mode";
-import PdfView from "./PdfView.vue";
 import { t } from "../../i18n";
 import type { FileNode, FileVersionInfo } from "../../types";
 import { languageFromPath } from "../../lib/language";
 import { escapeHtml, mimeFor, previewKindFor, renderMarkdown, rtfToText } from "../../lib/preview";
-import { renderDocx, renderSheet, renderSlides } from "../../lib/office";
-import { renderLegacySlides, renderLegacyWord } from "../../lib/binaryOffice";
-import { renderOdfSlides, renderOdfText } from "../../lib/odf";
 import {
   initWorkspace,
   loadChildren,
@@ -31,6 +25,11 @@ import {
 } from "../../stores/workArea";
 import { activeSessionId } from "../../stores/sessions";
 import { resolvedTheme } from "../../stores/settings";
+
+/** The heavy viewers stay out of the main chunk until a tab actually needs them. */
+const MonacoEditor = defineAsyncComponent(() => import("../MonacoEditor.vue"));
+const MonacoDiff = defineAsyncComponent(() => import("../MonacoDiff.vue"));
+const PdfView = defineAsyncComponent(() => import("./PdfView.vue"));
 
 const props = defineProps<{ path?: string | null }>();
 
@@ -77,12 +76,6 @@ const imageSrc = ref("");
  * Images come through Rust as base64 rather than through the asset protocol: the webview
  * blocks `asset://` requests from the dev-server origin ("protocols must match").
  */
-watch(sheetView, () => {
-  if (kind.value === "sheet" && officeSource.value) {
-    officeHtml.value = renderSheet(officeSource.value, sheetView.value);
-  }
-});
-
 watch(
   [() => props.path, kind, fileRevision],
   async ([path, currentKind]) => {
@@ -108,8 +101,9 @@ const officeHtml = ref("");
 /** The office family: each format has its own reader, none of them is plain text. */
 const OFFICE_KINDS = ["docx", "doc", "odt", "sheet", "rtf", "slides", "ppt", "odp"];
 
-watch(sheetView, () => {
+watch(sheetView, async () => {
   if (kind.value === "sheet" && officeSource.value) {
+    const { renderSheet } = await import("../../lib/office");
     officeHtml.value = renderSheet(officeSource.value, sheetView.value);
   }
 });
@@ -124,14 +118,30 @@ watch(
     try {
       const base64 = await invoke<string>("read_file_base64", { path });
       officeSource.value = currentKind === "sheet" ? base64 : null;
-      if (currentKind === "docx") officeHtml.value = await renderDocx(base64);
-      else if (currentKind === "doc") officeHtml.value = await renderLegacyWord(base64);
-      else if (currentKind === "odt") officeHtml.value = await renderOdfText(base64);
-      else if (currentKind === "sheet") officeHtml.value = renderSheet(base64, sheetView.value);
-      else if (currentKind === "slides") officeHtml.value = await renderSlides(base64);
-      else if (currentKind === "ppt") officeHtml.value = renderLegacySlides(base64);
-      else if (currentKind === "odp") officeHtml.value = await renderOdfSlides(base64);
-      else officeHtml.value = `<pre>${escapeHtml(rtfToText(atob(base64)))}</pre>`;
+      if (currentKind === "docx") {
+        const { renderDocx } = await import("../../lib/office");
+        officeHtml.value = await renderDocx(base64);
+      } else if (currentKind === "doc") {
+        const { renderLegacyWord } = await import("../../lib/binaryOffice");
+        officeHtml.value = await renderLegacyWord(base64);
+      } else if (currentKind === "odt") {
+        const { renderOdfText } = await import("../../lib/odf");
+        officeHtml.value = await renderOdfText(base64);
+      } else if (currentKind === "sheet") {
+        const { renderSheet } = await import("../../lib/office");
+        officeHtml.value = renderSheet(base64, sheetView.value);
+      } else if (currentKind === "slides") {
+        const { renderSlides } = await import("../../lib/office");
+        officeHtml.value = await renderSlides(base64);
+      } else if (currentKind === "ppt") {
+        const { renderLegacySlides } = await import("../../lib/binaryOffice");
+        officeHtml.value = await renderLegacySlides(base64);
+      } else if (currentKind === "odp") {
+        const { renderOdfSlides } = await import("../../lib/odf");
+        officeHtml.value = await renderOdfSlides(base64);
+      } else {
+        officeHtml.value = `<pre>${escapeHtml(rtfToText(atob(base64)))}</pre>`;
+      }
     } catch (cause) {
       error.value = String(cause);
     }

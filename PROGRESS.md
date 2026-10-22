@@ -2212,3 +2212,87 @@ Light setzt `--bg-composer` jetzt auf `#f7f7f7` (dieselbe Fläche wie `--bg-pane
 Border, Text und der Select bleiben unverändert und passen nun zusammen. Das dunkle
 Theme behält `#202020`. `pnpm build` grün; noch nicht committet, gehört zum
 v0.4.11-Stand.
+
+## 56. Terminal, Git, Augen, Ohren und das Ruder (2026-10-22, fünfunddreißigste Runde)
+
+- Die vollständige v0.4.10 des Nutzers (`v0410`) ist jetzt die Basis; die lokale Kopie war
+  nur unvollständig angekommen. Die unveränderte Referenz liegt außerhalb des
+  Arbeitsverzeichnisses, damit das Feierabend-ZIP sauber bleibt. Die bisherigen Runden
+  (Dateiverlauf, Gedächtnis, Retry, Diagnose, Tastenkürzel) sind darin enthalten.
+- **Terminal:** `portable-pty` (Windows ConPTY, macOS/Linux PTY), `src-tauri/src/pty.rs`
+  mit `pty_open/write/resize/close` und den Events `pty-output`/`pty-exit`.
+  `TerminalPanel.vue` ist jetzt xterm am echten PTY; der Tab bleibt beim Wechsel gemountet,
+  die Shell läuft weiter, Tab schließen beendet sie. Der globale Dispatcher lässt Tasten
+  aus `[data-terminal-input]` an die Shell. Zusätzlich öffnet ein Button im oberen Kurzmenü
+  (neben Browser und Dateibrowser) den Terminal-Tab.
+- **Git:** `src-tauri/src/git_panel.rs` nutzt die Git-CLI (status mit porcelain `-z`,
+  stage/unstage/stage_all/diff/commit, untracked-Diff, `CREATE_NO_WINDOW` unter Windows).
+  `GitPanel.vue` zeigt Branch/Head, Gruppen, Diff und Commit; zusätzlich Zweigliste und
+  -wechsel sowie Pull mit `--ff-only`. Kein Git-Crate, kein Push (dafür das Terminal).
+- **Leitplanken:** `settings.commandPolicy`/`allowedCommands`/`workspaceOnly` gelten für den
+  Companion, nicht für das Terminal. In „allowlist" prüft `bash` jedes einfache Segment:
+  Programmname muss exakt in der Liste stehen; Pfade, `;`-Ketten mit unbekannten Programmen,
+  Umleitungen, Backticks und `$()` werden abgelehnt. Default ist eine Liste gängiger Build-
+  und Lesebefehle. `workspaceOnly` lehnt `write`/`edit` außerhalb des Workspace ab (auch
+  `..` und Symlinks nach außen). Die Einstellungen haben einen eigenen Bereich „Leitplanken".
+  Das ist eine Policy, keine OS-Sandbox; erlaubte Interpreter wie `node`/`python` bleiben
+  mächtig, das Terminal bleibt frei. Tests: `the_command_allowlist_rejects_chains_and_redirection`,
+  `workspace_only_rejects_parents_and_outside_paths`.
+- **Workspace-Picker:** eigener Ordner-Browser auf `read_dir_children` (kein Tauri-Dialog-
+  Plugin, keine neue Abhängigkeit): Pfadfeld, „nach oben", Ordnerliste und „Diesen Ordner
+  wählen"; im Erststart und unter Einstellungen → Allgemein. Live geöffnet und
+  `X:\DEV\dside-main` darüber gesetzt.
+- **Code-Splitting:** `ViewFileTab`, Monaco, PDF, Office-Leser, Terminal, Git und Logs sind
+  asynchrone Chunks; die Office-Leser werden erst beim Öffnen dynamisch importiert. Der
+  Haupt-Chunk sinkt von **5,5 MB auf ~224 KB**; die großen Teile laden beim ersten Bedarf.
+  Sichtprüfung: Datei-Tab mit Monaco nach dem Lazy-Load.
+- **Augen:** `capture.rs` nimmt den virtuellen Desktop auf (Windows PowerShell, macOS
+  `screencapture`, Linux grim/gnome-screenshot/spectacle/scrot/ImageMagick). Das volle PNG
+  ist temporär und wird gelöscht; der Composer hängt eine 2000-px-JPEG-Version über
+  `attachment_save` an. Zusätzlich gibt es das `screenshot`-Werkzeug: Der Companion kann
+  selbst aufnehmen; in „Fragen" fragt er vorher, in „Mitlesen"/„Ruder" nimmt er direkt auf,
+  das Bild erscheint im Tool-Verlauf und wird als User-Image an den nächsten Modellaufruf
+  gehängt. **Grenze:** Der aktuelle DeepSeek meldet live, dass er das Bild nicht sieht — die
+  Aufnahme kommt als Anhang an, das Modell ist aber text-only; für echte Augen braucht es
+  ein vision-fähiges Modell. Die manuelle Aufnahme ist live geprüft, nicht an das Modell
+  gesendet.
+- **Ohren:** `logs.rs` hält einen Ring (400 Zeilen, je 2000 Zeichen); `log_line!` ersetzt die
+  bisherigen `eprintln!`-Zeilen in App, Engine und Secret. `log_tail`, der Logs-Tab und das
+  `logs`-Werkzeug für den Companion lesen ihn. Der Ring ist nur im Speicher, kein Transcript.
+- **Memory-Suche:** Das Gedächtnis-Panel filtert die Karten über Titel, Text, Art, Scope und
+  Workspace, ohne die Datenbank anzufassen; die stillgelegten Einträge werden mitgefiltert.
+- **Ruder, drei Stufen:** `settings.permission` ist `read | ask | full` (Mitlesen, Fragen,
+  Ruder). „Fragen" ist der neue Default für frische Installationen; der alte Boolean
+  `fullAuthorization` wird beim Start migriert (true → full, false → read). Die Auswahl sitzt
+  im Composer und in den Einstellungen. Nur „full" öffnet den `RudderDialog` mit Warnung und
+  Pflicht-Checkbox; „Mitlesen" und „Fragen" gelten sofort. In „ask" hält der Engine-Loop vor
+  jedem `write`/`edit`/`bash` an, emittiert `action_required` mit `kind: permission` und dem
+  konkreten Befehl/Inhalt, und wartet auf „Einmal erlauben", „Für diese Sitzung erlauben"
+  oder „Ablehnen". „Für diese Sitzung" merkt sich die Freigabe nur im Speicher (pro Session,
+  weg beim Moduswechsel oder Neustart). Ein genehmigter Aufruf bekommt einen eigenen
+  Vollzugriff-Kontext; ein abgelehnter liefert dem Modell eine Absage. Eine kleine harte
+  Untergrenze bleibt auch im Ruder: gefährliche Shell-Muster (`rm -rf /`, `sudo`, `mkfs`,
+  `git reset --hard`, `curl | sh`, …) fragen einmal nach. Geplante Läufe werden in „ask"
+  read-only ausgeführt, weil dort niemand antworten kann. Der Sub-Agent kann in „ask" nicht
+  fragen; seine Schreibzugriffe bleiben gesperrt.
+- **Geprüft:** `vue-tsc`, `vite build`, **34 passed / 13 ignored**; live: Terminal/Git auf
+  v0.4.10, Logs-Tab, Screenshot-Aufnahme + JPEG-Anhang, Ruder-Dialog mit Checkbox,
+  **„Fragen" end-to-end** (write → Frage → „Einmal erlauben" → Datei geschrieben) und
+  **„Für diese Sitzung"** (erster Write geschrieben; der Folgeturn scheiterte am transienten
+  Provider-Netzwerk, nicht an der Freigabe), Leitplanken-Panel, Workspace-Picker und
+  Monaco-Lazy-Load. Version bleibt 0.4.10; zuhause als **v0.4.11** taggen. Die
+  Änderungspakete sind Referenz; das Arbeitsverzeichnis ist der vollständige Stand.
+
+## 57. Zuhause vollständig übernommen (2026-10-22, sechsunddreißigste Runde)
+
+Der komplette Arbeitsstand aus §56 ist per Snapshot übernommen, nicht nur der
+All-Patch: Quellcode, Tests, Manifeste und Doku. `pnpm install` normalisierte den
+Lockfile-Stand, `pnpm build` (vue-tsc + Vite) ist grün, `cargo test --lib` meldet
+**34 passed / 13 ignored**. Die 0-Byte-Datei `src-tauri/1.blob` ist entfernt; die
+generierten Plattform-Schemas (`src-tauri/gen/...`) wurden bewusst nicht
+mitkopiert.
+
+Enthalten sind Terminal/PTY, Git-Panel, Ruder mit drei Stufen, Leitplanken,
+Workspace-Picker, Augen/Ohren, Code-Splitting und die Gedächtnis-Suche. Die
+Version bleibt 0.4.10. **Kein Tag und keine Veröffentlichung**, bis die
+Namensgebung besprochen ist; danach wird v0.4.11 daraus.
