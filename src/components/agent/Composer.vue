@@ -173,6 +173,7 @@ function autoGrow(): void {
 
 function reset(): void {
   text.value = "";
+  attachments.value = [];
   void nextTick(() => {
     if (box.value) box.value.style.height = "auto";
   });
@@ -197,8 +198,9 @@ watch(
 function submit() {
   const value = text.value.trim();
   if (!value || running.value) return;
+  const outgoing = attachments.value.map((item) => ({ ...item }));
   reset();
-  void sendPrompt(value);
+  void sendPrompt(value, outgoing);
 }
 
 /**

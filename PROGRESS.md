@@ -2462,3 +2462,16 @@ Die Release-Liste ist damit sauber: v0.4.13 (Latest), v0.4.11, v0.4.9.
 
 **CI v0.4.13:** verify und Linux/macOS/Windows grün; sieben Assets; 37 Rust-Tests
 (13 ignored). Der Vision-Fix ist im Live-Test mit dem Fixture „HALLO 4711" belegt.
+
+## 65. Anhänge gingen beim Senden verloren (2026-10-23, vierundvierzigste Runde)
+
+Der Windows-Test hat einen echten Composer-Fehler gefunden: `submit()` rief
+`sendPrompt(value)` ohne die angehängten Bilder auf, und `reset()` leerte nur den
+Text, nicht `attachments`. Die Bilder blieben also im Composer liegen und wurden
+nie mitgeschickt.
+
+Jetzt wird vor dem Reset eine Kopie der Anhänge gemacht, `sendPrompt(value,
+outgoing)` bekommt sie mit, und `reset()` räumt auch `attachments` ab. Das betrifft
+alle Plattformen, nicht nur Windows.
+
+`pnpm build` grün; noch kein Tag — der Stand geht so in den Windows-Test.
