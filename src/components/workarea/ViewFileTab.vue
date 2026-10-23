@@ -13,6 +13,7 @@ import {
   initWorkspace,
   loadChildren,
   readFile,
+  reloadTree,
   tree,
   treeError,
   treeLoading,
@@ -289,22 +290,29 @@ async function revealInTree(path: string, nodes: FileNode[]): Promise<boolean> {
     if (nodePath === target) return true;
     if (!node.isFolder) continue;
     if (!target.startsWith(`${nodePath}/`)) continue;
-    if (!node.expanded) {
-      node.expanded = true;
-      if (!node.loaded) await loadChildren(node);
-    }
+    node.expanded = true;
+    // Refresh the folder on the way to the target even when it is already open: a file the
+    // companion just wrote is not in a listing that was read before it existed.
+    await loadChildren(node);
     if (await revealInTree(target, node.children ?? [])) return true;
   }
   return false;
 }
 
 /**
- * A file the companion opens should not leave the tree untouched: expand the path and bring
- * the selected row into view. Unlike a user pick, this does not schedule the tree to hide —
- * the point is that the file stays findable.
+ * A file the companion opens should not leave the tree untouched: refresh the containing
+ * folders, expand the path and bring the selected row into view. A new top-level entry is
+ * not in the root list yet, so the whole tree is reloaded once when the first pass misses.
+ * Unlike a user pick, this does not schedule the tree to hide — the point is that the file
+ * stays findable.
  */
 async function revealFile(path: string): Promise<void> {
-  if (!(await revealInTree(path, tree.value))) return;
+  let found = await revealInTree(path, tree.value);
+  if (!found) {
+    await reloadTree();
+    found = await revealInTree(path, tree.value);
+  }
+  if (!found) return;
   await nextTick();
   document
     .querySelector<HTMLElement>(".tree .row.selected")
