@@ -14,6 +14,7 @@ mod logs;
 mod pty;
 mod secret;
 mod skills;
+mod test_bridge;
 
 // ---------------------------------------------------------------------------
 // Editor detection
@@ -1153,6 +1154,7 @@ pub fn run() {
         )
         .manage(engine::EngineState::default())
         .manage(pty::PtyState::default())
+        .manage(test_bridge::TestBridgeState::default())
         .setup(|app| {
             let directory = app.path().app_data_dir()?;
             let database = db::Db::open(&directory.join("ds-ide.sqlite3"))?;
@@ -1168,6 +1170,20 @@ pub fn run() {
                     engine::run_due_schedules(&handle).await;
                 }
             });
+
+            // Dev-only UI test bridge: a localhost channel into the main webview. It is
+            // compiled only into debug builds and starts only when explicitly requested.
+            #[cfg(debug_assertions)]
+            if std::env::var("DS_IDE_TEST_BRIDGE").ok().as_deref() == Some("1") {
+                let port = std::env::var("DS_IDE_TEST_BRIDGE_PORT")
+                    .ok()
+                    .and_then(|value| value.parse::<u16>().ok())
+                    .unwrap_or(9333);
+                let bridge_handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    test_bridge::serve(bridge_handle, port).await;
+                });
+            }
 
             // Splash: the main window stays hidden until the splash says it has painted.
             // The fallback makes sure a broken frontend cannot leave the user windowless.
@@ -1270,6 +1286,7 @@ pub fn run() {
             git_panel::git_panel_pull,
             capture::capture_screen,
             logs::log_tail,
+            test_bridge::test_bridge_report,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

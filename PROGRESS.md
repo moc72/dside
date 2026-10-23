@@ -2672,3 +2672,60 @@ Vier Punkte, alle umgesetzt.
 Geprüft: `pnpm build` grün, `cargo test --lib` **43 passed / 13 ignored**,
 Statuszeile und Reveal live. Test-DB wieder auf `ask`, Schedules gelöscht,
 Follow wieder an. Kein Tag.
+
+## 70. Hände für die Oberfläche (2026-10-23, neunundvierzigste Runde)
+
+Die Wayland-Sitzung ließ keinen nativen Eingabeweg in das Tauri-Fenster zu:
+XTest kommt nicht an, das X11-Fenster ist ein Ghost; ein Screenshot des
+Electron-Nachbarn zeigte nur den Desktop. Der DeepVibe-Test über den
+Chromium-Debug-Port zeigte, dass der richtige Weg **in** der App liegt, nicht
+im Betriebssystem. DS.IDE hat kein CDP; deshalb eine eigene, kleine Brücke.
+
+### Die Brücke
+`src-tauri/src/test_bridge.rs`: In Debug-Builds und nur mit
+`DS_IDE_TEST_BRIDGE=1` lauscht sie auf `127.0.0.1:9333`
+(`DS_IDE_TEST_BRIDGE_PORT` überschreibt). `POST /eval` führt JavaScript im
+Haupt-Webview aus; das Skript bekommt `report(data)`, das über den neuen
+Tauri-Command `test_bridge_report` einen JSON-Bericht mit Sequenznummer ablegt;
+`GET /report` liefert ihn, `GET /health` ist der Lebendtest. Der Release-Build
+enthält den Server nicht (`#[cfg(debug_assertions)]`), nur den harmlosen
+Report-Command. Client: `scripts/ui-test.mjs` (`report`, `eval`, `wait`,
+`shot` über xdotool/ImageMagick). Der Companion kann die Brücke per
+bash/python nutzen, wenn die App so gestartet wird.
+
+### Was die Brücke geprüft hat
+Isolierte Testdaten (`/tmp/dside-e2e`, Workspace `/tmp/dside-workspace`,
+Ask-Modus, Follow an, Browser-Steuerung an), lokaler Formularserver auf 8765:
+
+- **Fokus:** Nach dem Splash ist `document.activeElement` das Textarea des
+  Composers — vorher war das nur typgeprüft, jetzt live gelesen.
+- **Restore-Dialog:** Verlauf öffnen, „Schreiben · Neu angelegt“ wählen,
+  „Wiederherstellen“: der eigene Dialog „Fassung wiederherstellen?“ erscheint,
+  der Fokus liegt auf „Abbrechen“. Abbrechen lässt Datei und Verlauf stehen;
+  Bestätigen entfernt `src/reveal-test2.txt`, der Tab zeigt „Die Datei wurde
+  durch das Wiederherstellen entfernt …“, `read_text_file` meldet os error 2.
+- **Write + Approval:** Prompt an den Companion, Freigabe „Einmal erlauben“
+  per DOM-Klick; `src/bridge-test.txt` entsteht; nach dem Turn liegt der Fokus
+  wieder im Composer.
+- **Reveal-Fehler gefunden und behoben:** Der Baum war beim Start gelesen; eine
+  danach geschriebene Datei in einem bereits geladenen Ordner fehlte, die
+  Markierung war `null`. `revealInTree` lädt die Elternordner auf dem Weg zum
+  Ziel jetzt immer neu; `revealFile` lädt den ganzen Baum einmal nach, wenn ein
+  neuer Eintrag auf oberster Ebene fehlt. Danach: `bridge-test.txt` markiert,
+  die entfernte `reveal-test2.txt` verschwunden.
+- **Browser-Fill mit Approval:** `browser_read` mit URL öffnet `browser-1`;
+  `browser_fill` löst den Frage-Dialog aus; „Einmal erlauben“; 5/5 Felder und
+  Submit; die Fenster-URL ist
+  `http://127.0.0.1:8765/submitted?name=Test&email=test%40example.com&comment=Hallo+Browser&agree=on&farbe=blau`;
+  der Companion liest die Seite und berichtet die Werte; der Fokus ist zurück
+  im Composer. Screenshots: `/tmp/dside-restore-dialog.png`,
+  `/tmp/dside-restore-missing.png`, `/tmp/dside-write-follow.png`,
+  `/tmp/dside-browser-final-main.png`, `/tmp/dside-browser-submitted.png`.
+
+### Geprüft und offen
+`pnpm build` (vue-tsc + Vite) grün; `cargo test --lib` **45 passed / 13
+ignored** (zwei Brückentests). Die Brücke ist ein Testwerkzeug, kein
+Produktpfad: Debug-Build plus explizite Umgebungsvariable, nur localhost. Die
+Screenshot-Hilfe im Client ist Linux-spezifisch; `eval`/`report` sind
+plattformunabhängig. Windows/macOS bleiben als Laufzeitprüfung offen; die
+echte `prompt_tokens`-Usage als Kompressionsauslöser ebenfalls.

@@ -3,9 +3,9 @@
 This is the short handover for taking the project over. `PROGRESS.md` is the authoritative
 log (German, one section per round); `AGENTS.md` describes how to work in the repository.
 
-**Status:** `v0.4.13` is public. The current head carries the round-69 changes
-(browser open/read/fill, recall, explicit workspace failures, tree reveal, the
-app's restore dialog, follow/stop polish); they are not tagged yet.
+**Status:** `v0.4.13` is public. The current head carries the round-70 changes
+(the dev-only UI test bridge, a reveal refresh for files written after the tree
+was read, and the round-69 browser/recall/restore/follow work); not tagged yet.
 
 ## What it is
 
@@ -36,7 +36,7 @@ Checks and release:
 
 ```sh
 pnpm build                        # vue-tsc + Vite
-cd src-tauri && cargo test --lib  # 43 passed, 13 ignored (live tests need DS_IDE_API_KEY)
+cd src-tauri && cargo test --lib  # 45 passed, 13 ignored (live tests need DS_IDE_API_KEY)
 pnpm tauri build                  # deb/rpm/AppImage, NSIS, dmg
 ```
 
@@ -48,6 +48,27 @@ CI: `.github/workflows/release.yml` runs verify (build + Rust tests) and builds 
 macOS and Windows on a version tag, creating a **draft** release. The tag is the version;
 `scripts/set-version.mjs` keeps the manifests aligned. Signing and notarization are **not**
 configured (see limitations).
+
+## UI test bridge (dev only)
+
+The native input path does not reach the WebKit window on Linux/Wayland (XTest is not
+delivered; the X11 frame is a ghost). A debug build can therefore expose a small localhost
+channel into the main webview:
+
+```sh
+DS_IDE_TEST_BRIDGE=1 pnpm tauri dev   # debug only; 127.0.0.1:9333, port via DS_IDE_TEST_BRIDGE_PORT
+node scripts/ui-test.mjs eval 'report({ active: document.activeElement?.tagName })'
+node scripts/ui-test.mjs shot /tmp/dside-ui.png
+```
+
+`POST /eval` runs JavaScript in the main window; the wrapper provides `report(data)`, which
+stores a JSON payload with a sequence number through the `test_bridge_report` command.
+`GET /report` returns it, `GET /health` is a liveness check. `scripts/ui-test.mjs` is the
+client (`eval`, `report`, `wait`, `shot`); `shot` needs xdotool and ImageMagick on Linux,
+while `eval`/`report` are platform-independent. A release build does not contain the server
+(`#[cfg(debug_assertions)]`); without `DS_IDE_TEST_BRIDGE=1` nothing listens. This is a test
+backdoor, not a product feature — use it against the isolated test data, not the real
+workspace.
 
 ## First start
 
@@ -91,7 +112,8 @@ connection test.
 - **Follow mode:** files the partner reads/writes open in the work area, `web_fetch` opens
   the page in the integrated browser; the eye in the tab bar turns it off. A read opens at
   once; a write/edit opens when the tool result confirms it, not while approval is pending.
-  A followed file is revealed in the tree (parents expanded, row scrolled into view).
+  A followed file is revealed in the tree (parents expanded, row scrolled into view); the
+  containing folders are re-read, so a file written after the tree was loaded still appears.
 - **Browser control:** with Settings → General → Browser control on, the partner can open a
   page in a new window itself (`browser_read` with `url`), read its text, links and form
   fields, and fill/submit forms (`browser_fill`). A read never navigates a page the user

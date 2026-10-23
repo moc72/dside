@@ -15,6 +15,10 @@ Fallback, falls diese Datei fehlt.
 - Windows-Release: `cargo build --release --features tauri/custom-protocol`. Ohne das
   Feature lädt die Binary die Dev-URL `http://localhost:1420`.
 - Entwicklung: `pnpm tauri dev` (cargo muss im PATH sein), Vite läuft auf Port 1420.
+- **UI-Tests:** `DS_IDE_TEST_BRIDGE=1 pnpm tauri dev` öffnet in Debug-Builds eine
+  localhost-Brücke (127.0.0.1:9333, Port über `DS_IDE_TEST_BRIDGE_PORT`);
+  `node scripts/ui-test.mjs eval 'report({...})'` führt DOM-Schritte aus, `shot` macht
+  ein Fensterfoto. Der Release-Build enthält den Server nicht.
 
 ## Konventionen
 
