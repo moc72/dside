@@ -188,6 +188,7 @@ export async function configureEngine(): Promise<void> {
       commandPolicy: settings.commandPolicy,
       allowedCommands: settings.allowedCommands,
       workspaceOnly: settings.workspaceOnly,
+      browserControl: settings.browserControl,
       maxTurns: 24,
       reasoningEffort: settings.reasoningEffort || null,
       // Compression needs the window to know when a conversation is too long.

@@ -410,6 +410,9 @@ export const de = {
       followCompanion: "Dem Begleiter folgen",
       followCompanionDesc:
         "Dateien und Webseiten, die er öffnet, im Arbeitsbereich zeigen — der Fokus bleibt im Eingabefeld.",
+      browserControl: "Browser-Steuerung",
+      browserControlDesc:
+        "Der Begleiter darf die von Dir geöffneten Browserseiten lesen und Formulare ausfüllen. Nur bewusst einschalten.",
     },
   },
   common: {

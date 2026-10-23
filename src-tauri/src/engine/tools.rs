@@ -332,6 +332,46 @@ pub fn definitions() -> Vec<Value> {
                 }
             }
         }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "browser_read",
+                "description": "Read the page the user has open in one of the app's browser windows: URL, title, visible text, links, and form fields (password values are omitted). Use the id returned here for later calls, or omit it for the newest window. The user must have enabled Browser control in Settings → General.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "id": { "type": "string", "description": "Browser window id; omit for the newest window." }
+                    }
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "browser_fill",
+                "description": "Fill form controls in the user's browser window. Each field needs a CSS selector from browser_read and a value; optionally submit the form. Requires Browser control in Settings → General; in Ask before changes the user approves the fill. Never enter credentials the user did not explicitly ask you to enter.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "id": { "type": "string", "description": "Browser window id; omit for the newest window." },
+                        "fields": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "selector": { "type": "string", "description": "CSS selector from browser_read." },
+                                    "value": { "type": "string", "description": "Value to enter; for checkboxes use true/false." }
+                                },
+                                "required": ["selector", "value"]
+                            }
+                        },
+                        "submit": { "type": "boolean", "description": "Submit the form after filling it. Default false." },
+                        "submitSelector": { "type": "string", "description": "Optional CSS selector of the submit button or form." }
+                    },
+                    "required": ["fields"]
+                }
+            }
+        }),
     ]
 }
 

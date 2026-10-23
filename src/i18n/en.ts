@@ -410,6 +410,9 @@ export const en: Messages = {
       followCompanion: "Follow the companion",
       followCompanionDesc:
         "Show files and pages it opens in the work area — the cursor stays in the composer.",
+      browserControl: "Browser control",
+      browserControlDesc:
+        "The companion may read the browser pages you opened and fill in forms. Only enable deliberately.",
     },
   },
   common: {

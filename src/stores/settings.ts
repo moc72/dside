@@ -29,6 +29,8 @@ export interface SettingsState {
   partnerPrompt: string;
   /** Per-command overrides of the keyboard defaults; an absent id means the defaults apply. */
   shortcuts: Record<string, string[]>;
+  /** Let the partner read and fill forms in browser windows the user opened. */
+  browserControl: boolean;
   /** How hard the model should think, on the provider's own scale. Empty = provider default. */
   reasoningEffort: string;
   /** Set once the first-start dialog has been answered or dismissed. */
@@ -84,6 +86,7 @@ const PERSISTED_KEYS: (keyof SettingsState)[] = [
   "fontSize",
   "partnerPrompt",
   "shortcuts",
+  "browserControl",
   "reasoningEffort",
   "onboarded",
 ];
@@ -110,6 +113,7 @@ const defaults: SettingsState = {
   fontSize: 14,
   partnerPrompt: "",
   shortcuts: {},
+  browserControl: false,
   reasoningEffort: "",
   onboarded: false,
 };

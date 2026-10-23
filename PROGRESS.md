@@ -2475,3 +2475,40 @@ outgoing)` bekommt sie mit, und `reset()` räumt auch `attachments` ab. Das betr
 alle Plattformen, nicht nur Windows.
 
 `pnpm build` grün; noch kein Tag — der Stand geht so in den Windows-Test.
+
+## 66. Browser lesen und Formulare füllen (2026-10-23, fünfundvierzigste Runde)
+
+Der Browser ist jetzt ein Werkzeug, kein reines Fenster mehr — aber bewusst nur
+hinter einer Einstellung.
+
+### Freigabe
+`settings.browserControl` (Standard **aus**) wird unter Einstellungen → Allgemein
+eingeschaltet und als `browserControl` an die Engine gegeben. Ist es aus, tauchen
+`browser_read` und `browser_fill` gar nicht erst im Werkzeugangebot auf. Im
+Planmodus ist Lesen erlaubt, Füllen verboten; in „Vor Änderungen fragen" fragt
+das Füllen über den bestehenden Freigabedialog, im Vollzugriff läuft es direkt.
+
+### Lesen ohne Remote-IPC
+Die fremde Seite bekommt keine Tauri-IPC-Rechte. Der Host führt ein Extraktions-
+skript per `eval` aus; das Skript schreibt URL, Titel, sichtbaren Text (8k),
+Links (40) und Formularfelder (60, Passwortwerte ausgelassen) als Base64 in den
+URL-Hash. Rust liest den Hash über `window.url()`, entfernt ihn wieder und gibt
+JSON zurück. Das umgeht die Capability-/`dangerousRemoteDomainIpcAccess`-Frage
+und funktioniert auch für fremde Origins; CSP-Seiten können das Skript blockieren,
+dann kommt eine ehrliche Fehlermeldung.
+
+### Füllen
+`browser_fill` nimmt Selektoren aus `browser_read` plus Werte, setzt native
+Setter (React-kompatibel), feuert `input`/`change`, unterstützt Checkboxen,
+Radios und Selects (Wert oder Optionstext) und kann ein Formular absenden
+(`submitSelector` oder das erste Formular). Das Ergebnis meldet Anzahl und
+Submit-Status über denselben Hash; nach einer Navigation zählt die Absicht.
+
+### Grenzen
+Nur das jeweils neueste (oder per `id` benannte) Fenster; keine Frames, keine
+Klicks auf beliebige Links, kein Login-Autofill. Die Einstellung ist eine
+bewusste Nutzerfreigabe, keine Sandbox. **Noch nicht in einer echten WebView
+durchgeklickt** — der Windows-Test soll das übernehmen.
+
+`cargo test --lib` **38 passed / 13 ignored** (Hash-Parser-Test), `pnpm build`
+grün. Kein Tag/Build; der Stand ist für den Twin gedacht.

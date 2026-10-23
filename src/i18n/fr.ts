@@ -409,6 +409,9 @@ export const fr: Messages = {
       followCompanion: "Suivre le compagnon",
       followCompanionDesc:
         "Afficher dans l'espace de travail les fichiers et pages qu'il ouvre — le curseur reste dans le champ de saisie.",
+      browserControl: "Contrôle du navigateur",
+      browserControlDesc:
+        "Le compagnon peut lire les pages que vous avez ouvertes et remplir des formulaires. À activer en connaissance de cause.",
     },
   },
   common: {

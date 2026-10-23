@@ -1201,6 +1201,8 @@ pub fn run() {
             browser::browser_windows,
             browser::browser_action,
             browser::browser_close,
+            browser::browser_read,
+            browser::browser_fill,
             splash_visible,
             log_message,
             splash_ready,

@@ -27,6 +27,9 @@ pub struct EngineConfig {
     /// Reject write/edit outside the workspace.
     #[serde(default)]
     pub workspace_only: bool,
+    /// The user allowed the partner to read and fill forms in the browser windows they opened.
+    #[serde(default)]
+    pub browser_control: bool,
     #[serde(default = "default_max_turns")]
     pub max_turns: u32,
     /// How hard the model thinks: the provider's own scale (`none` … `max`). Empty means

@@ -406,6 +406,9 @@ export const zhHans: Messages = {
       joinEarlyAccessDesc: "最先体验最新功能",
       followCompanion: "跟随伙伴",
       followCompanionDesc: "在伙伴打开文件或网页时于工作区显示——光标仍留在输入框。",
+      browserControl: "浏览器控制",
+      browserControlDesc:
+        "伙伴可以读取你打开的网页并填写表单。请有意识地开启。",
     },
   },
   common: {

@@ -1228,6 +1228,7 @@ mod tests {
             command_policy: "all".to_string(),
             allowed_commands: Vec::new(),
             workspace_only: false,
+            browser_control: false,
             max_turns: 4,
             reasoning_effort: None,
             context_window: None,
@@ -1506,6 +1507,11 @@ async fn run_turn(
             if name == Some("choose_name") && named {
                 return false;
             }
+            if matches!(name, Some("browser_read") | Some("browser_fill"))
+                && !config.browser_control
+            {
+                return false;
+            }
             !name.map(|name| disabled.contains(&name.to_lowercase())).unwrap_or(false)
         })
         .collect();
@@ -1711,6 +1717,92 @@ async fn run_turn(
                     &arguments,
                 )
                 .await
+            } else if call.function.name == "browser_read" {
+                if !config.browser_control {
+                    tools::ToolOutcome::err(
+                        "browser_read: Browser control is disabled in Settings → General",
+                    )
+                } else {
+                    let id = arguments
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .map(str::to_string);
+                    match crate::browser::browser_read(app.clone(), id).await {
+                        Ok(page) => tools::ToolOutcome::ok(
+                            serde_json::to_string_pretty(&page)
+                                .unwrap_or_else(|_| "{}".to_string()),
+                        ),
+                        Err(error) => tools::ToolOutcome::err(format!("browser_read: {error}")),
+                    }
+                }
+            } else if call.function.name == "browser_fill" {
+                if config.permission == "read" {
+                    tools::ToolOutcome::err(
+                        "browser_fill: permission denied in Plan mode — ask the user to switch to Ask before changes or Full access",
+                    )
+                } else if !config.browser_control {
+                    tools::ToolOutcome::err(
+                        "browser_fill: Browser control is disabled in Settings → General",
+                    )
+                } else {
+                    let id = arguments
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .map(str::to_string);
+                    let fields_value = arguments
+                        .get("fields")
+                        .cloned()
+                        .unwrap_or(Value::Array(Vec::new()));
+                    match serde_json::from_value::<Vec<crate::browser::BrowserFillField>>(
+                        fields_value,
+                    ) {
+                        Ok(fields) => {
+                            let submit =
+                                arguments.get("submit").and_then(Value::as_bool).unwrap_or(false);
+                            let submit_selector = arguments
+                                .get("submitSelector")
+                                .and_then(Value::as_str)
+                                .map(str::to_string);
+                            let needs_permission =
+                                config.permission == "ask" && !has_session_grant(app, session_id);
+                            if needs_permission
+                                && !approve_tool(
+                                    app,
+                                    session_id,
+                                    "browser_fill",
+                                    &arguments,
+                                    &mut seq,
+                                    true,
+                                )
+                                .await
+                            {
+                                tools::ToolOutcome::err(
+                                    "browser_fill: permission denied by the user",
+                                )
+                            } else {
+                                match crate::browser::browser_fill(
+                                    app.clone(),
+                                    id,
+                                    fields,
+                                    Some(submit),
+                                    submit_selector,
+                                )
+                                .await
+                                {
+                                    Ok(result) => tools::ToolOutcome::ok(
+                                        serde_json::to_string(&result).unwrap_or_else(|_| "{}".to_string()),
+                                    ),
+                                    Err(error) => {
+                                        tools::ToolOutcome::err(format!("browser_fill: {error}"))
+                                    }
+                                }
+                            }
+                        }
+                        Err(error) => tools::ToolOutcome::err(format!(
+                            "browser_fill: invalid fields: {error}"
+                        )),
+                    }
+                }
             } else if call.function.name == "screenshot" {
                 let needs_permission =
                     config.permission == "ask" && !has_session_grant(app, session_id);

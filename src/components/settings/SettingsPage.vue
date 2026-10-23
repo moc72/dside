@@ -375,6 +375,11 @@ watch(activeItem, (value) => {
             :description="t('settings.general.followCompanionDesc')"
           />
           <ToggleRow
+            v-model="settings.browserControl"
+            :label="t('settings.general.browserControl')"
+            :description="t('settings.general.browserControlDesc')"
+          />
+          <ToggleRow
             v-model="settings.joinEarlyAccess"
             :label="t('settings.general.joinEarlyAccess')"
             :description="t('settings.general.joinEarlyAccessDesc')"
