@@ -32,9 +32,10 @@ export function resolveWorkspacePath(path: string): string {
 }
 
 /**
- * Makes the work area follow what the companion is doing. Files it reads, writes or edits
- * open in the file tab; a web fetch moves the browser. `glob`/`grep`/`bash` stay chips:
- * they describe a search, not a document.
+ * Makes the work area follow what the companion is doing. A file it reads opens at once; a
+ * file it writes or edits opens when the result confirms that it was written — before that
+ * the file may not exist yet (or the turn may still be waiting for approval). A web fetch
+ * moves the browser. `glob`/`grep`/`bash` stay chips: they describe a search, not a document.
  *
  * Deliberately no `focus()` anywhere: the work area changes, but the cursor stays in the
  * composer, so a running turn is not interrupted.
@@ -46,12 +47,14 @@ export function followToolStart(id: string, name: string, rawArguments?: string)
     const raw = typeof args.path === "string" ? args.path.trim() : "";
     if (!raw) return;
     const path = resolveWorkspacePath(raw);
-    // Only a write changes content. Tracking reads would re-read a file that cannot have
-    // changed, and the result event has no arguments of its own.
-    if (name !== "read") pendingPaths.set(id, path);
-    if (!settings.followCompanion) return;
-    openFile(path);
-    pulseTab("file");
+    if (name === "read") {
+      if (!settings.followCompanion) return;
+      openFile(path);
+      pulseTab("file");
+      return;
+    }
+    // The tool has not touched the disk yet. Remember the path; the result opens it.
+    pendingPaths.set(id, path);
     return;
   }
 
@@ -64,10 +67,15 @@ export function followToolStart(id: string, name: string, rawArguments?: string)
   }
 }
 
-/** Called when a tool finishes, so the preview reloads the content it just changed. */
-export function followToolResult(id: string): void {
+/** A successful write/edit opens the changed file; a failed one leaves the work area alone. */
+export function followToolResult(id: string, isError = false): void {
   const path = pendingPaths.get(id);
   if (!path) return;
   pendingPaths.delete(id);
+  if (isError) return;
+  if (settings.followCompanion) {
+    openFile(path);
+    pulseTab("file");
+  }
   refreshFile(path);
 }

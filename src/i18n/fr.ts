@@ -150,6 +150,11 @@ export const fr: Messages = {
     statusCompleted: "Terminé",
     empty: "Aucune tâche.",
   },
+  workspace: {
+    missing: "L’espace de travail {path} n’existe pas ou n’est pas un dossier.",
+    none: "Aucun espace de travail sélectionné.",
+    openSettings: "Ouvrir les réglages",
+  },
   viewFile: {
     hint: "Sélectionne un fichier dans l'arborescence.",
     hideTree: "Cacher l'arborescence",
@@ -178,6 +183,10 @@ export const fr: Messages = {
     historyError: "Impossible de charger l’historique.",
     restore: "Restaurer",
     restoreConfirm: "Restaurer cette version ? L’état actuel est d’abord sauvegardé.",
+    restoreTitle: "Restaurer cette version ?",
+    cancel: "Annuler",
+    removed: "Le fichier a été supprimé par la restauration.",
+    removedHint: "L’historique reste disponible ; une version plus ancienne peut le recréer.",
     restoreFailed: "Échec de la restauration.",
   },
   diagnostics: {
@@ -270,6 +279,7 @@ export const fr: Messages = {
     running: "en cours",
     failed: "Échec",
     done: "Terminé",
+    cancelled: "annulé",
     retry: "Réessayer",
   },
   model: {
@@ -411,7 +421,7 @@ export const fr: Messages = {
         "Afficher dans l'espace de travail les fichiers et pages qu'il ouvre — le curseur reste dans le champ de saisie.",
       browserControl: "Contrôle du navigateur",
       browserControlDesc:
-        "Le compagnon peut lire les pages que vous avez ouvertes et remplir des formulaires. À activer en connaissance de cause.",
+        "Le compagnon peut ouvrir des pages dans le navigateur intégré, les lire et remplir des formulaires. À activer en connaissance de cause.",
     },
   },
   common: {

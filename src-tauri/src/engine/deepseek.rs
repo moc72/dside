@@ -37,42 +37,76 @@ fn truncate(text: &str, limit: usize) -> String {
 /// provider accept the request and ignore the picture — the model then answers as if it were
 /// blind.
 fn wire_messages(messages: &[ChatMessage]) -> Vec<Value> {
-    messages
-        .iter()
-        .map(|message| {
-            let mut wire = json!({ "role": message.role.as_str() });
+    fn wire_message(message: &ChatMessage) -> Value {
+        let mut wire = json!({ "role": message.role.as_str() });
 
-            let images = message
-                .image
-                .as_ref()
-                .filter(|images| !images.is_empty());
-            if let Some(images) = images {
-                let mut content = Vec::with_capacity(images.len() + 1);
-                if let Some(text) = message.content.as_deref() {
-                    if !text.is_empty() {
-                        content.push(json!({ "type": "text", "text": text }));
-                    }
+        let images = message
+            .image
+            .as_ref()
+            .filter(|images| !images.is_empty());
+        if let Some(images) = images {
+            let mut content = Vec::with_capacity(images.len() + 1);
+            if let Some(text) = message.content.as_deref() {
+                if !text.is_empty() {
+                    content.push(json!({ "type": "text", "text": text }));
                 }
-                for url in images {
-                    content.push(json!({
-                        "type": "image_url",
-                        "image_url": { "url": url }
+            }
+            for url in images {
+                content.push(json!({
+                    "type": "image_url",
+                    "image_url": { "url": url }
+                }));
+            }
+            wire["content"] = Value::Array(content);
+        } else if let Some(text) = message.content.as_deref() {
+            wire["content"] = Value::String(text.to_string());
+        }
+
+        if let Some(calls) = &message.tool_calls {
+            wire["tool_calls"] = json!(calls);
+        }
+        if let Some(id) = &message.tool_call_id {
+            wire["tool_call_id"] = json!(id);
+        }
+        wire
+    }
+
+    let mut wire = Vec::with_capacity(messages.len());
+    let mut index = 0;
+    while index < messages.len() {
+        let message = &messages[index];
+        wire.push(wire_message(message));
+
+        if let Some(calls) = &message.tool_calls {
+            // The provider rejects a request when an assistant `tool_calls` message is not
+            // followed by one tool message per call. A turn can be stopped (or the app can
+            // restart) while a call waits for approval; the assistant row is already in the
+            // database then. Pad the missing answers here instead of leaving every later turn
+            // of that session poisoned with HTTP 400.
+            let mut next = index + 1;
+            let mut answered = std::collections::HashSet::new();
+            while next < messages.len() && messages[next].role == "tool" {
+                if let Some(id) = messages[next].tool_call_id.as_deref() {
+                    answered.insert(id.to_string());
+                }
+                wire.push(wire_message(&messages[next]));
+                next += 1;
+            }
+            for call in calls {
+                if !answered.contains(&call.id) {
+                    wire.push(json!({
+                        "role": "tool",
+                        "tool_call_id": call.id,
+                        "content": "Cancelled before the tool ran.",
                     }));
                 }
-                wire["content"] = Value::Array(content);
-            } else if let Some(text) = message.content.as_deref() {
-                wire["content"] = Value::String(text.to_string());
             }
-
-            if let Some(calls) = &message.tool_calls {
-                wire["tool_calls"] = json!(calls);
-            }
-            if let Some(id) = &message.tool_call_id {
-                wire["tool_call_id"] = json!(id);
-            }
-            wire
-        })
-        .collect()
+            index = next;
+            continue;
+        }
+        index += 1;
+    }
+    wire
 }
 
 /// Streams one assistant turn from an OpenAI-compatible chat-completions endpoint
@@ -417,6 +451,42 @@ mod live {
         let tool = wire_messages(&[ChatMessage::tool("call-1", "done")]);
         assert_eq!(tool[0]["tool_call_id"], "call-1");
         assert_eq!(tool[0]["content"], "done");
+    }
+
+    /// Stopping a turn while a tool call waits for approval leaves the assistant row with a
+    /// tool call and no result. Every later request would fail with HTTP 400; the wire
+    /// sequence gets the missing answer padded instead.
+    #[test]
+    fn a_cancelled_tool_call_is_padded_for_the_provider() {
+        let call = |id: &str, name: &str| OutgoingToolCall {
+            id: id.to_string(),
+            call_type: "function".to_string(),
+            function: OutgoingFunction {
+                name: name.to_string(),
+                arguments: "{}".to_string(),
+            },
+        };
+        let assistant = ChatMessage {
+            role: "assistant".to_string(),
+            content: Some(String::new()),
+            image: None,
+            tool_calls: Some(vec![call("call-a", "read"), call("call-b", "bash")]),
+            tool_call_id: None,
+        };
+
+        let wire = wire_messages(&[
+            ChatMessage::user("los"),
+            assistant,
+            ChatMessage::tool("call-a", "ok"),
+            ChatMessage::user("weiter"),
+        ]);
+
+        assert_eq!(wire.len(), 5);
+        assert_eq!(wire[1]["role"], "assistant");
+        assert_eq!(wire[2]["tool_call_id"], "call-a");
+        assert_eq!(wire[3]["tool_call_id"], "call-b");
+        assert_eq!(wire[3]["content"], "Cancelled before the tool ran.");
+        assert_eq!(wire[4]["role"], "user");
     }
 
     /// `reasoning_effort` is a real field with a fixed set of values; a typo in either the

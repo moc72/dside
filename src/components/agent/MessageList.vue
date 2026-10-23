@@ -115,13 +115,23 @@ function retryMessage(id: string): void {
           <template v-else>
             <button
               class="tool"
-              :class="{ error: part.tool.isError, running: part.tool.running }"
+              :class="{
+                error: part.tool.isError,
+                running: part.tool.running,
+                cancelled: part.tool.cancelled,
+              }"
               type="button"
               @click="toggle(part.tool.id)"
             >
               <Icon :name="isOpen(part.tool.id) ? 'chevron-down' : 'chevron-right'" :size="12" />
               <Icon
-                :name="part.tool.running ? 'reload' : part.tool.isError ? 'x' : 'check'"
+                :name="
+                  part.tool.running
+                    ? 'reload'
+                    : part.tool.cancelled || part.tool.isError
+                      ? 'x'
+                      : 'check'
+                "
                 :size="12"
               />
               <span class="tool-name">{{ part.tool.name }}</span>
@@ -129,9 +139,11 @@ function retryMessage(id: string): void {
                 {{
                   part.tool.running
                     ? t("engine.running")
-                    : part.tool.isError
-                      ? t("engine.failed")
-                      : t("engine.done")
+                    : part.tool.cancelled
+                      ? t("engine.cancelled")
+                      : part.tool.isError
+                        ? t("engine.failed")
+                        : t("engine.done")
                 }}
               </span>
               <span v-if="part.tool.durationMs" class="tool-time">{{ part.tool.durationMs }}ms</span>
@@ -445,6 +457,10 @@ function retryMessage(id: string): void {
 .tool.error {
   color: var(--danger);
   border-color: var(--danger);
+}
+
+.tool.cancelled {
+  color: var(--text-muted);
 }
 
 /* Name, state and duration sit at the right end of the row; the two icons stay left. */

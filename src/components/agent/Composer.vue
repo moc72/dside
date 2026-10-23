@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import Icon from "../Icon.vue";
 import ContextRing from "./ContextRing.vue";
 import RudderDialog from "../RudderDialog.vue";
 import { t } from "../../i18n";
 import { settings } from "../../stores/settings";
+import { openSettings } from "../../stores/ui";
+import { treeError } from "../../composables/useWorkspace";
 import { partnerDisplayName } from "../../stores/partner";
 import { modelChoices, modelLabel } from "../../stores/models";
 import { activeSessionId } from "../../stores/sessions";
@@ -18,6 +22,75 @@ import {
 } from "../../composables/useEngine";
 
 const text = ref("");
+
+/**
+ * The composer is where the next sentence starts. A chat window that opens with the
+ * cursor somewhere in the chrome makes the user click before typing; keeping it here
+ * also means the keyboard shortcuts for the field work immediately.
+ *
+ * The mount focus alone is not enough: the main window is still hidden while the splash
+ * runs, and a hidden webview drops the focus. The window's own focus event fires when it
+ * is finally shown, so the field is ready at the first keystroke.
+ */
+let removeFocusListener: (() => void) | null = null;
+let removeShownListener: (() => void) | null = null;
+let focusFallback: number | undefined;
+
+/** Never take the cursor away from a field someone is already typing in. */
+function composerFocusIsSafe(): boolean {
+  const active = document.activeElement as HTMLElement | null;
+  return !(
+    active &&
+    (active.tagName === "INPUT" ||
+      active.tagName === "TEXTAREA" ||
+      active.tagName === "SELECT" ||
+      active.isContentEditable)
+  );
+}
+
+function focusComposerIfIdle(): void {
+  if (composerFocusIsSafe()) box.value?.focus();
+}
+
+onMounted(() => {
+  void nextTick(() => box.value?.focus());
+
+  // Register both listeners independently: awaiting one must not delay the other. The
+  // window-focus listener is the normal path; the splash's `main-shown` is the reliable
+  // signal that the hidden main window has appeared.
+  void listen("main-shown", () => focusComposerIfIdle())
+    .then((unlisten) => {
+      removeShownListener = unlisten;
+    })
+    .catch(() => undefined);
+  void getCurrentWindow()
+    .onFocusChanged(({ payload: focused }) => {
+      if (focused) focusComposerIfIdle();
+    })
+    .then((unlisten) => {
+      removeFocusListener = unlisten;
+    })
+    .catch(() => undefined);
+
+  // The window is hidden for the splash's full run. A single late focus catches the case
+  // where neither event arrives on this platform; it never steals from a field.
+  focusFallback = window.setTimeout(() => focusComposerIfIdle(), 9000);
+});
+
+onBeforeUnmount(() => {
+  if (focusFallback !== undefined) window.clearTimeout(focusFallback);
+  removeFocusListener?.();
+  removeFocusListener = null;
+  removeShownListener?.();
+  removeShownListener = null;
+});
+
+/** Lets the panel put the cursor back after a turn without stealing it from another field. */
+function focusComposer(): void {
+  box.value?.focus();
+}
+
+defineExpose({ focus: focusComposer });
 
 interface PendingAttachment {
   path: string;
@@ -337,6 +410,13 @@ function cancelRudder(): void {
       </div>
     </form>
 
+    <p v-if="treeError" class="workspace-warning">
+      <span>{{ treeError }}</span>
+      <button type="button" @click="openSettings('general')">
+        {{ t("workspace.openSettings") }}
+      </button>
+    </p>
+
     <p class="disclaimer">
       {{ engineReady ? t("composer.disclaimer") : t("engine.needsKey") }}
     </p>
@@ -572,5 +652,31 @@ function cancelRudder(): void {
   color: var(--text-muted);
   font-size: 11px;
   text-align: center;
+}
+
+/* The workspace problem belongs where the user looks while typing, not only in the tree. */
+.workspace-warning {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 8px 0 0;
+  color: var(--danger);
+  font-size: 11px;
+  text-align: center;
+}
+
+.workspace-warning button {
+  padding: 2px 9px;
+  border: 1px solid var(--danger);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--danger);
+  font-size: 11px;
+}
+
+.workspace-warning button:hover {
+  background: var(--bg-hover);
 }
 </style>

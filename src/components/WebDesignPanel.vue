@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { nextTick, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import Icon from "./Icon.vue";
 import { t } from "../i18n";
@@ -11,8 +11,14 @@ interface BrowserWindowInfo {
 }
 
 const url = ref("");
+const urlInput = ref<HTMLInputElement | null>(null);
 const windows = ref<BrowserWindowInfo[]>([]);
 const error = ref<string | null>(null);
+
+/** The panel exists to open a page; opening it should put the cursor in the address line. */
+watch(webOpen, (isOpen) => {
+  if (isOpen) void nextTick(() => urlInput.value?.focus());
+});
 
 async function refresh() {
   try {
@@ -72,6 +78,7 @@ onMounted(() => {
   <div v-if="webOpen" class="web">
     <div class="line">
       <input
+        ref="urlInput"
         v-model="url"
         class="url"
         :placeholder="t('browser.placeholder')"

@@ -151,6 +151,11 @@ export const zhHans: Messages = {
     statusCompleted: "完成",
     empty: "没有任务。",
   },
+  workspace: {
+    missing: "工作区 {path} 不存在或不是文件夹。",
+    none: "未选择工作区。",
+    openSettings: "打开设置",
+  },
   viewFile: {
     hint: "从文件树中选择一个文件。",
     hideTree: "隐藏文件树",
@@ -179,6 +184,10 @@ export const zhHans: Messages = {
     historyError: "无法加载历史记录。",
     restore: "恢复",
     restoreConfirm: "恢复此版本？当前状态会先保存为备份。",
+    restoreTitle: "恢复此版本？",
+    cancel: "取消",
+    removed: "恢复操作已删除该文件。",
+    removedHint: "历史记录仍然可用；较旧的版本可以重新创建它。",
     restoreFailed: "恢复失败。",
   },
   diagnostics: {
@@ -269,6 +278,7 @@ export const zhHans: Messages = {
     running: "工作中",
     failed: "失败",
     done: "完成",
+    cancelled: "已取消",
     retry: "重试",
   },
   model: {
@@ -408,7 +418,7 @@ export const zhHans: Messages = {
       followCompanionDesc: "在伙伴打开文件或网页时于工作区显示——光标仍留在输入框。",
       browserControl: "浏览器控制",
       browserControlDesc:
-        "伙伴可以读取你打开的网页并填写表单。请有意识地开启。",
+        "伙伴可以在内置浏览器中打开并阅读网页、填写表单。请有意识地开启。",
     },
   },
   common: {

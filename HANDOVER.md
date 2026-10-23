@@ -3,9 +3,9 @@
 This is the short handover for taking the project over. `PROGRESS.md` is the authoritative
 log (German, one section per round); `AGENTS.md` describes how to work in the repository.
 
-**Status:** `v0.4.9` is public and `v0.4.10` is a draft. The source tree here is the
-prepared `v0.4.11` state (terminal, Git, policies, screen capture, logs, permission
-stages); tag it after the naming pass.
+**Status:** `v0.4.13` is public. The current head carries the round-69 changes
+(browser open/read/fill, recall, explicit workspace failures, tree reveal, the
+app's restore dialog, follow/stop polish); they are not tagged yet.
 
 ## What it is
 
@@ -36,7 +36,7 @@ Checks and release:
 
 ```sh
 pnpm build                        # vue-tsc + Vite
-cd src-tauri && cargo test --lib  # 34 passed, 13 ignored (live tests need DS_IDE_API_KEY)
+cd src-tauri && cargo test --lib  # 43 passed, 13 ignored (live tests need DS_IDE_API_KEY)
 pnpm tauri build                  # deb/rpm/AppImage, NSIS, dmg
 ```
 
@@ -84,14 +84,28 @@ connection test.
 - **File history:** every successful `write`/`edit` first stores the old content; the file
   tab's **History** shows the versions, a read-only Monaco diff and **Restore** (the current
   state is backed up before restoring; a snapshot from before the file existed removes it).
+  The confirmation is the app's own dialog, and a removed file leaves a clear note in the tab.
 - **Retry:** a failed turn shows the cause and a Retry button. The failed tail is rolled back,
   the same user message is sent again (no duplicate), and the error bubble survives a visit
   to Settings. The provider base URL is editable under **Settings → Account & model**.
 - **Follow mode:** files the partner reads/writes open in the work area, `web_fetch` opens
-  the page in the integrated browser; the eye in the tab bar turns it off.
+  the page in the integrated browser; the eye in the tab bar turns it off. A read opens at
+  once; a write/edit opens when the tool result confirms it, not while approval is pending.
+  A followed file is revealed in the tree (parents expanded, row scrolled into view).
+- **Browser control:** with Settings → General → Browser control on, the partner can open a
+  page in a new window itself (`browser_read` with `url`), read its text, links and form
+  fields, and fill/submit forms (`browser_fill`). A read never navigates a page the user
+  opened; the new window does not take the keyboard.
+- **Recall:** the partner can search its long-term notes and earlier conversations by
+  keyword (`recall`). Notes and conversations are project-scoped; the workspace is filled
+  into every hit.
+- **Missing workspace:** `glob`/`grep` fail with the missing path instead of returning
+  "(no matches)"; the composer status line and the file tree name the missing directory and
+  link to Settings.
 - **Memory:** long-term memory the user can read, search, correct and retire; notes can be
   project-scoped (recalled only inside that workspace); context compression folds older
-  turns into a summary the model writes.
+  turns into a summary the model writes. The trigger counts text, tool arguments and
+  images; the summary replaces the older turns.
 - **Where we were:** a compressed conversation shows its summary as a sticky card above
   the timeline; the user can open it to re-enter the work.
 - **Previews:** Markdown, PDF, images, Word, Excel (values or formulas), presentations, RTF
@@ -197,4 +211,4 @@ reference checkouts used during development are not part of the repository.
 2. Start from an empty app data dir: onboarding, keyring, workspace, provider.
 3. Open Settings → Diagnostics and run the connection test.
 4. Ask the partner to change a file; open the file tab's History, inspect the diff, restore.
-5. Read `PROGRESS.md` §44–§58 for the recent fixes, then `AGENTS.md` for the working rules.
+5. Read `PROGRESS.md` §44–§68 for the recent fixes, then `AGENTS.md` for the working rules.

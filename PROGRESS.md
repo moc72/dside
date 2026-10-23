@@ -8,7 +8,7 @@
 
 Eine eigene **agentic IDE** mit Tauri (kein Electron) nach Vorlage von **MiniMax Code**.
 Erlaubnis vom Nutzer erteilt (2026-10-15, 07:55). Name: **DS.IDE** / "DeepSeek Code".
-Arbeitsverzeichnis: `/home/me/Projects/TEST`
+Arbeitsverzeichnis: `/home/me/Projects/DS.IDE`
 
 Nutzervorgaben (verbindlich):
 - **Kein Electron** — Tauri v2.
@@ -2512,3 +2512,163 @@ durchgeklickt** — der Windows-Test soll das übernehmen.
 
 `cargo test --lib` **38 passed / 13 ignored** (Hash-Parser-Test), `pnpm build`
 grün. Kein Tag/Build; der Stand ist für den Twin gedacht.
+
+## 67. Linux-Durchlauf: fünf Fixes und ein vergifteter Tool-Call (2026-10-23, sechsundvierzigste Runde)
+
+Erster vollständiger Durchlauf auf Linux (CachyOS, KDE Wayland, WebKitGTK) mit
+frischem Datenverzeichnis (`/tmp/dside-e2e`) und eigenem Test-Workspace
+(`/tmp/dside-workspace`). Der echte Keyring-Schlüssel wurde erkannt; Onboarding,
+Chat mit `deepseek-flash` und die Provider-Diagnose liefen live. Geprüft:
+Onboarding, Chat (read/write/read-back), Freigabedialog („Einmal erlauben"),
+Gedächtnis mit Projekt-Scope, Dateihistorie mit Diff und Restore (eine neu
+angelegte Datei wird wieder entfernt), Terminal (echtes PTY), Git-Panel,
+Vorschauen (Markdown, Bild, DOCX, XLSX, CSV, PDF), Einstellungen, Diagnose
+(„Verbindung OK · 2 Modelle · 20,91 USD"), Theme hell/dunkel, Sprachwechsel
+de/en, Persistenz über Neustarts, Editor-Picker (öffnet Code-OSS), Suche
+(Ctrl+K). Vision live: `live_deepseek_takes_an_image` liest „HALLO 4711".
+
+### Gefunden und behoben
+- **Work Area zu schmal.** Der Default war 15 %; ein Datei-Tab reserviert 220 px
+  für den Baum, dem Vorschaufenster blieben auf 1631 px noch ~25 px. Jetzt 30 %;
+  der alte Default 15 wird beim Start auf 30 gehoben, ein bewusst gewählter
+  anderer Wert bleibt.
+- **Composer ohne Fokus.** Nach dem Start und nach jedem Turn stand der Cursor
+  nicht im Eingabefeld. `Composer` fokussiert beim Mounten; `AgentPanel` setzt
+  den Fokus nach `running = false` zurück, aber nur wenn der Nutzer nicht
+  gerade in einem anderen Feld tippt.
+- **Ein abgebrochener Tool-Call vergiftete die Sitzung.** Wird ein Turn während
+  der Freigabe gestoppt (oder die App neu gestartet), bleibt eine
+  Assistant-Nachricht mit `tool_calls` ohne Tool-Antwort in der DB. Jede weitere
+  Anfrage scheiterte mit HTTP 400 („insufficient tool messages following
+  tool_calls"); der Retry half nicht, weil er nur den letzten Turn zurückrollt.
+  `wire_messages` ergänzt fehlende Antworten jetzt als
+  `"Cancelled before the tool ran."` (nur auf dem Draht; die DB-Historie bleibt
+  unverändert). Test `a_cancelled_tool_call_is_padded_for_the_provider`; live
+  erholte sich die vergiftete Sitzung nach dem Fix per Retry.
+- **Änderungen-Tab verschwand nach Neustart.** `KINDS` in `workArea.ts` kannte
+  `changes` nicht; `isTab` verwarf den Tab beim Restore. Jetzt enthalten.
+- **Browser-Panel ohne Fokus im Adressfeld.** `WebDesignPanel` fokussiert das
+  URL-Feld beim Öffnen (Watch auf `webOpen`); live noch nicht bestätigt.
+
+### Geprüft
+`pnpm build` (vue-tsc + Vite) grün; `cargo test --lib` **39 passed / 13
+ignored**; Vision-Live-Test grün. Kein Commit/Tag — der Nutzer testet zuerst.
+
+### Offen / Beobachtungen
+- **Der Browser kann keine Seite öffnen.** `browser_read`/`browser_fill` sind
+  vorhanden (der Agent nannte beide), aber `browser_read` liefert ohne bereits
+  geöffnetes Fenster „no browser window is open". Der Agent kann also nur ein
+  vom Nutzer geöffnetes Fenster lesen. Der Fill-Test endete deshalb vor dem
+  Formular; die Extraktions- und Fill-Logik ist weiterhin nur per Unit-Test
+  gedeckt. Ein `browser_open` (oder ein optionales `url` an `browser_read`) wäre
+  die naheliegende Ergänzung.
+- Der Restore fragt mit `window.confirm` (nativer WebView-Dialog) statt mit
+  einem App-Dialog nach; funktional, aber ein Stilbruch.
+- Der Follow-Mode öffnet eine Datei schon beim `write`-Aufruf, bevor sie
+  existiert; der Tab zeigt bis zur Freigabe „Datei konnte nicht gelesen werden."
+- Der Stop-Knopf ergänzt die fehlende Tool-Antwort nicht in der DB; der
+  Wire-Fix heilt den nächsten Request, die Historie zeigt den offenen Call
+  weiter als „fehlgeschlagen".
+- Bei manuell sehr schmal gezogener Work Area bleibt der Datei-Tab mit
+  220-px-Baum eng; der neue Default verhindert nur den ersten Fall.
+- Die Wayland-Sitzung ließ keine synthetische Mausbewegung zu (XWarpPointer und
+  XTest blieben wirkungslos); getestet wurde über Tastatur, Shortcuts,
+  DB-Einstellungen und Neustarts. Windows/macOS bleiben offen.
+
+## 68. Der Browser öffnet selbst, das Gedächtnis wird durchsuchbar (2026-10-23, siebenundvierzigste Runde)
+
+Die offenen Punkte aus §67 sind abgearbeitet; zwei eigene Ergänzungen kamen dazu.
+
+### Browser öffnet selbst
+`browser_read` hat jetzt ein optionales `url`. Ist es gesetzt, ruft der Engine-Loop
+`browser::browser_open_read` auf: ein **neues** Fenster (die Seiten des Nutzers
+werden nicht navigiert), `focus: false` (der Composer behält die Tastatur), und
+erst lesen, wenn das Fenster `about:blank` verlassen hat (bis zu sechs Versuche).
+`normalize_url` ergänzt bei einem nackten Host `https://`; Test
+`a_bare_host_gets_https`. Das Ergebnis enthält die Fenster-`id`, sodass
+`browser_fill` direkt anschließen kann.
+
+Live mit der lokalen Testseite (`/tmp/dside-browser`): `browser_read` lieferte
+Titel „DS.IDE Browser-Test" und „FLINKWAL 42"; `browser_fill` meldete
+`{"filled":5,"submitted":true}`; die zweite `browser_read` sah
+`/submitted?name=Test&email=test%40example.com&comment=Hallo+Browser&agree=on&farbe=blau`
+und die Werte im Text. Der Dialogpfad für Fill ist derselbe `approve_tool`-Pfad
+wie beim Schreiben (in §67 live geprüft); für den automatisierten Lauf wurde der
+Scheduler mit Vollzugriff benutzt, weil die Wayland-Testsitzung keine native
+Tastatur an das App-Fenster liefert. Der Scheduler selbst lief dabei zum ersten
+Mal live (einmaliger Lauf, danach gelöscht).
+
+### Recall
+Neues, schreibgeschütztes Werkzeug `recall`: `db.recall(query, limit, workspace)`
+sucht aktive Erinnerungen (global plus aktueller Workspace) und Sessions/
+Nachrichten (dieselbe Suche wie der Suchdialog) und liefert `RecallHit` mit
+kind/title/text/source/sessionId/workspace. Test
+`recall_finds_memories_and_past_messages` (Projekt-Scope). Live: 8 Treffer,
+darunter `#1 [fact/user] Testfarbe: Blau` und die Sitzung „Testfarbe Blau merken".
+Das Werkzeug ist im Planmodus erlaubt und braucht keine Freigabe.
+
+### Restore, Follow, Stop
+- Der native `window.confirm` ist durch `ConfirmDialog.vue` ersetzt: eigener
+  Dialog, Fokus auf „Abbrechen", Escape und Klick außerhalb schließen. Sechs
+  Sprachen (`viewFile.restoreTitle`, `viewFile.cancel`, `viewFile.removed`,
+  `viewFile.removedHint`).
+- Eine wiederhergestellte Fassung mit `existed=false` entfernt die Datei; der
+  Tab zeigt jetzt „Die Datei wurde durch das Wiederherstellen entfernt" samt
+  Hinweis auf den Verlauf statt „Datei konnte nicht gelesen werden".
+- Follow-Mode: `read` öffnet sofort; `write`/`edit` erst, wenn `tool_result`
+  ohne Fehler zurückkommt. Während der Freigabe und bei Fehlern bleibt der
+  Datei-Tab unangetastet.
+- Beim `turn_end` mit `stopReason=abort` werden noch laufende Werkzeugzeilen als
+  `cancelled` markiert und heißen „abgebrochen"; der Wire-Fix aus §67 hält die
+  Session gültig.
+
+### Fokus und schmale Work Area
+- Nach dem Splash sendet Rust `main-shown`; der Composer registriert den
+  Tauri-Fokus- und den `main-shown`-Listener sofort und fokussiert beim
+  Sichtbarwerden, ohne ein Feld zu stehlen. Zusätzlich ein einmaliger 9-s-Fallback
+  (der Kaltstart-Fokus ging vorher verloren, weil das Hauptfenster beim Mounten
+  noch verborgen war). In der Wayland-Testsitzung ließ sich der erste Tastendruck
+  nicht live bestätigen — die native Tastatur erreicht das App-Fenster dort
+  nicht; der Fix ist gebaut und typgeprüft.
+- Die Baumspalte ist `minmax(120px, 220px)` statt fest 220px: auch bei schmaler
+  Work Area bleibt der Vorschau eine nutzbare Spalte.
+
+### Kompression
+`estimated_tokens` zählt jetzt Tool-Argumente und Bilder mit (1000 Tokens je
+Bild, bewusst vorsichtig); der veraltete Kommentar im ContextRing („does not
+exist yet") ist korrigiert. Die Entscheidung bleibt eine Schätzung; die echte
+`prompt_tokens`-Usage als Auslöser ist weiterhin offen.
+
+### Geprüft
+`pnpm build` (vue-tsc + Vite) grün; `cargo test --lib` **42 passed / 13
+ignored**; Browser- und Recall-Live-Test; Scheduler-Lauf. Testdaten lagen in
+`/tmp/dside-e2e`; die echten Sitzungen und Einstellungen blieben unberührt.
+Test-Schedules gelöscht, Test-Permission wieder auf `ask`. Kein Commit/Tag.
+
+## 69. Leer ist nicht kaputt (2026-10-23, achtundvierzigste Runde)
+
+Rückmeldung aus dem Einsatz: Die Werkzeuge meldeten „leer" und „kaputt" gleich.
+Vier Punkte, alle umgesetzt.
+
+- **glob/grep:** Vor der Suche wird die Suchwurzel geprüft. Fehlt der Workspace,
+  kommt `workspace /pfad does not exist` (bei explizitem `path`: `path ...`),
+  kein `(no matches)`. Test `glob_and_grep_report_a_missing_workspace`.
+- **Start:** `initEngine` lädt den Baum jetzt beim Boot; `read_workspace_tree`
+  nennt den fehlenden Pfad, `reloadTree` übersetzt ihn in
+  „Arbeitsverzeichnis {path} existiert nicht oder ist kein Ordner." Die
+  Composer-Statuszeile zeigt den Hinweis mit „Einstellungen öffnen", der
+  Dateibaum ebenso; sechs Sprachen. Live mit `/tmp/dside-missing-workspace`
+  bestätigt.
+- **recall:** Der Workspace wird in die Treffer geschrieben und die
+  Gesprächssuche darauf eingegrenzt (global/ohne Workspace bleibt sichtbar).
+  `SearchHit` trägt den Workspace; der Test deckt zwei Projekte in beide
+  Richtungen ab.
+- **Reveal:** `ViewFileTab.revealFile` klappt die Elternordner auf und scrollt
+  die markierte Zeile in den Blick; der falsche Kommentar in `select()` ist
+  ersetzt. Live: Der Begleiter schrieb `src/reveal-test2.txt`; der Baum zeigte
+  `src` aufgeklappt und die Datei markiert, der Tab den Inhalt.
+- **PROGRESS:** Zeile 11 steht jetzt auf `/home/me/Projects/DS.IDE`.
+
+Geprüft: `pnpm build` grün, `cargo test --lib` **43 passed / 13 ignored**,
+Statuszeile und Reveal live. Test-DB wieder auf `ask`, Schedules gelöscht,
+Follow wieder an. Kein Tag.

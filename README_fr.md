@@ -42,7 +42,7 @@ Le partenaire de développement intégré à l'application se nomme **Ziggy**. C
 - **Git** : gestion de l'état, ajout/retrait de fichiers à l'index (stage/unstage), visualisation des différences (diff), commits, branches locales et commande `pull --ff-only`. Aucune interface n'est prévue pour les opérations de type « push » ou « merge » ; celles-ci s'effectuent via le terminal.
 - **Capture d'écran** : l'icône en forme d'œil dans la zone de saisie permet de capturer le bureau virtuel et d'y joindre une image JPEG (2000 px). L'outil `screenshot` permet également à l'assistant de solliciter lui-même une capture. L'image est envoyée comme partie `image_url` d'OpenAI ; `deepseek-flash` lit le texte et la mise en page (testé). Les images très petites (par exemple 1×1) sont refusées par le fournisseur.
 - **Journaux (Logs)** : un historique circulaire conservé en mémoire, regroupant les logs de l'application et du moteur. Il est accessible via un onglet dédié ou via l'outil `logs` (en mode lecture seule) mis à la disposition de l'assistant. Aucune donnée n'est écrite sur le disque.
-- **Navigateur intégré.**
+- **Navigateur intégré.** Avec le **Contrôle du navigateur** activé, l'assistant peut ouvrir, lire et remplir lui-même les pages ; l'option se trouve dans Réglages → Général.
 - **Compétences (Skills)** : stockées dans `~/.ds-ide/skills`, elles peuvent être créées directement au sein de l'application.
 
 #### L'application

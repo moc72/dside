@@ -5,7 +5,29 @@ import MessageList from "./MessageList.vue";
 import Composer from "./Composer.vue";
 import { t } from "../../i18n";
 import { activeSessionId, messages } from "../../stores/sessions";
-import { answerAction, initEngine, pendingAction } from "../../composables/useEngine";
+import { answerAction, initEngine, pendingAction, running } from "../../composables/useEngine";
+
+const composer = ref<InstanceType<typeof Composer> | null>(null);
+
+/**
+ * After a turn the next sentence usually goes into the same field. Put the cursor back —
+ * but never take it away from a field the user is already typing in (for example while
+ * the turn is still streaming and they are writing the next message).
+ */
+watch(running, (isRunning) => {
+  if (isRunning) return;
+  const active = document.activeElement as HTMLElement | null;
+  if (
+    active &&
+    (active.tagName === "INPUT" ||
+      active.tagName === "TEXTAREA" ||
+      active.tagName === "SELECT" ||
+      active.isContentEditable)
+  ) {
+    return;
+  }
+  void nextTick(() => composer.value?.focus());
+});
 
 const freeAnswer = ref("");
 
@@ -172,7 +194,7 @@ onBeforeUnmount(() => {
       </template>
     </section>
 
-    <Composer />
+    <Composer ref="composer" />
   </section>
 </template>
 

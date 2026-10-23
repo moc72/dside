@@ -42,7 +42,7 @@ Der Programmierpartner innerhalb der Anwendung heißt **Ziggy**. Diesen Namen ha
 - **Git** – Statusanzeige, Staging/Unstaging, Diff-Ansicht, Commits, lokale Branches sowie `pull --ff-only`. Es gibt keine Benutzeroberfläche für Push- oder Merge-Vorgänge; hierfür kann das Terminal genutzt werden.
 - **Bildschirmaufnahme** – über das Augensymbol im Eingabebereich lässt sich der virtuelle Desktop erfassen und als 2000px-JPEG anhängen. Mit dem `screenshot`-Tool kann der KI-Assistent zudem selbst eine Aufnahme anfordern. Das Bild wird als OpenAI-`image_url`-Teil gesendet; `deepseek-flash` liest Text und Layout daraus (getestet). Sehr kleine Bilder (z. B. 1×1) lehnt der Anbieter ab.
 - **Logs** – ein im Arbeitsspeicher gehaltener Ringpuffer für Log-Einträge der Anwendung und der Engine. Diese sind über einen eigenen „Logs“-Tab einsehbar; zudem steht dem KI-Assistenten ein schreibgeschütztes `logs`-Tool zur Verfügung. Es werden keine Daten auf die Festplatte geschrieben.
-- **Integrierter Browser.**
+- **Integrierter Browser.** Mit eingeschalteter **Browser-Steuerung** öffnet, liest und füllt der Begleiter Seiten selbst; die Einstellung steht unter Einstellungen → Allgemein.
 - **Skills** befinden sich im Verzeichnis `~/.ds-ide/skills` und können direkt in der Anwendung erstellt werden.
 
 #### Die Anwendung

@@ -81,6 +81,8 @@ export interface ToolActivity {
   /** A data URL for picture-producing tools (screenshot). */
   image?: string;
   running?: boolean;
+  /** The turn was stopped while this tool was waiting; it never produced a result. */
+  cancelled?: boolean;
 }
 
 export interface EngineEvent {

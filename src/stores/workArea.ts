@@ -9,7 +9,16 @@ const PROGRESS_TAB: WorkAreaTab = { id: "progress", kind: "progress" };
 const LEGACY_KEY = "ds-ide.workarea";
 const UI_KEY = "workarea";
 
-const KINDS: WorkAreaTabKind[] = ["progress", "file", "skills", "schedules", "terminal", "git", "logs"];
+const KINDS: WorkAreaTabKind[] = [
+  "progress",
+  "file",
+  "skills",
+  "schedules",
+  "terminal",
+  "git",
+  "logs",
+  "changes",
+];
 
 export const tabs = ref<WorkAreaTab[]>([{ ...PROGRESS_TAB }]);
 

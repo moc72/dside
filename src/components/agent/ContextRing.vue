@@ -34,8 +34,8 @@ async function compact(): Promise<void> {
 /**
  * How much of the model's context is used, as a ring. The number comes from the provider's
  * own usage report for the last request, the limit from the model list — nothing here is
- * estimated. Clicking it would mean compressing the conversation, which does not exist yet,
- * so it stays a display.
+ * estimated. Clicking it compresses the older part of the conversation now; the ring itself
+ * only displays.
  */
 const RADIUS = 7;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;

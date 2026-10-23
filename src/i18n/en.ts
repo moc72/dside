@@ -151,6 +151,11 @@ export const en: Messages = {
     statusCompleted: "Done",
     empty: "No tasks yet.",
   },
+  workspace: {
+    missing: "Workspace {path} does not exist or is not a folder.",
+    none: "No workspace selected.",
+    openSettings: "Open settings",
+  },
   viewFile: {
     hint: "Select a file from the workspace tree.",
     hideTree: "Hide file tree",
@@ -179,6 +184,10 @@ export const en: Messages = {
     historyError: "Could not load the history.",
     restore: "Restore",
     restoreConfirm: "Restore this version? The current state is saved as a backup first.",
+    restoreTitle: "Restore this version?",
+    cancel: "Cancel",
+    removed: "The file was removed by the restore.",
+    removedHint: "The history is still available; an older version can bring it back.",
     restoreFailed: "Restore failed.",
   },
   diagnostics: {
@@ -270,6 +279,7 @@ export const en: Messages = {
     running: "working",
     failed: "failed",
     done: "done",
+    cancelled: "cancelled",
     retry: "Retry",
   },
   model: {
@@ -412,7 +422,7 @@ export const en: Messages = {
         "Show files and pages it opens in the work area — the cursor stays in the composer.",
       browserControl: "Browser control",
       browserControlDesc:
-        "The companion may read the browser pages you opened and fill in forms. Only enable deliberately.",
+        "The companion may open pages in the integrated browser, read them and fill in forms. Only enable deliberately.",
     },
   },
   common: {

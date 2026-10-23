@@ -1,6 +1,7 @@
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import type { FileNode } from "../types";
+import { t } from "../i18n";
 import { settings } from "../stores/settings";
 
 export const tree = ref<FileNode[]>([]);
@@ -10,6 +11,7 @@ export const treeError = ref<string | null>(null);
 export async function reloadTree(): Promise<void> {
   if (!settings.workspace) {
     tree.value = [];
+    treeError.value = t("workspace.none");
     return;
   }
   treeLoading.value = true;
@@ -22,7 +24,13 @@ export async function reloadTree(): Promise<void> {
       depth: 0,
     });
   } catch (error) {
-    treeError.value = String(error);
+    const message = String(error);
+    // The backend names the missing path. Show the user the same fact in their language
+    // instead of an empty tree that looks like a workspace with no files.
+    treeError.value =
+      message.includes("does not exist") || message.includes("not a directory")
+        ? t("workspace.missing", { path: settings.workspace })
+        : message;
     tree.value = [];
   } finally {
     treeLoading.value = false;

@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde::Serialize;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 mod browser;
 mod capture;
@@ -542,8 +542,13 @@ fn read_dir_nodes(dir: &Path, depth: u32) -> Vec<NodeDto> {
 #[tauri::command]
 fn read_workspace_tree(root: String, depth: Option<u32>) -> Result<Vec<NodeDto>, String> {
     let path = PathBuf::from(&root);
-    if !path.is_dir() {
-        return Err(format!("not a directory: {root}"));
+    match fs::metadata(&path) {
+        Ok(meta) if meta.is_dir() => {}
+        Ok(_) => return Err(format!("workspace {root} is not a directory")),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Err(format!("workspace {root} does not exist"));
+        }
+        Err(error) => return Err(format!("workspace {root}: {error}")),
     }
     Ok(read_dir_nodes(&path, depth.unwrap_or(1).min(6)))
 }
@@ -554,7 +559,7 @@ fn read_workspace_tree(root: String, depth: Option<u32>) -> Result<Vec<NodeDto>,
 fn read_dir_children(path: String) -> Result<Vec<NodeDto>, String> {
     let target = PathBuf::from(&path);
     if !target.is_dir() {
-        return Err(format!("not a directory: {path}"));
+        return Err(format!("path {path} does not exist or is not a directory"));
     }
     Ok(read_dir_nodes(&target, 0))
 }
@@ -1121,6 +1126,9 @@ fn show_main_window(app: &AppHandle) {
         if !main.is_visible().unwrap_or(false) {
             let _ = main.show();
             let _ = main.set_focus();
+            // The composer mounted while this window was still hidden, so its focus call was
+            // dropped. The frontend listens for this event and puts the cursor in the field.
+            let _ = app.emit("main-shown", ());
             crate::log_line!("startup: main window shown");
         }
     }

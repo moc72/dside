@@ -20,6 +20,7 @@ import {
   endAssistantMessage,
   ensureAssistantMessage,
   failAssistantMessage,
+  messages,
   messagesBySession,
   selectSession,
   sessions,
@@ -35,7 +36,7 @@ watch(
     void invoke("engine_clear_session_grants").catch(() => undefined);
   },
 );
-import { ensureWorkspace } from "./useWorkspace";
+import { ensureWorkspace, reloadTree } from "./useWorkspace";
 import { buildPersona } from "../engine/persona";
 import { EVERYDAY_DISABLED_TOOLS, everydayMode } from "../engine/mode";
 import { partnerName, refreshPartnerName } from "../stores/partner";
@@ -236,7 +237,7 @@ function handleEvent(event: EngineEvent): void {
     case "tool_result":
       flushStream();
       if (event.tool) {
-        followToolResult(event.tool.id);
+        followToolResult(event.tool.id, event.tool.isError === true);
         upsertToolActivity({
           id: event.tool.id,
           name: event.tool.name,
@@ -282,6 +283,18 @@ function handleEvent(event: EngineEvent): void {
 
     case "turn_end":
       flushStream();
+      if (event.stopReason === "abort") {
+        // A stop can land while a tool waits for approval; that tool never produces a
+        // result. It must not keep spinning in the timeline as if it were still running.
+        for (const message of messages.value) {
+          for (const tool of message.tools ?? []) {
+            if (tool.running) {
+              tool.running = false;
+              tool.cancelled = true;
+            }
+          }
+        }
+      }
       endAssistantMessage(event.stopReason);
       bumpTurnDiff();
       pendingAction.value = null;
@@ -324,6 +337,9 @@ export async function initEngine(): Promise<void> {
     }
     extractLegacyKey();
     await ensureWorkspace();
+    // Check the workspace at startup, not only when the file tab first mounts: the
+    // composer's status line shows the difference between "empty" and "gone".
+    await reloadTree();
     await refreshSecret();
     await refreshPartnerName();
     // Ask the provider which models exist before the first turn: an id it does not know would

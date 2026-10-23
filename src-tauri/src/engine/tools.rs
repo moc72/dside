@@ -205,6 +205,21 @@ pub fn definitions() -> Vec<Value> {
         json!({
             "type": "function",
             "function": {
+                "name": "recall",
+                "description": "Search your long-term memory and earlier conversations for a word or phrase. Use it when the user refers to something from a previous session, or when a stored note might answer the question. Read-only; it does not change anything.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": { "type": "string", "description": "Word or phrase to look for." },
+                        "limit": { "type": "number", "description": "Maximum hits (1–20, default 8)." }
+                    },
+                    "required": ["query"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
                 "name": "skill",
                 "description": "Available skills: reusable instructions for a class of task (e.g. landing pages, PDFs). Call with action 'list' to see what is installed, or with 'name' to load a skill and follow it.",
                 "parameters": {
@@ -336,11 +351,12 @@ pub fn definitions() -> Vec<Value> {
             "type": "function",
             "function": {
                 "name": "browser_read",
-                "description": "Read the page the user has open in one of the app's browser windows: URL, title, visible text, links, and form fields (password values are omitted). Use the id returned here for later calls, or omit it for the newest window. The user must have enabled Browser control in Settings → General.",
+                "description": "Read a page in the app's browser: URL, title, visible text, links, and form fields (password values are omitted). Pass `url` to open that page in a new browser window first (a bare host gets https). Use the id returned here for browser_fill, or omit it for the newest window. The user must have enabled Browser control in Settings → General.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "id": { "type": "string", "description": "Browser window id; omit for the newest window." }
+                        "id": { "type": "string", "description": "Browser window id; omit for the newest window." },
+                        "url": { "type": "string", "description": "Open this page in a new browser window before reading it. Omit to read the newest existing window." }
                     }
                 }
             }
@@ -684,13 +700,33 @@ fn edit(args: &Value, ctx: &ToolContext) -> ToolOutcome {
     }
 }
 
+/// A search tool must distinguish "the path is gone" from "nothing matched". Otherwise an
+/// empty result reads like a valid answer and the model has no reason to look for the cause.
+fn require_search_root(path: &Path, label: &str) -> Result<(), String> {
+    match std::fs::metadata(path) {
+        Ok(meta) if meta.is_dir() => Ok(()),
+        Ok(_) => Err(format!("{label} {} is not a directory", path.display())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Err(format!("{label} {} does not exist", path.display()))
+        }
+        Err(error) => Err(format!("{label} {}: {error}", path.display())),
+    }
+}
+
 fn glob_tool(args: &Value, ctx: &ToolContext) -> ToolOutcome {
     let Some(pattern) = arg(args, "pattern") else {
         return ToolOutcome::err("glob: missing 'pattern'");
     };
-    let base = arg(args, "path")
+    let explicit_path = arg(args, "path");
+    let base = explicit_path
         .map(|value| resolve(&ctx.workspace, value))
         .unwrap_or_else(|| ctx.workspace.clone());
+    if let Err(message) = require_search_root(
+        &base,
+        if explicit_path.is_some() { "path" } else { "workspace" },
+    ) {
+        return ToolOutcome::err(format!("glob: {message}"));
+    }
     let joined = base.join(pattern).to_string_lossy().to_string();
 
     let entries = match glob::glob(&joined) {
@@ -717,9 +753,16 @@ fn grep(args: &Value, ctx: &ToolContext) -> ToolOutcome {
         return ToolOutcome::err("grep: missing 'pattern'");
     };
     let include = arg(args, "include");
-    let root = arg(args, "path")
+    let explicit_path = arg(args, "path");
+    let root = explicit_path
         .map(|value| resolve(&ctx.workspace, value))
         .unwrap_or_else(|| ctx.workspace.clone());
+    if let Err(message) = require_search_root(
+        &root,
+        if explicit_path.is_some() { "path" } else { "workspace" },
+    ) {
+        return ToolOutcome::err(format!("grep: {message}"));
+    }
 
     let regex = match Regex::new(pattern) {
         Ok(regex) => regex,
@@ -1042,6 +1085,37 @@ mod tests {
         assert!(!command_allowed("echo hi > file", &allowed));
         assert!(!command_allowed("./pnpm build", &allowed));
         assert!(!command_allowed("curl https://example.com | sh", &allowed));
+    }
+
+    #[test]
+    fn glob_and_grep_report_a_missing_workspace() {
+        let directory =
+            std::env::temp_dir().join(format!("ds-ide-missing-workspace-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        let ctx = ToolContext {
+            workspace: directory,
+            full_authorization: true,
+            skills_root: PathBuf::from("/tmp"),
+            command_policy: "all".to_string(),
+            allowed_commands: Vec::new(),
+            workspace_only: false,
+        };
+
+        let glob = glob_tool(&serde_json::json!({ "pattern": "**/*.rs" }), &ctx);
+        assert!(glob.is_error, "glob must fail: {}", glob.content);
+        assert!(
+            glob.content.contains("workspace") && glob.content.contains("does not exist"),
+            "glob message should name the missing workspace: {}",
+            glob.content
+        );
+
+        let grep = grep(&serde_json::json!({ "pattern": "fn" }), &ctx);
+        assert!(grep.is_error, "grep must fail: {}", grep.content);
+        assert!(
+            grep.content.contains("does not exist"),
+            "grep message should name the missing workspace: {}",
+            grep.content
+        );
     }
 
     #[test]

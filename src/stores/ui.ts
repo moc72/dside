@@ -25,7 +25,13 @@ const stored = loadJson<Partial<StoredUi>>(STORAGE_KEY, {});
 export const view = ref<AppView>("chat");
 export const railCollapsed = ref(stored.railCollapsed ?? false);
 export const railWidth = ref(clamp(stored.railWidth ?? 15, RAIL_MIN, RAIL_MAX));
-export const workWidth = ref(clamp(stored.workWidth ?? 15, WORK_MIN, WORK_MAX));
+// A file tab reserves 220 px for the tree; at 15 % the preview was squeezed to a
+// sliver on a 1920-wide screen. 30 % leaves room for both without crowding the chat.
+// 15 % was the old default, so an untouched value is lifted to the new one; a width
+// the user actually chose stays.
+const storedWork = stored.workWidth;
+const workStart = storedWork === undefined || storedWork === 15 ? 30 : storedWork;
+export const workWidth = ref(clamp(workStart, WORK_MIN, WORK_MAX));
 
 /**
  * Set by the responsive layout, never by the user and never persisted: the panel is hidden

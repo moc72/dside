@@ -11,6 +11,17 @@ fn parse(url: &str) -> Result<tauri::Url, String> {
         .map_err(|error| format!("browser: {error}"))
 }
 
+/// A bare host is a web address, not a relative path. Without this the companion's
+/// `browser_read {url: "example.com"}` would fail at `Url::parse` and look like a broken tool.
+fn normalize_url(value: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+        trimmed.to_string()
+    } else {
+        format!("https://{trimmed}")
+    }
+}
+
 fn raise(window: &WebviewWindow) {
     let _ = window.unminimize();
     let _ = window.show();
@@ -280,6 +291,38 @@ pub async fn browser_read(app: AppHandle, id: Option<String>) -> Result<BrowserP
     Err("browser: the page did not answer (CSP or an unsupported page)".to_string())
 }
 
+/// Opens a page for the companion and reads it back. The window is deliberately not focused:
+/// the user keeps the keyboard in the composer. A new window is used so a page the user has
+/// open is not navigated away; `browser_read` is retried until the new window has left
+/// `about:blank`, because a page can still be loading even when it is local.
+pub async fn browser_open_read(app: AppHandle, value: String) -> Result<BrowserPage, String> {
+    let url = normalize_url(&value);
+    if url.is_empty() {
+        return Err("browser: empty url".to_string());
+    }
+    let label = open_browser_window(app.clone(), url, Some(true), Some(false))?;
+
+    let mut last: Option<BrowserPage> = None;
+    let mut last_error = String::new();
+    for _ in 0..6 {
+        match browser_read(app.clone(), Some(label.clone())).await {
+            Ok(page) if !page.url.is_empty() && page.url != "about:blank" => return Ok(page),
+            Ok(page) => last = Some(page),
+            Err(error) => last_error = error,
+        }
+        sleep(Duration::from_millis(300)).await;
+    }
+
+    if let Some(page) = last {
+        return Ok(page);
+    }
+    Err(if last_error.is_empty() {
+        "browser: the page did not load".to_string()
+    } else {
+        last_error
+    })
+}
+
 fn fill_script(fields: &[BrowserFillField], submit: bool, submit_selector: Option<&str>) -> String {
     let fields_json = serde_json::to_string(fields).unwrap_or_else(|_| "[]".to_string());
     let selector_json = serde_json::to_string(&submit_selector).unwrap_or_else(|_| "null".to_string());
@@ -403,5 +446,13 @@ mod tests {
         let url = format!("https://example.test/#__dside_read={encoded}");
         assert_eq!(read_hash(&url).as_deref(), Some(json));
         assert!(read_hash("https://example.test/").is_none());
+    }
+
+    #[test]
+    fn a_bare_host_gets_https() {
+        assert_eq!(normalize_url("example.com"), "https://example.com");
+        assert_eq!(normalize_url(" http://127.0.0.1:8765/ "), "http://127.0.0.1:8765/");
+        assert_eq!(normalize_url("https://a.test/x"), "https://a.test/x");
+        assert_eq!(normalize_url(""), "");
     }
 }

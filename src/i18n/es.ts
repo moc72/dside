@@ -150,6 +150,11 @@ export const es: Messages = {
     statusCompleted: "Completado",
     empty: "Sin tareas.",
   },
+  workspace: {
+    missing: "El directorio de trabajo {path} no existe o no es una carpeta.",
+    none: "No hay ningún directorio de trabajo seleccionado.",
+    openSettings: "Abrir configuración",
+  },
   viewFile: {
     hint: "Selecciona un archivo en el árbol de archivos.",
     hideTree: "Ocultar árbol",
@@ -179,6 +184,10 @@ export const es: Messages = {
     restore: "Restaurar",
     restoreConfirm:
       "¿Restaurar esta versión? El estado actual se guarda antes como copia de seguridad.",
+    restoreTitle: "¿Restaurar esta versión?",
+    cancel: "Cancelar",
+    removed: "El archivo se eliminó al restaurar.",
+    removedHint: "El historial sigue disponible; una versión anterior puede recuperarlo.",
     restoreFailed: "Error al restaurar.",
   },
   diagnostics: {
@@ -270,6 +279,7 @@ export const es: Messages = {
     running: "ejecutándose",
     failed: "fallido",
     done: "completado",
+    cancelled: "cancelado",
     retry: "Reintentar",
   },
   model: {
@@ -408,7 +418,7 @@ export const es: Messages = {
         "Mostrar en el área de trabajo los archivos y páginas que abre — el cursor permanece en el campo de escritura.",
       browserControl: "Control del navegador",
       browserControlDesc:
-        "El compañero puede leer las páginas que has abierto y rellenar formularios. Actívalo solo a propósito.",
+        "El compañero puede abrir páginas en el navegador integrado, leerlas y rellenar formularios. Actívalo solo a propósito.",
     },
   },
   common: {

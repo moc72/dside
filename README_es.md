@@ -42,7 +42,7 @@ El asistente de programación integrado en la aplicación se llama **Ziggy**. É
 - **Git:** Gestión de estado, preparación de cambios (*stage/unstage*), visualización de diferencias (*diff*), confirmaciones (*commit*), ramas locales y la operación `pull --ff-only`. No incluye interfaz para *push* o *merge*; para estas acciones, se utiliza la terminal.
 - **Captura de pantalla:** El icono del ojo en el campo de redacción permite capturar el escritorio virtual y adjuntar una imagen JPEG de 2000 px. La herramienta `screenshot` permite que el asistente solicite una captura por sí mismo. La imagen se envía como parte `image_url` de OpenAI; `deepseek-flash` lee texto y diseño (probado). El proveedor rechaza imágenes muy pequeñas (por ejemplo, 1×1).
 - **Registros (*Logs*):** Un registro en memoria (almacenamiento circular) que recopila la actividad de la aplicación y del motor. Se puede consultar en la pestaña «Logs» o mediante la herramienta `logs` (en modo de solo lectura) a la que tiene acceso el asistente. No se escribe nada en el disco.
-- **Navegador integrado.**
+- **Navegador integrado.** Con el **Control del navegador** activado, el asistente puede abrir, leer y rellenar páginas por sí mismo; la opción está en Configuración → General.
 - **Las «habilidades» (skills)** se almacenan en `~/.ds-ide/skills` y pueden redactarse dentro de la propia aplicación.
 
 #### La aplicación

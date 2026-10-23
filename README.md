@@ -36,7 +36,7 @@ work area shows a preview, not an editor.*
 - **Git:** status, stage/unstage, diff, commit, local branches and `pull --ff-only`. No push or merge UI; the terminal is there for that.
 - **Screen capture:** the eye in the composer captures the virtual desktop and attaches a 2000px JPEG. The `screenshot` tool lets the companion ask for a capture itself. The image is sent as an OpenAI `image_url` content part; `deepseek-flash` reads text and layout from it (tested). Very small images (for example 1×1) are rejected by the provider.
 - **Logs:** an in-memory ring of the app's and engine's log lines, with a Logs tab and a read-only `logs` tool for the companion. Nothing is written to disk.
-- Integrated browser.
+- **Integrated browser.** With **Browser control** on, the partner can open, read and fill pages itself; the setting is under Settings → General.
 - **Skills** live in `~/.ds-ide/skills` and can be written in the app.
 
 **The app**

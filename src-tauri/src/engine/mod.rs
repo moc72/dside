@@ -333,14 +333,25 @@ pub struct CompactionReport {
     pub through_message_id: i64,
 }
 
-/// Rough size of what is about to be sent. Characters over four is the usual estimate; it only
-/// has to be good enough to decide *when* to compress, never to be quoted as a token count.
+/// Rough size of what is about to be sent. Text and tool arguments count as characters over
+/// four; a picture is billed by tiles, not by its base64 length, so it gets a cautious flat
+/// estimate. It only has to decide *when* to compress, never to be quoted as a token count.
 fn estimated_tokens(messages: &[ChatMessage]) -> i64 {
-    let characters: usize = messages
-        .iter()
-        .map(|message| message.content.as_deref().map(str::len).unwrap_or(0))
-        .sum();
-    (characters / 4) as i64
+    let mut tokens = 0i64;
+    for message in messages {
+        if let Some(text) = message.content.as_deref() {
+            tokens += text.len() as i64 / 4;
+        }
+        if let Some(calls) = &message.tool_calls {
+            for call in calls {
+                tokens += (call.function.name.len() + call.function.arguments.len()) as i64 / 4;
+            }
+        }
+        if let Some(images) = &message.image {
+            tokens += images.len() as i64 * 1000;
+        }
+    }
+    tokens
 }
 
 const COMPACT_AT: f64 = 0.75;
@@ -713,6 +724,35 @@ fn choose_name_tool(app: &AppHandle, args: &Value) -> tools::ToolOutcome {
             ))
         }
         Err(error) => tools::ToolOutcome::err(format!("choose_name: {error}")),
+    }
+}
+
+/// The companion's own way back into the archive: notes and earlier conversation lines.
+fn recall_tool(app: &AppHandle, args: &Value, workspace: &str) -> tools::ToolOutcome {
+    let Some(db) = app.try_state::<Db>() else {
+        return tools::ToolOutcome::err("recall: database unavailable");
+    };
+    let query = args
+        .get("query")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
+    if query.is_empty() {
+        return tools::ToolOutcome::err("recall: 'query' is required");
+    }
+    let limit = args
+        .get("limit")
+        .and_then(Value::as_u64)
+        .unwrap_or(8)
+        .clamp(1, 20) as usize;
+    match db.recall(query, limit, workspace.trim()) {
+        Ok(hits) if hits.is_empty() => {
+            tools::ToolOutcome::ok(format!("no matches for \"{query}\""))
+        }
+        Ok(hits) => tools::ToolOutcome::ok(
+            serde_json::to_string_pretty(&hits).unwrap_or_else(|_| "[]".to_string()),
+        ),
+        Err(error) => tools::ToolOutcome::err(format!("recall: {error}")),
     }
 }
 
@@ -1691,6 +1731,8 @@ async fn run_turn(
                     "{} is not available in this mode",
                     call.function.name
                 ))
+            } else if call.function.name == "recall" {
+                recall_tool(app, &arguments, &config.workspace)
             } else if call.function.name == "memory" {
                 memory_tool(app, &arguments, &config.workspace)
             } else if call.function.name == "name_ideas" {
@@ -1727,7 +1769,17 @@ async fn run_turn(
                         .get("id")
                         .and_then(Value::as_str)
                         .map(str::to_string);
-                    match crate::browser::browser_read(app.clone(), id).await {
+                    let url = arguments
+                        .get("url")
+                        .and_then(Value::as_str)
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .map(str::to_string);
+                    let page = match url {
+                        Some(url) => crate::browser::browser_open_read(app.clone(), url).await,
+                        None => crate::browser::browser_read(app.clone(), id).await,
+                    };
+                    match page {
                         Ok(page) => tools::ToolOutcome::ok(
                             serde_json::to_string_pretty(&page)
                                 .unwrap_or_else(|_| "{}".to_string()),
@@ -1954,4 +2006,28 @@ async fn run_turn(
     }
 
     (seq, outcome_result)
+}
+
+#[cfg(test)]
+mod estimate_tests {
+    use super::*;
+
+    /// The threshold used to be blind to tool arguments and pictures; both are real context
+    /// and must influence when a turn is compressed.
+    #[test]
+    fn a_picture_and_tool_arguments_are_counted() {
+        let mut message = ChatMessage::user("12345678");
+        message.tool_calls = Some(vec![crate::engine::types::OutgoingToolCall {
+            id: "call-1".to_string(),
+            call_type: "function".to_string(),
+            function: crate::engine::types::OutgoingFunction {
+                name: "read".to_string(),
+                arguments: "x".repeat(400),
+            },
+        }]);
+        message.image = Some(vec!["data:image/jpeg;base64,AAAA".to_string()]);
+
+        // 2 tokens of text, 100 tokens of arguments, 1000 for the picture.
+        assert!(estimated_tokens(&[message]) >= 1100);
+    }
 }

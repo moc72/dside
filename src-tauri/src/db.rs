@@ -351,6 +351,23 @@ pub struct SearchHit {
     pub session_id: String,
     pub session_title: String,
     pub snippet: String,
+    /// The session's workspace; empty for the global search dialog, named for recall.
+    pub workspace: String,
+}
+
+/// One result of the companion's own recall: a stored note or a line from an earlier
+/// conversation. Both fit in the same shape so the model does not have to parse two.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecallHit {
+    /// "memory", "session" or "message".
+    pub kind: String,
+    pub title: String,
+    pub text: String,
+    /// "#12 [fact/user] seeky" for a note, the hit kind for a conversation line.
+    pub source: String,
+    pub session_id: String,
+    pub workspace: String,
 }
 
 #[derive(Serialize)]
@@ -994,7 +1011,18 @@ impl Db {
     // Search
     // -----------------------------------------------------------------------
 
+    /// The search dialog searches everything. `recall` uses the same engine but scopes the
+    /// results to the current project; an empty workspace means "no project filter".
     pub fn search(&self, query: &str, limit: usize) -> Result<Vec<SearchHit>, String> {
+        self.search_with_workspace(query, limit, "")
+    }
+
+    fn search_with_workspace(
+        &self,
+        query: &str,
+        limit: usize,
+        workspace: &str,
+    ) -> Result<Vec<SearchHit>, String> {
         let trimmed = query.trim();
         if trimmed.is_empty() {
             return Ok(Vec::new());
@@ -1005,49 +1033,133 @@ impl Db {
 
         let mut sessions = conn
             .prepare(
-                "SELECT id, title FROM sessions
-                 WHERE title LIKE ?1 ORDER BY updated_at DESC LIMIT ?2",
+                "SELECT id, title, COALESCE(workspace, '') FROM sessions
+                 WHERE title LIKE ?1
+                   AND (?2 = '' OR COALESCE(workspace, '') = '' OR workspace = ?2)
+                 ORDER BY updated_at DESC LIMIT ?3",
             )
             .map_err(|error| error.to_string())?;
         let rows = sessions
-            .query_map(params![needle, limit as i64], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            .query_map(params![needle, workspace, limit as i64], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
             })
             .map_err(|error| error.to_string())?;
         for row in rows {
-            let (id, title) = row.map_err(|error| error.to_string())?;
+            let (id, title, workspace) = row.map_err(|error| error.to_string())?;
             hits.push(SearchHit {
                 kind: "session".to_string(),
                 session_id: id,
                 snippet: title.clone(),
                 session_title: title,
+                workspace,
             });
         }
 
         let mut messages = conn
             .prepare(
-                "SELECT m.session_id, s.title, m.content
+                "SELECT m.session_id, s.title, COALESCE(s.workspace, ''), m.content
                  FROM messages m JOIN sessions s ON s.id = m.session_id
                  WHERE m.content LIKE ?1 AND m.role IN ('user', 'assistant')
+                   AND (?3 = '' OR COALESCE(s.workspace, '') = '' OR s.workspace = ?3)
                  ORDER BY m.id DESC LIMIT ?2",
             )
             .map_err(|error| error.to_string())?;
         let rows = messages
-            .query_map(params![needle, limit as i64], |row| {
+            .query_map(params![needle, limit as i64, workspace], |row| {
                 Ok((
                     row.get::<_, String>(0)?,
                     row.get::<_, String>(1)?,
-                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, Option<String>>(3)?,
                 ))
             })
             .map_err(|error| error.to_string())?;
         for row in rows {
-            let (session_id, session_title, content) = row.map_err(|error| error.to_string())?;
+            let (session_id, session_title, workspace, content) =
+                row.map_err(|error| error.to_string())?;
             hits.push(SearchHit {
                 kind: "message".to_string(),
                 session_id,
                 session_title,
                 snippet: snippet_around(&content.unwrap_or_default(), trimmed, 140),
+                workspace,
+            });
+        }
+
+        hits.truncate(limit);
+        Ok(hits)
+    }
+
+    /// Searches the notes and the conversation archive in one call. Memories are limited to
+    /// the current project plus the global ones, like the system-prompt recall; the message
+    /// search is the same one the search dialog uses.
+    pub fn recall(
+        &self,
+        query: &str,
+        limit: usize,
+        workspace: &str,
+    ) -> Result<Vec<RecallHit>, String> {
+        let trimmed = query.trim();
+        if trimmed.is_empty() {
+            return Ok(Vec::new());
+        }
+        let needle = format!("%{trimmed}%");
+        let mut hits: Vec<RecallHit> = Vec::new();
+
+        {
+            let conn = self.lock()?;
+            let mut statement = conn
+                .prepare(
+                    "SELECT id, kind, scope, COALESCE(title, ''), text, origin, workspace
+                     FROM memories
+                     WHERE retired_at IS NULL AND (title LIKE ?1 OR text LIKE ?1)
+                       AND (workspace = '' OR workspace = ?2)
+                     ORDER BY importance DESC, created_at DESC LIMIT ?3",
+                )
+                .map_err(|error| error.to_string())?;
+            let rows = statement
+                .query_map(params![needle, workspace, limit as i64], |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, String>(4)?,
+                        row.get::<_, String>(5)?,
+                        row.get::<_, String>(6)?,
+                    ))
+                })
+                .map_err(|error| error.to_string())?;
+            for row in rows {
+                let (id, kind, scope, title, text, origin, workspace) =
+                    row.map_err(|error| error.to_string())?;
+                hits.push(RecallHit {
+                    kind: "memory".to_string(),
+                    title: if title.trim().is_empty() {
+                        text.clone()
+                    } else {
+                        title
+                    },
+                    text,
+                    source: format!("#{id} [{kind}/{scope}] {origin}"),
+                    session_id: String::new(),
+                    workspace,
+                });
+            }
+        }
+
+        for hit in self.search_with_workspace(trimmed, limit, workspace)? {
+            hits.push(RecallHit {
+                kind: hit.kind,
+                title: hit.session_title.clone(),
+                text: hit.snippet,
+                source: "conversation".to_string(),
+                session_id: hit.session_id,
+                workspace: hit.workspace,
             });
         }
 
@@ -2005,6 +2117,75 @@ mod tests {
         db.retire_memory(id).unwrap();
         assert!(db.list_memories(10).unwrap().is_empty());
         assert!(db.memory_context(10, "").unwrap().is_empty());
+
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn recall_finds_memories_and_past_messages() {
+        let directory = std::env::temp_dir().join(format!("ds-ide-recall-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let db = Db::open(&directory.join("r.sqlite3")).unwrap();
+
+        db.create_session("s1", "Farben", "/tmp/project").unwrap();
+        db.insert_message("s1", "user", Some("Die Testfarbe ist Blau."), None, None)
+            .unwrap();
+        db.create_session("s2", "Anderes Projekt", "/tmp/other").unwrap();
+        db.insert_message(
+            "s2",
+            "user",
+            Some("Blau gehoert zum anderen Projekt."),
+            None,
+            None,
+        )
+        .unwrap();
+        let id = db
+            .insert_memory_with_title(
+                "fact",
+                "user",
+                Some("Testfarbe"),
+                "Die Testfarbe ist Blau.",
+                None,
+                "seeky",
+            )
+            .unwrap();
+        db.set_memory_workspace(id, "/tmp/project").unwrap();
+
+        let hits = db.recall("Blau", 10, "/tmp/project").unwrap();
+        assert!(
+            hits.iter()
+                .any(|hit| hit.kind == "memory" && hit.text.contains("Blau")),
+            "the project note is recalled: {hits:?}"
+        );
+        assert!(
+            hits.iter().any(|hit| {
+                hit.kind == "message" && hit.session_id == "s1" && hit.workspace == "/tmp/project"
+            }),
+            "the earlier message is recalled with its workspace: {hits:?}"
+        );
+        assert!(
+            !hits.iter().any(|hit| hit.session_id == "s2"),
+            "the other project's conversation must stay out: {hits:?}"
+        );
+
+        let elsewhere = db.recall("Blau", 10, "/tmp/other").unwrap();
+        assert!(
+            !elsewhere
+                .iter()
+                .any(|hit| hit.kind == "memory" && hit.workspace == "/tmp/project"),
+            "another project must not see this note"
+        );
+        assert!(
+            elsewhere.iter().any(|hit| {
+                hit.kind == "message" && hit.session_id == "s2" && hit.workspace == "/tmp/other"
+            }),
+            "the other project's own message is recalled there: {elsewhere:?}"
+        );
+        assert!(
+            !elsewhere.iter().any(|hit| hit.session_id == "s1"),
+            "the first project's conversation must stay out: {elsewhere:?}"
+        );
 
         let _ = std::fs::remove_dir_all(&directory);
     }

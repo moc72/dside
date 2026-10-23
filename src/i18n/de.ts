@@ -149,6 +149,11 @@ export const de = {
     statusCompleted: "Erledigt",
     empty: "Noch keine Aufgaben.",
   },
+  workspace: {
+    missing: "Arbeitsverzeichnis {path} existiert nicht oder ist kein Ordner.",
+    none: "Kein Arbeitsverzeichnis gewählt.",
+    openSettings: "Einstellungen öffnen",
+  },
   viewFile: {
     hint: "Wähle eine Datei im Dateibaum.",
     hideTree: "Dateibaum ausblenden",
@@ -178,6 +183,10 @@ export const de = {
     restore: "Wiederherstellen",
     restoreConfirm:
       "Diese Fassung wiederherstellen? Der aktuelle Stand wird vorher als Sicherung gespeichert.",
+    restoreTitle: "Fassung wiederherstellen?",
+    cancel: "Abbrechen",
+    removed: "Die Datei wurde durch das Wiederherstellen entfernt.",
+    removedHint: "Der Verlauf bleibt verfügbar; eine ältere Fassung kann sie wieder anlegen.",
     restoreFailed: "Wiederherstellen fehlgeschlagen.",
   },
   diagnostics: {
@@ -270,6 +279,7 @@ export const de = {
     running: "arbeitet",
     failed: "fehlgeschlagen",
     done: "fertig",
+    cancelled: "abgebrochen",
     retry: "Erneut versuchen",
   },
   model: {
@@ -412,7 +422,7 @@ export const de = {
         "Dateien und Webseiten, die er öffnet, im Arbeitsbereich zeigen — der Fokus bleibt im Eingabefeld.",
       browserControl: "Browser-Steuerung",
       browserControlDesc:
-        "Der Begleiter darf die von Dir geöffneten Browserseiten lesen und Formulare ausfüllen. Nur bewusst einschalten.",
+        "Der Begleiter darf Seiten im integrierten Browser öffnen, lesen und Formulare ausfüllen. Nur bewusst einschalten.",
     },
   },
   common: {

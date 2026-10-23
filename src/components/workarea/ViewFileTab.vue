@@ -3,6 +3,7 @@ import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, r
 import { invoke } from "@tauri-apps/api/core";
 import Icon from "../Icon.vue";
 import FileTree from "../FileTree.vue";
+import ConfirmDialog from "../ConfirmDialog.vue";
 import { everydayMode } from "../../engine/mode";
 import { t } from "../../i18n";
 import type { FileNode, FileVersionInfo } from "../../types";
@@ -23,6 +24,7 @@ import {
   historyRequest,
   openFile,
 } from "../../stores/workArea";
+import { openSettings } from "../../stores/ui";
 import { activeSessionId } from "../../stores/sessions";
 import { resolvedTheme } from "../../stores/settings";
 
@@ -52,6 +54,9 @@ const versions = ref<FileVersionInfo[]>([]);
 const selectedVersionId = ref<number | null>(null);
 const originalContent = ref<string | null>(null);
 const restoring = ref(false);
+const restoreOpen = ref(false);
+/** The restored snapshot predates the file; it was removed, not failed to load. */
+const missing = ref(false);
 const historyAvailable = computed(() => kind.value === "text" || kind.value === "markdown");
 
 watch(
@@ -63,6 +68,8 @@ watch(
     versions.value = [];
     selectedVersionId.value = null;
     originalContent.value = null;
+    restoreOpen.value = false;
+    missing.value = false;
   },
 );
 
@@ -159,6 +166,7 @@ const viewerOptions = {
 async function load(path: string) {
   loading.value = true;
   error.value = null;
+  missing.value = false;
   try {
     // Binary previews bring their own loader. Trying to read a PNG as UTF-8 text fails,
     // and that failure used to surface as "could not read the file" over a preview that
@@ -234,19 +242,34 @@ async function selectVersion(id: number): Promise<void> {
   }
 }
 
-async function restoreSelected(): Promise<void> {
+/** Asks first: restoring changes (or removes) a file. The native confirm looked like a browser warning. */
+function restoreSelected(): void {
   const id = selectedVersionId.value;
   if (!id || restoring.value || !selectedPath.value) return;
-  if (!window.confirm(t("viewFile.restoreConfirm"))) return;
+  restoreOpen.value = true;
+}
+
+async function doRestore(): Promise<void> {
+  const version = versions.value.find((entry) => entry.id === selectedVersionId.value);
+  if (!version || !selectedPath.value || restoring.value) return;
+  restoreOpen.value = false;
   restoring.value = true;
   historyError.value = null;
   try {
-    await invoke("file_revert", { id, sessionId: activeSessionId.value ?? "" });
-    await load(selectedPath.value);
+    await invoke("file_revert", { id: version.id, sessionId: activeSessionId.value ?? "" });
     historyOpen.value = false;
     versions.value = [];
     selectedVersionId.value = null;
     originalContent.value = null;
+    if (version.existed) {
+      missing.value = false;
+      await load(selectedPath.value);
+    } else {
+      // The snapshot predates the file: restoring it removes the file again.
+      content.value = "";
+      error.value = null;
+      missing.value = true;
+    }
   } catch (error) {
     historyError.value = `${t("viewFile.restoreFailed")} ${String(error)}`;
   } finally {
@@ -254,10 +277,45 @@ async function restoreSelected(): Promise<void> {
   }
 }
 
+function normalizeTreePath(value: string): string {
+  return value.replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
+/** Expands the folders leading to `path`; the file row is selected by `selectedPath`. */
+async function revealInTree(path: string, nodes: FileNode[]): Promise<boolean> {
+  const target = normalizeTreePath(path);
+  for (const node of nodes) {
+    const nodePath = normalizeTreePath(node.path);
+    if (nodePath === target) return true;
+    if (!node.isFolder) continue;
+    if (!target.startsWith(`${nodePath}/`)) continue;
+    if (!node.expanded) {
+      node.expanded = true;
+      if (!node.loaded) await loadChildren(node);
+    }
+    if (await revealInTree(target, node.children ?? [])) return true;
+  }
+  return false;
+}
+
+/**
+ * A file the companion opens should not leave the tree untouched: expand the path and bring
+ * the selected row into view. Unlike a user pick, this does not schedule the tree to hide —
+ * the point is that the file stays findable.
+ */
+async function revealFile(path: string): Promise<void> {
+  if (!(await revealInTree(path, tree.value))) return;
+  await nextTick();
+  document
+    .querySelector<HTMLElement>(".tree .row.selected")
+    ?.scrollIntoView({ block: "nearest" });
+}
+
 watch(
   [() => props.path, fileRevision],
   ([value]) => {
     if (value) void load(value);
+    if (value) void revealFile(value);
     if (value && historyOpen.value) void loadVersions();
   },
   { immediate: true },
@@ -270,8 +328,9 @@ watch(historyRequest, async () => {
   if (requestPath === selectedPath.value) await openHistory();
 });
 
-onMounted(() => {
-  if (tree.value.length === 0) void initWorkspace();
+onMounted(async () => {
+  if (tree.value.length === 0) await initWorkspace();
+  if (selectedPath.value) void revealFile(selectedPath.value);
 });
 
 /**
@@ -311,7 +370,8 @@ onBeforeUnmount(cancelTreeHide);
 
 function select(node: FileNode) {
   openFile(node.path);
-  // The companion never goes through here: `openFile` on its behalf leaves the tree alone.
+  // A user pick gets the tree out of the way after a moment. A file opened by the
+  // companion is revealed instead (see `revealFile`) and never hides the tree.
   scheduleTreeHide();
 }
 
@@ -418,7 +478,13 @@ async function toggle(node: FileNode) {
         </div>
 
         <template v-else>
-          <img v-if="kind === 'image'" class="image" :src="imageSrc" :alt="selectedPath ?? ''" />
+          <div v-if="missing" class="placeholder">
+            <Icon name="doc" :size="28" />
+            <p>{{ t("viewFile.removed") }}</p>
+            <p class="note">{{ t("viewFile.removedHint") }}</p>
+          </div>
+
+        <img v-else-if="kind === 'image'" class="image" :src="imageSrc" :alt="selectedPath ?? ''" />
 
         <PdfView v-else-if="kind === 'pdf'" :path="selectedPath" />
 
@@ -474,7 +540,15 @@ async function toggle(node: FileNode) {
       </div>
       <div class="tree-body">
         <p v-if="treeLoading" class="note">{{ t("viewFile.loading") }}</p>
-        <p v-else-if="treeError" class="note">{{ t("viewFile.error") }}</p>
+        <p v-else-if="treeError" class="note warn">{{ treeError }}</p>
+        <button
+          v-if="treeError"
+          class="workspace-settings"
+          type="button"
+          @click="openSettings('general')"
+        >
+          {{ t("workspace.openSettings") }}
+        </button>
         <FileTree
           v-else
           :nodes="tree"
@@ -484,6 +558,16 @@ async function toggle(node: FileNode) {
         />
       </div>
     </div>
+
+    <ConfirmDialog
+      :open="restoreOpen"
+      :title="t('viewFile.restoreTitle')"
+      :message="t('viewFile.restoreConfirm')"
+      :confirm-label="t('viewFile.restore')"
+      :cancel-label="t('viewFile.cancel')"
+      @cancel="restoreOpen = false"
+      @confirm="doRestore"
+    />
   </div>
 </template>
 
@@ -491,7 +575,9 @@ async function toggle(node: FileNode) {
 .viewfile {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 220px;
+  /* A narrow work area still leaves the preview a usable column instead of the 25 px a
+     fixed 220 px tree left over. The tree keeps its 220 px whenever there is room. */
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 220px);
   grid-template-rows: minmax(0, 1fr);
   height: 100%;
   min-height: 0;
@@ -798,6 +884,20 @@ async function toggle(node: FileNode) {
 
 .note.warn {
   color: var(--danger);
+}
+
+.workspace-settings {
+  margin: 2px 10px 0;
+  padding: 3px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+}
+
+.workspace-settings:hover {
+  border-color: var(--accent);
 }
 
 .history {
