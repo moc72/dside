@@ -114,21 +114,40 @@ fn capture_to(path: &Path) -> Result<(), String> {
 
 #[cfg(target_os = "linux")]
 fn capture_to(path: &Path) -> Result<(), String> {
+    use std::process::Stdio;
+
     fn attempt(program: &str, args: &[&str], path: &Path) -> bool {
-        let Ok(status) = Command::new(program).args(args).arg(path).status() else {
+        // A capture tool that cannot work here (grim on a compositor without the screencopy
+        // protocol, for example) is expected: the next one is tried. Its stderr would land in
+        // the app's terminal and claim a failure that did not happen — the screenshot was
+        // taken by the tool after it. Only the first successful tool is worth a log line.
+        let Ok(status) = Command::new(program)
+            .args(args)
+            .arg(path)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+        else {
             return false;
         };
-        status.success() && path.is_file() && fs::metadata(path).map(|meta| meta.len() > 0).unwrap_or(false)
+        status.success()
+            && path.is_file()
+            && fs::metadata(path).map(|meta| meta.len() > 0).unwrap_or(false)
     }
 
     // Wayland first, then the common X11/GNOME/KDE tools. Every one writes to the given path.
-    if attempt("grim", &[], path)
-        || attempt("gnome-screenshot", &["-f"], path)
-        || attempt("spectacle", &["-b", "-n", "-o"], path)
-        || attempt("scrot", &[], path)
-        || attempt("import", &["-window", "root"], path)
-    {
-        return Ok(());
+    for (program, args) in [
+        ("grim", &[][..]),
+        ("gnome-screenshot", &["-f"][..]),
+        ("spectacle", &["-b", "-n", "-o"][..]),
+        ("scrot", &[][..]),
+        ("import", &["-window", "root"][..]),
+    ] {
+        if attempt(program, args, path) {
+            crate::log_line!("screenshot: captured with {program}");
+            return Ok(());
+        }
     }
 
     Err(

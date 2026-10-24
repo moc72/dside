@@ -15,12 +15,76 @@ pub struct StreamOutcome {
     pub content: String,
     /// Collected thinking. The UI gets it live through `DeltaKind::Reasoning`; this is the
     /// full text for callers (and tests) that need it after the fact.
-    #[allow(dead_code)]
     pub reasoning: String,
     pub tool_calls: Vec<OutgoingToolCall>,
     pub prompt_tokens: u32,
     pub completion_tokens: u32,
     pub total_tokens: u32,
+    /// Set when the model started repeating itself and the stream was cut. The repeated tail
+    /// is already removed from `content`/`reasoning`; the flag is how the turn reports it.
+    pub repeated: Option<Repetition>,
+}
+
+/// A detected loop: which stream repeated, what unit, and how often.
+pub struct Repetition {
+    /// "text" or "reasoning".
+    pub stream: &'static str,
+    pub block: String,
+    pub repeats: usize,
+}
+
+/// How much repetition counts as a loop. Exact repetition of the same block for 320 bytes is
+/// not prose and not a table: prose does not repeat a phrase 60 times in a row, and a wide
+/// markdown table has cells between its separators. Setting it this low bounds the damage
+/// (a few hundred wasted tokens) while staying far away from normal formatting.
+const LOOP_MIN_CHARS: usize = 320;
+const LOOP_MIN_REPEATS: usize = 24;
+const LOOP_MAX_BLOCK: usize = 200;
+
+/// The repeated unit at the end of `text`, if the tail is nothing but copies of one block.
+/// Only the tail is examined, so a long correct answer with one repeated word does not trip.
+fn repeated_tail(text: &str) -> Option<(String, usize)> {
+    let bytes = text.as_bytes();
+    if bytes.len() < LOOP_MIN_CHARS {
+        return None;
+    }
+    for block_len in 1..=LOOP_MAX_BLOCK {
+        let repeats = (LOOP_MIN_CHARS / block_len).max(LOOP_MIN_REPEATS);
+        let span = block_len * repeats;
+        if bytes.len() < span {
+            continue;
+        }
+        let tail = &bytes[bytes.len() - span..];
+        let block = &tail[..block_len];
+        if block.iter().all(|byte| byte.is_ascii_whitespace()) {
+            continue;
+        }
+        if (0..repeats).all(|index| &tail[index * block_len..(index + 1) * block_len] == block) {
+            return Some((String::from_utf8_lossy(block).to_string(), repeats));
+        }
+    }
+    None
+}
+
+/// Removes the detected repetition from the end. Cutting by bytes is safe here because the
+/// removed span is a whole number of repeated blocks; the lossy conversion only guards the
+/// case where a block boundary split a multi-byte character.
+fn cut_repetition(text: &mut String, block: &str, repeats: usize) {
+    let span = block.len() * repeats;
+    if span == 0 || span > text.len() || block.is_empty() {
+        return;
+    }
+    let cut = text.len() - span;
+    *text = String::from_utf8_lossy(&text.as_bytes()[..cut]).to_string();
+    // Copies that began before the detected span are stripped too, so the answer ends where
+    // the loop started instead of keeping a dozen "The." that add nothing.
+    while text.ends_with(block) {
+        let shorter = text.len() - block.len();
+        text.truncate(shorter);
+    }
+    while text.ends_with([' ', '\n']) {
+        text.pop();
+    }
 }
 
 fn truncate(text: &str, limit: usize) -> String {
@@ -158,8 +222,12 @@ pub async fn stream_chat(
     let mut reasoning = String::new();
     let mut partials: Vec<(String, String, String)> = Vec::new();
     let mut usage = (0u32, 0u32, 0u32);
+    // A model that starts repeating itself does not stop on its own; the stream is cut as
+    // soon as a tail is nothing but copies of one block. My own turn once produced "The. The."
+    // for a hundred thousand characters because nothing looked at the output.
+    let mut repeated: Option<Repetition> = None;
 
-    while let Some(chunk) = stream.next().await {
+    'stream: while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|error| error.to_string())?;
         buffer.push_str(&String::from_utf8_lossy(&chunk));
 
@@ -207,6 +275,15 @@ pub async fn stream_chat(
             if let Some(text) = delta.get("content").and_then(Value::as_str) {
                 if !text.is_empty() {
                     content.push_str(text);
+                    if let Some((block, repeats)) = repeated_tail(&content) {
+                        cut_repetition(&mut content, &block, repeats);
+                        repeated = Some(Repetition {
+                            stream: "text",
+                            block,
+                            repeats,
+                        });
+                        break 'stream;
+                    }
                     on_delta(DeltaKind::Text, text);
                 }
             }
@@ -214,6 +291,15 @@ pub async fn stream_chat(
             if let Some(thinking) = delta.get("reasoning_content").and_then(Value::as_str) {
                 if !thinking.is_empty() {
                     reasoning.push_str(thinking);
+                    if let Some((block, repeats)) = repeated_tail(&reasoning) {
+                        cut_repetition(&mut reasoning, &block, repeats);
+                        repeated = Some(Repetition {
+                            stream: "reasoning",
+                            block,
+                            repeats,
+                        });
+                        break 'stream;
+                    }
                     on_delta(DeltaKind::Reasoning, thinking);
                 }
             }
@@ -267,6 +353,7 @@ pub async fn stream_chat(
         prompt_tokens: usage.0,
         completion_tokens: usage.1,
         total_tokens: usage.2,
+        repeated,
     })
 }
 
@@ -541,5 +628,74 @@ mod live {
             }
             Err(error) => panic!("live reasoner call failed: {error}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod guard {
+    use super::*;
+
+    #[test]
+    fn a_repeated_phrase_is_a_loop() {
+        let mut text = String::from("Here is the answer.\n");
+        text.push_str(&"The. ".repeat(80));
+        let (block, repeats) = repeated_tail(&text).expect("the loop must be detected");
+        assert_eq!(block, "The. ");
+        assert!(repeats >= 60);
+    }
+
+    #[test]
+    fn a_repeated_sentence_is_a_loop() {
+        let unit = "I will check the file first. ";
+        let mut text = String::new();
+        for _ in 0..30 {
+            text.push_str(unit);
+        }
+        let (block, repeats) = repeated_tail(&text).expect("repeated sentences must be caught");
+        assert_eq!(block, unit);
+        assert!(repeats * block.len() >= LOOP_MIN_CHARS);
+    }
+
+    #[test]
+    fn normal_prose_and_tables_stay_untouched() {
+        let prose = "The function reads the file, checks the header and returns the rows. \
+                     It reports an error when the header is missing, so the caller can decide \
+                     what to do. Each row is validated before it is written to the database, \
+                     and the transaction is rolled back when a row fails.";
+        assert!(repeated_tail(prose).is_none());
+
+        // A wide markdown table repeats its separator pattern but has cells in between.
+        let mut table = String::new();
+        for column in 0..40 {
+            table.push_str(&format!("| column {column} "));
+        }
+        table.push_str("|\n");
+        table.push_str(&"|---|".repeat(60));
+        assert!(repeated_tail(&table).is_none(), "a separator row is not a loop");
+
+        // An indented code block with blank lines is not a loop either.
+        let code = "fn main() {\n\n    let x = 1;\n\n    println!(\"{x}\");\n\n}\n";
+        assert!(repeated_tail(&code.repeat(4)).is_none());
+    }
+
+    #[test]
+    fn cutting_removes_the_repetition_and_keeps_the_answer() {
+        let mut text = String::from("Answer before the loop. ");
+        let block = "The. ";
+        text.push_str(&block.repeat(80));
+        let (found, repeats) = repeated_tail(&text).unwrap();
+        cut_repetition(&mut text, &found, repeats);
+        assert_eq!(text, "Answer before the loop.");
+    }
+
+    /// The guard runs on the tail only; a repeated word in the middle of a long answer must
+    /// not cut it off.
+    #[test]
+    fn repetition_earlier_in_the_answer_is_not_the_tail() {
+        let mut text = String::new();
+        text.push_str(&"The. ".repeat(100));
+        text.push_str("And here is the actual answer, written in ordinary prose that continues \
+                       for a while so the tail is clearly not a repetition of one block.");
+        assert!(repeated_tail(&text).is_none());
     }
 }
