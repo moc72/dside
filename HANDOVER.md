@@ -3,9 +3,28 @@
 This is the short handover for taking the project over. `PROGRESS.md` is the authoritative
 log (German, one section per round); `AGENTS.md` describes how to work in the repository.
 
-**Status:** `v0.4.13` is public. The current head carries the round-70 changes
-(the dev-only UI test bridge, a reveal refresh for files written after the tree
-was read, and the round-69 browser/recall/restore/follow work); not tagged yet.
+**Status:** `v0.4.13` is public. The current head (`53606ec`) carries the round-70
+changes (the dev-only UI test bridge, a reveal refresh for files written after the
+tree was read, and the round-69 browser/recall/restore/follow work); it is not
+tagged yet. The working tree adds round 71 (copy action, tool-registry test),
+round 72 (workspace preview server + `preview` tool, layout data in
+`browser_read`, permanent tool grants with a revoke button), round 73 (the
+preview no longer needs Browser control, the layout reports overflow and text
+colours, and a read-only `settings` tool reports the running turn's
+configuration), round 74 (i18n parity check wired into the build, README
+feature lists completed in six languages, dead prototype panel removed) and
+round 75 (`browser_click`, one reused preview window, and the preview window
+exempt from Browser control for read/click/fill), round 76 (capture attempts no
+longer print a failed tool's stderr when a later tool succeeds), round 77
+(`preview` takes `width`/`height` to measure a breakpoint; the browser window's
+minimum size dropped to 320×280 so narrow layouts are reachable) and round 78
+(`size.requested/effective/clamped` so a clamped measurement is visible, adaptive
+settling instead of a fixed sleep, `loading` for a not-yet-painted page, the
+current URL in `browser_click` answers and errors, and browser window titles that
+follow the page) and round 79 (`browser_windows` as a tool, `browser_read(url, id)`
+for a deliberate navigation, and `loading` keyed on content rather than a title)
+and round 80 (a stream guard that cuts a repeating answer and says so); it is not
+committed because the user tests first.
 
 ## What it is
 
@@ -35,8 +54,9 @@ pnpm tauri dev                    # Vite on 1420 + debug window; cargo must be o
 Checks and release:
 
 ```sh
-pnpm build                        # vue-tsc + Vite
-cd src-tauri && cargo test --lib  # 45 passed, 13 ignored (live tests need DS_IDE_API_KEY)
+pnpm build                        # i18n check + vue-tsc + Vite
+pnpm check:i18n                   # six catalogs, same keys, no German leftovers
+cd src-tauri && cargo test --lib  # 59 passed, 13 ignored (live tests need DS_IDE_API_KEY)
 pnpm tauri build                  # deb/rpm/AppImage, NSIS, dmg
 ```
 
@@ -100,8 +120,14 @@ connection test.
 
 ## Features worth knowing
 
+- **Runaway answers:** the stream is watched for a repeated tail (one block of up to 200
+  bytes, at least 320 bytes and 24 repeats). On a hit the stream is cut, the repetition is
+  removed and the turn ends with `stop_reason: "loop"` plus a message; what came before is
+  kept. Reasoning is stored and shown but never sent back to the provider, so a model cannot
+  read its own loop back in.
 - **Timeline:** thinking, text and tool calls in the order they happened; tool rows open to
-  show the command, output and approval state.
+  show the command, output and approval state. Every assistant answer has a **copy markdown**
+  action that copies the raw source (code fences and tables included).
 - **File history:** every successful `write`/`edit` first stores the old content; the file
   tab's **History** shows the versions, a read-only Monaco diff and **Restore** (the current
   state is backed up before restoring; a snapshot from before the file existed removes it).
@@ -116,8 +142,35 @@ connection test.
   containing folders are re-read, so a file written after the tree was loaded still appears.
 - **Browser control:** with Settings → General → Browser control on, the partner can open a
   page in a new window itself (`browser_read` with `url`), read its text, links and form
-  fields, and fill/submit forms (`browser_fill`). A read never navigates a page the user
-  opened; the new window does not take the keyboard.
+  fields, fill/submit forms (`browser_fill`) and click elements (`browser_click`). A read
+  never navigates a page the user opened; the new window does not take the keyboard.
+  `browser_read` also returns a layout snapshot (viewport plus visible elements' boxes,
+  margins, padding and gaps).
+- **Preview:** `preview(path)` serves the workspace read-only on a random localhost port,
+  opens the file in the app browser and returns its text plus layout (viewport, boxes,
+  spacing, overflow, colours) in the same call. It reuses one preview window, so iterating
+  does not fill the desktop. Relative stylesheets, scripts and images work. It deliberately
+  does **not** require Browser control: only workspace files are served, never remote pages.
+  `browser_read`, `browser_click` and `browser_fill` on that same preview window are exempt
+  from the switch and from approval too; every other page follows the browser rules.
+  `width`/`height` lay the page out at a given CSS size (the window minimum is 320×280), so a
+  breakpoint is measured rather than guessed; `size.requested`, `size.effective`,
+  `size.clamped` and `size.kept` say what was actually measured. `screenshot` still captures
+  the whole desktop.
+- **Browser windows** are titled "DS·IDE — Browser" and then follow the page title after each
+  read. `browser_windows` lists every window with its id, URL, title and which one a read
+  without an id would use; `browser_read(url, id)` navigates that window deliberately, while
+  `browser_read(url)` opens a new one so a page the user is reading is never replaced. A page
+  that has no text, links or fields is reported with `loading: true` instead of as an empty
+  result, and a failed `browser_click` names the window's current URL.
+- **Settings tool:** read-only `settings` returns the configuration the current turn runs
+  with (permission, browser control, policy, allowlist, model, effort) next to the stored
+  values and the permanently trusted tools. A switch flipped mid-turn arrives with the next
+  turn; the tool says so.
+- **Permissions:** Ask before changes questions once per call, with "allow once", "allow for
+  this session" and "always allow"; the last one is stored in `settings.trustedTools` and
+  shown with a revoke button under Settings → Usage & model. A permanent grant also silences
+  the danger floor for that tool.
 - **Recall:** the partner can search its long-term notes and earlier conversations by
   keyword (`recall`). Notes and conversations are project-scoped; the workspace is filled
   into every hit.

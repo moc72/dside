@@ -2729,3 +2729,458 @@ Produktpfad: Debug-Build plus explizite Umgebungsvariable, nur localhost. Die
 Screenshot-Hilfe im Client ist Linux-spezifisch; `eval`/`report` sind
 plattformunabhängig. Windows/macOS bleiben als Laufzeitprüfung offen; die
 echte `prompt_tokens`-Usage als Kompressionsauslöser ebenfalls.
+
+## 71. Antworten kopieren (2026-10-23, fünfzigste Runde)
+
+Feedback aus dem Einsatz: An jede Antwort gehört ein „Copy Markdown“-Button; und
+die Frage, ob das Punkte-/Vertrauenssystem noch geplant ist. Beides beantwortet,
+der Button gebaut; kein Commit, der Nutzer testet zuerst.
+
+### Copy Markdown
+- Jede Assistant-Antwort hat unten rechts eine kleine Aktionszeile
+  (`message-actions`) mit „Markdown kopieren“. Kopiert wird `message.text` — der
+  rohe, zusammengefügte Markdown-Quelltext, nicht das gerenderte HTML; Codeblöcke
+  und Tabellen bleiben also erhalten.
+- Der Button zeigt beim Klick „Kopiert“ mit Häkchen, bei einem Fehler
+  „Kopieren fehlgeschlagen“ mit x; der Zustand fällt nach 1,8 s zurück.
+- Clipboard: `navigator.clipboard.writeText`, mit `textarea`+`execCommand`-
+  Fallback für ältere Webviews. Kein neues Plugin, kein Rust.
+- Sechs Sprachen (`message.copyMarkdown/copied/copyFailed`), neues `copy`-Icon.
+- Live über die Brücke: 6 Assistant-Antworten, 6 Buttons; Klick → `copy copied`,
+  „Kopiert“; die X11-Clipboard-Ablage enthält den rohen Markdown inklusive
+  Tabelle. Screenshots `/tmp/dside-copy-buttons.png`, `...-clicked.png`.
+
+### Das Punktesystem war geplant
+`PROGRESS` §35/§36: Der Begleiter wählt seinen Namen früh selbst, aber der Nutzer
+erfährt ihn erst ab einer Punktzahl; Punkte für Verhalten über Zeit (Streaks,
+erledigte Aufgaben, Korrekturen, Gedächtnispflege), nicht für einzelne Klicks;
+eigene Tabelle, Fortschritt auf der Begleiterseite, kleine Enthüllung. „Ziggy ist
+bereits enthüllt — gilt für neue Installationen.“ Gebaut ist es nicht; die
+Thumbs-up/down sind darin nicht vorgesehen. Der aktuelle Partner-Tab zeigt den
+gewählten Namen sofort. Nächste Runde, wenn die Schwelle feststeht.
+
+### Die eine Ursache im echten DS.IDE
+Die reale Datenbank stand auf `workspace=/home/me/Projects/TEST` (Ordner weg).
+Die App lief nicht; Einstellung auf `/home/me/Projects/DS.IDE` gesetzt, Backup
+`ds-ide.sqlite3.bak-workspace-20261023`. Damit sollten glob, grep, bash, write,
+edit und code_review beim nächsten Start den Workspace finden.
+
+### Werkzeug-Liste
+Der veraltete Kommentar an `tools::definitions` („seven tools“) nennt jetzt die
+20 Werkzeuge und die geteilte Ausführung (`execute` hier, der Rest in
+`engine/mod.rs`). Neuer Test `tool_definitions_have_unique_names` (Namen
+eindeutig, mindestens 20) — `cargo test --lib`: **46 passed / 13 ignored**.
+`pnpm build` grün.
+
+Kein Commit; die Instanz des Nutzers testet den Button zuerst.
+
+## 72. Die Seite sehen, dauerhaft erlauben (2026-10-24, einundfünfzigste Runde)
+
+Der Bruder scheiterte daran, eine selbst geschriebene Seite je zu Gesicht zu
+bekommen: `write` ist workspace-only, der Testserver lag außerhalb, `file://`
+lehnt der Browser ab, ein eigener Server scheiterte an der bash-Policy. Dazu
+die Rückfrage nach einer generellen Freigabe und der Wunsch, den Copy-Button
+nur als Symbol zu zeigen.
+
+### Copy
+Der Button ist jetzt ein reines Symbol (24 × 24, Lupe/Häkchen/x), der Text
+liegt als `sr-only` für Screenreader darunter; `title`/`aria-label` nennen ihn
+weiter. Kopiert wird `parts`-Text mit `message.text` als Rückfall — vorher hing
+der Button an der `text`-Spalte und fehlte bei Antworten, die nur aus Teilen
+bestanden. Sechs Sprachen unverändert.
+
+### Preview: der geschlossene Kreis
+`src-tauri/src/preview.rs`: Ein read-only Server bindet auf
+`127.0.0.1:0` (freier Port) und liefert ausschließlich Dateien unter dem
+kanonisierten Workspace; `..`, absolute Pfade und Prefix-Tricks enden in 404,
+Verzeichnisse gehen auf `index.html`, MIME für HTML/CSS/JS/SVG/Bilder/Fonts,
+`Cache-Control: no-store`, nur GET/HEAD. Pro Workspace ein Server; ein neuer
+Workspace ersetzt ihn (der alte Listener wird per Flag beendet).
+Tauri-Command `preview_start(root)` für die Oberfläche und das neue Werkzeug
+`preview(path)`: löst den Pfad auf, prüft „im Workspace“, startet den Server
+und öffnet die URL im App-Browser (`browser_open_read`, ohne Fokusklau).
+Verlangt Browser-Steuerung. Testfixture `src/preview-test.html` (2-Spalten-Grid,
+640 px, 16 px gap).
+
+### Layout statt Blindflug
+`browser_read` liefert zusätzlich `layout`: Viewport (Breite/Höhe/
+scrollHeight) und bis zu 80 sichtbare Elemente mit Tag, id, Klassen, Text bei
+Blättern, x/y/Breite/Höhe, display/position, margin, padding, gap und
+text-align. Das ist die Geometrie, mit der sich „sauber ausgerichtet“ prüfen
+lässt, ohne Pixel zu haben.
+
+### Immer erlauben — mit Rückweg
+Der Freigabedialog bietet zusätzlich „Immer erlauben (dauerhaft)“. Die Antwort
+`always` schreibt den Werkzeugnamen über `Db::add_trusted_tool` in
+`settings.trustedTools` (JSON-Liste, überlebt Neustarts); `has_tool_grant`
+überspringt die Frage danach — auch die Danger-Floor-Frage, denn genau die
+nervte bei Vollzugriff. Der Widerruf steht in Einstellungen → Nutzung & Modell
+unter den Freigabestufen: die Liste der vertrauten Werkzeuge mit
+„Freigaben zurücknehmen“ (`engine_trusted_tools`, `engine_clear_tool_grants`).
+Sechs Sprachen.
+
+### Geprüft
+`pnpm build` grün; `cargo test --lib` **48 passed / 13 ignored** (zwei neue
+Tests: Prozent-Dekodierung und MIME im Preview-Server). Live über die Brücke:
+`preview_start` → `http://127.0.0.1:35177/`; die Fixture im App-Browser
+geladen, `browser_read` meldet Titel „Preview-Test“, Viewport 1120 × 840 und
+für beide Karten `y=40`, Höhe 48, Breite 312, x=240 bzw. 568 — Abstand 16 px,
+also exakt das Grid. Ein Fensterfoto des Browserfensters war unter Wayland
+nicht möglich (kein X11-Titel); die Messwerte sind der Beleg. Test-App danach
+beendet.
+
+### Offen
+Ein Screenshot nur des Browserfensters (nicht des Desktops) wäre die letzte
+Bequemlichkeit für „sieht es auch gut aus“; die Geometrie deckt Ausrichtung ab.
+Kein Commit — der Nutzer testet zuerst.
+
+## 73. Vorschau ohne Schalter, Konfiguration lesbar (2026-10-24, zweiundfünfzigste Runde)
+
+Rückmeldung aus der DS.IDE-Instanz: `preview` scheiterte an „Browser control is
+disabled“, obwohl die Vorschau nur eine lokale Datei aus dem eigenen Workspace
+zeigt. Außerdem konnte sie nicht nachsehen, warum ein Werkzeug fehlt (`sqlite3`
+steht nicht auf ihrer Allowlist), und `browser_read` lieferte keine Überlauf-/
+Farbwerte.
+
+### Vorschau ist lokal, nicht Browser-Steuerung
+Der `preview`-Zweig prüft `browser_control` nicht mehr. Begründung: Der Server
+liefert ausschließlich Dateien unter dem kanonisierten Workspace auf localhost;
+das ist kein Fremdinhalt und kein Zugriff auf die Seiten des Nutzers.
+`browser_read`/`browser_fill` für beliebige URLs bleiben unverändert hinter dem
+Schalter. `preview` gibt jetzt die ganze Seite zurück (Text, Titel, Viewport,
+Boxen) statt nur einer Bestätigung — sonst bräuchte es einen zweiten Aufruf,
+der ohne Browser-Steuerung wieder scheiterte. Der Hinweis im Tool-Result sagt,
+dass `screenshot` den ganzen Desktop zeigt. Der Einstellungstext
+(`browserControlDesc`) sagt in sechs Sprachen, dass die lokale Vorschau die
+Freigabe nicht braucht.
+
+### Geometrie für Layouturteile
+`browser_read`-Layout ergänzt: je Blattelement `color`, `background`,
+`fontSize` (für Kontrast und Hierarchie) und `overflow` (`x`/`y`, wenn
+`scrollWidth`/`scrollHeight` die Clientgröße übersteigt) — damit ist der zu
+lange String ohne Leerzeichen nachweisbar, nicht nur sichtbar.
+
+### `settings`: die Wahrheit des laufenden Turns
+Neues, schreibgeschütztes Werkzeug `settings` (keine Freigabe nötig): liefert
+`thisTurn` (Workspace, Permission, Browser-Steuerung, Command-Policy, Allowlist,
+workspaceOnly, Modell, Effort), die gespeicherten Werte (`stored`) und die
+dauerhaft erlaubten Werkzeuge, dazu den Hinweis, dass eine Änderung mitten im
+Turn erst im nächsten Turn ankommt. Genau die Frage, die die Instanz nicht
+beantworten konnte.
+
+### Geprüft
+`pnpm build` grün; `cargo test --lib` **48 passed / 13 ignored**.
+Live mit `browserControl=false` in der Test-DB: `preview` auf
+`src/layout-test.html` rendert (Service-URL Port 33611), Viewport 1120 × 840,
+Karten `#left` x=240/y=40/312×48 und `#right` x=568/y=40/312×48, `#long`
+meldet `overflow: "x"`. Danach `settings` im nächsten Turn: `permission=full`,
+`browserControl=false`, Workspace `/tmp/dside-workspace` — die Turn-Werte,
+nicht die gespeicherten. Test-App beendet.
+
+Kein Commit — der Nutzer testet zuerst.
+
+## 74. Sechs Sprachen, ein Maßstab (2026-10-24, dreiundfünfzigste Runde)
+
+Die Oberfläche war typgeprüft vollständig (`Record<Locale, Messages>` bricht den
+Build bei fehlendem Schlüssel), aber das genügt nicht: Es sagt nichts über
+Platzhaltertexte, doppelte Schlüssel oder Funktionen, die in den READMEs nur auf
+Englisch stehen. Diese Runde prüft und schließt beides.
+
+### Der Katalog
+- `scripts/check-i18n.mjs` liest die sechs Kataloge mit dem TypeScript-Parser
+  (AST, kein Regex): vergleicht jeden Blattpfad gegen `de.ts`, meldet fehlende
+  und unbekannte Schlüssel, doppelte Schlüssel (die der Compiler still
+  überschreibt) und Werte, die noch identisch mit dem deutschen Text sind
+  (Warnung, weil Produktnamen legitim gleich heißen).
+- `pnpm check:i18n` führt ihn allein aus; **`pnpm build` beginnt damit**, damit
+  eine Lücke den Build bricht statt erst im UI aufzufallen.
+- Ergebnis: **471 Schlüssel, sechs Kataloge, keine Lücke, keine Warnung.**
+  `AGENTS.md` nennt den Schritt.
+
+### Was sich inhaltlich geändert hat
+- Jede Assistant-Antwort mit Text bekommt den Kopier-Button; das letzte harte
+  `alt="Screenshot"` ist jetzt `message.screenshotAlt` in sechs Sprachen.
+- `src/components/AgentPanel.vue` (der frühe Prototyp mit „Nachricht (noch ohne
+  Wirkung)…" und „KILO CODE") war nirgends importiert. Entfernt — toter Code mit
+  hartem UI-Text ist eine Falle für den nächsten Leser.
+- Sechs READMEs um vier Punkte ergänzt, jeweils in der Landessprache:
+  **Preview** (lokale Vorschau ohne Browser-Steuerung samt Layoutdaten),
+  **Kopieren** (Symbol, roher Markdown), **Recall** (Notizen und frühere
+  Gespräche, auf das Projekt begrenzt) und **Freigaben** (einmal/Sitzung/
+  dauerhaft, Widerruf in den Einstellungen). Vorher fehlte `recall` in allen
+  sechs, `preview`/Copy/Freigaben in den fünf Übersetzungen.
+
+### Geprüft
+`pnpm check:i18n` grün (471 Schlüssel); `pnpm build` grün mit vorgeschaltetem
+Check; `cargo test --lib` **48 passed / 13 ignored**. Kein Live-Test nötig: Die
+Änderungen sind Texte, ein entferntes, unbenutztes Bauteil und ein Prüfskript.
+
+Kein Commit — der Nutzer testet zuerst.
+
+## 75. Klicken gehört zum Ansehen (2026-10-24, vierundfünfzigste Runde)
+
+Rückmeldung aus der DS.IDE: Die Kette steht (schreiben → preview → Boxen →
+screenshot → edit), aber der Theme-Knopf blieb ungetestet, weil
+`browser_fill` Felder füllt und keine Knöpfe drückt. Der Live-Test dieser Runde
+fand dabei zwei weitere Lücken derselben Art.
+
+### `browser_click`
+Neues Werkzeug (CSS-Selektor, optional Fenster-ID): scrollt das Element in den
+Blick, schreibt die Kennung **vor** dem Klick in den URL-Hash
+(`#__dside_click=ok:…`) und klickt dann. Die Reihenfolge ist Absicht: Ein Klick,
+der navigiert, nimmt eine spätere Markierung mit. Kommt keine Markierung an,
+lautet die Antwort „geklickt, wahrscheinlich navigiert“ statt eines falschen
+Fehlers. Ein nicht passender Selektor meldet `no element matches … — call
+browser_read to see the page`. Tag und Beschriftung des Elements kommen zurück.
+`browser_click` erscheint als eigene Freigabezeile im Frage-Dialog.
+
+### Dieselbe Regel wie `preview`
+Die Vorschauseite ist eigener Workspace, read-only serviert; sie zu lesen,
+anzuklicken oder auszufüllen braucht weder Browser-Steuerung noch Freigabe.
+`browser_read` prüft dafür das Zielfenster (`window_is_preview` →
+`preview::is_preview_url`: http, Loopback, exakter Port des laufenden
+Servers, reine Funktion mit Test). `browser_fill` nutzt dieselbe Ausnahme;
+fremde Seiten bleiben unverändert hinter Schalter und Freigabe, Planmodus
+bleibt gesperrt.
+
+### Der Live-Test fand den Rest
+Erster Durchlauf (`browserControl=false`, echter Modell-Turn): `preview` und
+zwei Klicks liefen, `browser_read` scheiterte an der Browser-Steuerung —
+Klicken erlaubt, Ergebnis lesen nicht. Zweiter Befund: Jeder `preview`-Aufruf
+öffnete ein neues Fenster (`browser-1 → -2 → -3`), der Zähler stand wieder auf
+0. Behoben: `browser_read` hat dieselbe Ausnahme, und `show_preview_read`
+navigiert das vorhandene Vorschaufenster statt ein neues zu öffnen.
+
+### Geprüft
+`cargo test --lib` **49 passed / 13 ignored** (neuer Test
+`only_the_running_preview_server_counts_as_local`). Live über die Brücke:
+Zähler 0 → zwei Klicks → 2, Theme-Umschalter wechselt auf „Theme: dunkel“,
+fehlender Selektor meldet den klaren Fehler. Danach ein echter Modell-Turn mit
+`browserControl=false`: `preview` (ein Fenster), zweimal `browser_click`,
+`browser_read` liest **2** — alle Werkzeuge ohne Fehler, Fensterliste zeigt nur
+`browser-1`. `pnpm build` grün. Test-App beendet.
+
+Kein Commit — der Nutzer testet zuerst.
+
+## 76. Die Capture-Diagnose widersprach sich selbst (2026-10-24, fünfundfünfzigste Runde)
+
+Die DS.IDE-Instanz meldete im Terminal dauerhaft „composer doesn't support the
+screen capture protocol“ — während Screenshots ankamen. Der Widerspruch war
+echt und hausgemacht.
+
+### Ursache
+`capture_to` probiert unter Linux der Reihe nach `grim`,
+`gnome-screenshot`, `spectacle`, `scrot`, `import`. `grim` scheitert auf einem
+Compositor ohne Screencopy-Protokoll und schreibt seine Fehlermeldung auf
+**stderr**, das `Command::status()` erbt — sie landet im Terminal, obwohl der
+nächste Versuch erfolgreich fotografiert. Die Diagnose behauptete also einen
+Fehlschlag, den es nicht gab.
+
+### Änderung
+Jeder Versuch läuft jetzt mit `stdin/stdout/stderr` auf `Stdio::null()`; nur
+der erfolgreiche Kandidat hinterlässt eine Zeile
+(`screenshot: captured with spectacle`). Schlägt alles fehl, nennt der Fehler
+weiterhin die Liste der Werkzeuge. Fällt ein Werkzeug aus, ist das erwartetes
+Verhalten, kein Ereignis.
+
+### Geprüft
+Live über die Brücke: `capture_screen` liefert ein PNG (2,87 MB base64,
+`mime: image/png`), Logs enthalten genau eine Zeile (`captured with spectacle`)
+und **keine** grim-Meldung; im Dev-Log steht `screen capture protocol` 0-mal.
+`cargo test --lib` **49 passed / 13 ignored**.
+
+### Das „verschwundene“ Vorschaufenster
+Nicht reproduzierbar: Nach einem echten Turn mit `preview` blieb `browser-1`
+sowohl direkt am Turn-Ende als auch 15 s später gelistet. Da seit Runde 75 nur
+noch **ein** Fenster wiederverwendet wird, gibt es auch kein Aufräumen mehr.
+Wahrscheinlichste Erklärung beim Nutzer: der Neustart nach dem Update. Wenn es
+wieder auftritt, zeigt `browser_windows` bzw. `settings` sofort den Zustand.
+
+### Nicht von uns
+Der helle Modus mit 1,5:1-Kontrast und die Korrektur auf 5,74:1/5,73:1 sind
+Arbeit an `docs/webseiten-test.html` in der Instanz, nicht am App-Code. Der
+helle „soll/minimal“-Rest auf dem Screenshot liegt außerhalb der Vorschau; er
+gehört zu einem anderen Fenster. Die Seite bleibt untracked und wird von mir
+nicht committet.
+
+Kein Commit — der Nutzer testet zuerst.
+
+## 77. Ein Breakpoint lässt sich messen (2026-10-24, sechsundfünfzigste Runde)
+
+Offene Frage aus der DS.IDE: Alle Layoutzahlen beschrieben ein 1120-px-Fenster;
+ob die Seite in einem ~400 px breiten Panel hält, war ungemessen. Berechtigt —
+`preview` konnte die Fenstergröße nicht setzen.
+
+### `preview(width, height)`
+Neue optionale Parameter (CSS-Pixel, 240–4000 bzw. 200–4000). `preview` öffnet
+bzw. navigiert die Seite, ruft `browser::set_viewport` (logische Größe, skaliert
+mit dem Faktor des Fensters) und liest nach 250 ms erneut — die zurückgegebenen
+Boxen beschreiben also die angeforderte Größe, nicht die Standardgröße.
+
+### Der Test fand eine harte Grenze
+Erster Lauf mit `width: 400` meldete **Viewport 520**. Nicht der Parameter war
+falsch, sondern das Browserfenster: `open_browser_window` setzte
+`min_inner_size(520, 400)`. Die Mindestgröße ist jetzt **320 × 280** — klein
+genug für einen Breakpoint, weiterhin bedienbar. Zweiter Lauf: Viewport 400.
+
+### Ergebnisse bei 400 px
+- Eigene Fixture `src/responsive-test.html` (auto-fit-Grid, Tabelle):
+  Karten `c1/c2/c3` alle x=20, Breite 360, y=106/168/230 (gestapelt), Zellen
+  155/133/71, kein Überlauf.
+- Die Seite der Instanz (`webseiten-test.html`, aus `docs/` in den Test-Workspace
+  kopiert, Original unberührt): Viewport 400 × 800, scrollHeight 1665, **kein
+  Element mit Überlauf**, Tabelle 368 breit, `#chars` 330 × 45, SVG 368 × 79.
+  Das SVG schrumpft mit dem Container (368/420 ≈ 0,876), bleibt also
+  seitenverhältnistreu; bei 400 px ist es nur entsprechend kleiner.
+  Damit ist Punkt (e) beantwortet: Die Seite hält auch schmal.
+
+### Geprüft
+`cargo test --lib` **49 passed / 13 ignored**; `pnpm build` grün; zwei echte
+Modell-Turns über die Brücke (400-px-Messung, vorher 520). Test-App beendet.
+Die Testseite der Instanz bleibt untracked und wird nicht committet.
+
+Kein Commit — der Nutzer testet zuerst.
+
+## 78. Ein Messwert, der sagt, wenn er korrigiert wurde (2026-10-24, siebenundfünfzigste Runde)
+
+Der Vier-Läufe-Test der Instanz bestätigte die Breakpoint-Messung und fand drei
+Stellen, an denen das Werkzeug mehr versprach als es lieferte. Alle drei sind
+behoben, zwei davon mit neuen Tests.
+
+### 1. Klemmung war unsichtbar
+`width: 240` wurde vom Fensterminimum still auf 320 geklemmt, ohne Hinweis. Die
+Antwort trägt jetzt `size`:
+`requested`, `effective`, `clamped` (Liste der Achsen) und `note`. Die
+Unterscheidung „geklemmt“ vs. „nicht zur Ruhe gekommen“ war im ersten Versuch
+falsch — ein geklemmter Wert erreicht sein Ziel nie und galt deshalb als
+unsettled. Jetzt zählt Stabilität: zwei gleiche Messungen = zur Ruhe gekommen,
+auch wenn das Ziel verfehlt wurde. Test
+`a_clamped_size_is_reported_as_clamped` (deckt beides ab).
+
+### 2. „Ohne Parameter“ hieß „letzte Größe“
+Ein Aufruf ohne `width`/`height` behält die Fenstergröße — das ist richtig, war
+aber nicht sichtbar. Die Antwort sagt jetzt `size.kept`: „no width/height
+requested — the window keeps its previous size“, dazu `size.effective`. Test
+`a_call_without_a_size_says_it_kept_the_previous_one`.
+
+### 3. Die feste Wartezeit
+Die 250 ms sind durch adaptives Pollen ersetzt (bis 10 × 120 ms): Abbruch, sobald
+die Größe stimmt oder zwei Messungen identisch sind. `size.note` sagt, wenn das
+Fenster nicht zur Ruhe kam. Live: 400 × 700 exakt, 240 → 320 mit
+`clamped: ["width"]`, danach ohne Parameter `effective: 320 × 600` + `kept`.
+
+### Dazu, aus demselben Bericht
+- **`browser_click` nennt die URL.** „no element matches“ und „die Seite hat
+  seit dem Lesen navigiert“ waren eine Meldung. Jetzt steht die aktuelle URL im
+  Fehler (und als `url` in jeder Erfolgsantwort); die interne Markierung
+  (`#__dside_click=…`) wird dabei entfernt (Test
+  `the_reported_url_has_no_bookkeeping_fragment`).
+- **Leere Seite ≠ Ergebnis.** `browser_read`/`preview` warten bei fehlendem
+  Titel **und** fehlendem Text weiter und setzen `loading: true`, wenn nach den
+  Versuchen immer noch nichts da ist. `read_when_loaded` behandelt so eine Seite
+  als „noch nicht fertig“. Test `an_empty_document_looks_unloaded`.
+- **Fenstertitel.** Statt des statischen „Webdesign“ heißt das Fenster jetzt
+  „DS·IDE — Browser“ und folgt nach jedem Lesezugriff dem Seitentitel
+  („Klick-Test — DS·IDE“), wie ein Browser. Der Browser ist längst mehr als
+  Webdesign: er liest, füllt aus und zeigt die eigene Vorschau.
+
+### Geprüft
+`cargo test --lib` **54 passed / 13 ignored** (fünf neue Tests),
+`pnpm build` grün, drei echte Modell-Turns und zwei Brücken-Läufe:
+Klemmung/K kept/exakte Größe wie oben, Klick-Fehler mit sauberer URL,
+Fenstertitel „Klick-Test — DS·IDE“. Test-App beendet.
+
+### Nicht von uns
+Die Tabellenspalte der Instanz (`width: 1%` ohne Obergrenze, 68 px = 24 % bei
+320 px) ist deren CSS; `max-width: 90px` ist der richtige Fix. Die Testseite
+bleibt untracked.
+
+Kein Commit — der Nutzer testet zuerst.
+
+## 79. Welche Fenster offen sind (2026-10-24, achtundfünfzigste Runde)
+
+Zwei Befunde aus der DS.IDE: Ein `browser_read` auf eine Ergebnisseite kam leer
+zurück und meldete trotzdem `loading: false` (Titel war da, Body noch nicht), und
+die Instanz konnte nicht sehen, wie viele Fenster offen sind — `browser_windows`
+lag fertig im Backend, aber kein Werkzeug rief es auf. Deshalb hieß „guck mal in
+den Browser“ für sie: ein zweites Fenster aufmachen.
+
+### `loading` meint Inhalt, nicht Titel
+`looks_unloaded` prüft jetzt Text, Links **und** Formularfelder. Ein Titel aus
+dem Dokumentkopf beweist nichts, solange der Body leer ist; `read_when_loaded`
+wartet in dem Fall weiter und liefert `loading: true`, wenn nach den Versuchen
+nichts angekommen ist. Live mit `src/title-only.html` (Titel „Nur-Titel", leerer
+Body): `loading: true`, Text leer, keine Links, keine Felder. Der Test
+`an_empty_document_looks_unloaded` deckt „Titel allein ist kein Inhalt" und
+„Links zählen als geladen" ab.
+
+### `browser_windows` als Werkzeug
+Neues, freigabefreies Werkzeug: `id`, `url`, `title` und `newest` für jedes
+Fenster. `newest` sagt, welches `browser_read` ohne id nehmen würde — die
+Information, die vorher nur im Backend lag. Nur Metadaten; Seiteninhalt bleibt
+hinter der Browser-Steuerung (Vorschau ausgenommen).
+
+### `browser_read(url, id)` navigiert gezielt
+Ohne id öffnet `url` weiterhin ein neues Fenster — eine Seite des Nutzers wird
+nicht ungefragt ersetzt. Mit ausdrücklicher Fenster-ID wird dieses Fenster
+navigiert; die Entscheidung liegt dann beim Aufrufer. Genau der Fall „arbeite in
+dem Fenster, das schon offen ist". Live: `browser-1` gezielt auf
+`click-test.html` navigiert, beide Fenster danach korrekt gelistet.
+
+### Geprüft
+`cargo test --lib` **54 passed / 13 ignored**; `pnpm build` grün. Live über die
+Brücke: zwei Fenster geöffnet, Liste mit Titeln und `newest` korrekt, gezielte
+Navigation liefert die neue URL, Titel-Fall `loading: true`, Fenster nach dem
+Lesen „Klick-Test — DS·IDE" bzw. „Responsiv-Test — DS·IDE". Test-App beendet.
+
+Kein Commit — der Nutzer testet zuerst.
+
+## 80. Kein „The. The.“ mehr (2026-10-24, neunundfünfzigste Runde)
+
+Der Anlass dieser ganzen Sitzung: Mein eigener Turn lief in eine Wiederholung
+(„The. The.“, am Ende ~100 000 Zeichen), und nichts hielt ihn auf. Zuerst die
+wichtigste Gegenprobe, dann der Wächter.
+
+### DS.IDE schickt kein Reasoning zurück
+`ChatMessage` (`engine/types.rs`) hat **kein** Feld für Denktext; `wire_messages`
+baut ausschließlich `role`, `content`, `tool_calls`, `tool_call_id` und
+Bild-Content-Parts. Der Denktext wird live an die Oberfläche geschickt und
+gespeichert, aber nie wieder an das Modell gegeben. Genau die Ursache meines
+Loops — Reasoning als Historie — kann hier also nicht auftreten. Das war vorher
+nicht belegt, jetzt ist es nachgelesen.
+
+### Der fehlende Wächter
+Was fehlte, war der zweite Teil: `stream_chat` las den Strom bis zum Ende, egal
+was ankam. Neu in `engine/deepseek.rs`:
+
+- `repeated_tail(text)` prüft **nur das Ende** der Antwort auf einen exakt
+  wiederholten Block: mindestens 320 Byte, mindestens 24 Wiederholungen, Block
+  bis 200 Byte. Reiner Whitespace zählt nicht.
+- Beim Treffer bricht der Leser den HTTP-Strom ab, entfernt die Wiederholung
+  (auch die Kopien davor) und meldet `StreamOutcome.repeated`.
+- Der Engine-Turn beendet dann mit `stop_reason = "loop"` und einer Meldung:
+  „Stopped: the model began repeating itself (… in the reasoning, 64×). Everything
+  before the repetition is kept; the rest was cut.“ Der bereits gespeicherte Teil
+  bleibt sichtbar, der Retry-Knopf steht bereit.
+
+Die Schwellen sind bewusst so gewählt, dass normale Formatierung nicht anschlägt:
+Fließtext wiederholt keinen Satz 24-mal; eine breite Markdown-Tabelle hat Zellen
+zwischen den Trennern; ein Codeblock mit Leerzeilen ist keine Wiederholung eines
+Blocks. Fünf Tests decken beides ab (`a_repeated_phrase_is_a_loop`,
+`a_repeated_sentence_is_a_loop`, `normal_prose_and_tables_stay_untouched`,
+`cutting_removes_the_repetition_and_keeps_the_answer`,
+`repetition_earlier_in_the_answer_is_not_the_tail`).
+
+### Geprüft
+`cargo test --lib` **59 passed / 13 ignored** (fünf neue Tests). Live: eine
+normale Antwort von 305 Wörtern / 2 189 Zeichen kam vollständig durch, ohne
+Meldung — der Wächter greift nicht bei gewöhnlichem Text. Eine echte
+Modell-Schleife lässt sich nicht zuverlässig herbeiführen; die Erkennung ist
+deshalb deterministisch getestet. Nichts committet vor diesem Schritt.
+
+### Was jetzt noch offen ist
+`estimated_tokens` statt echter `prompt_tokens` als Kompressionsauslöser;
+ein Screenshot nur des Browserfensters; Laufzeittest auf Windows/macOS;
+Punkte-/Vertrauenssystem (Name ab Schwelle) aus §35/§36.
+
+Kein Commit — der Nutzer testet zuerst.

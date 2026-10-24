@@ -36,16 +36,21 @@ work area shows a preview, not an editor.*
 - **Git:** status, stage/unstage, diff, commit, local branches and `pull --ff-only`. No push or merge UI; the terminal is there for that.
 - **Screen capture:** the eye in the composer captures the virtual desktop and attaches a 2000px JPEG. The `screenshot` tool lets the companion ask for a capture itself. The image is sent as an OpenAI `image_url` content part; `deepseek-flash` reads text and layout from it (tested). Very small images (for example 1×1) are rejected by the provider.
 - **Logs:** an in-memory ring of the app's and engine's log lines, with a Logs tab and a read-only `logs` tool for the companion. Nothing is written to disk.
-- **Integrated browser.** With **Browser control** on, the partner can open, read and fill pages itself; the setting is under Settings → General.
+- **Integrated browser.** With **Browser control** on, the partner can open, read and fill pages itself; the setting is under Settings → General. A local preview of workspace files (for example the HTML/CSS it just wrote) works without that switch.
+- **Preview:** `preview(path)` renders a workspace file (HTML/CSS with relative assets) in the app browser through a local, read-only server and returns the page's text and layout — viewport, element boxes, spacing, overflow and colours. Works without Browser control. Clicking and filling that page (`browser_click`, `browser_fill`) works without the switch too, so interactive states are testable. `width`/`height` lay the page out at a given CSS size, so a breakpoint can be measured instead of guessed. The answer carries `size.requested`, `size.effective` and `size.clamped`, so a measurement clamped by the window minimum (320×280) is not mistaken for the requested one.
 - **Skills** live in `~/.ds-ide/skills` and can be written in the app.
 
 **The app**
 
 - Sessions, open tabs, the last file and the window geometry survive a restart.
+- **Copy:** every answer has a copy button (icon only) that copies the raw Markdown source, code fences and tables included.
+- **Runaway answers:** if the model starts repeating itself, the stream is cut after a few hundred repeated characters and the turn says so; everything before the repetition is kept.
 - **First start** asks for mode, workspace and API key; **Settings → Diagnostics** checks the keyring, provider, database and detected editors.
 - **Keyboard shortcuts** are listed, searchable and editable under Settings → Keyboard shortcuts.
 - **Policies:** the companion's `bash` tool can be limited to an allowlist and writes can be kept inside the workspace. This is a policy, not an OS sandbox; the user's terminal stays free.
+- **Permissions:** Ask before changes offers allow once, allow for this session and always allow. Permanent grants are listed under Settings → Usage & model and can be revoked there; they also silence the safety question for that tool.
 - Settings → a group named after the partner (memory, name, the user's own instructions).
+- **Recall:** the partner can search its long-term notes and earlier conversations by keyword; results are limited to the current project.
 - **Everyday mode**: the partner gets no shell, code review or sub-agents, and code panels make way for documents and the web; the user's terminal and Git tabs remain.
 - Six languages (de, en, es, fr, ru, zh-Hans), light and dark theme, adjustable reading size.
 - API key in the OS keychain, never in the frontend. Everything local in SQLite.
