@@ -22,9 +22,11 @@ minimum size dropped to 320×280 so narrow layouts are reachable) and round 78
 settling instead of a fixed sleep, `loading` for a not-yet-painted page, the
 current URL in `browser_click` answers and errors, and browser window titles that
 follow the page) and round 79 (`browser_windows` as a tool, `browser_read(url, id)`
-for a deliberate navigation, and `loading` keyed on content rather than a title)
-and round 80 (a stream guard that cuts a repeating answer and says so); it is not
-committed because the user tests first.
+for a deliberate navigation, and `loading` keyed on content rather than a title),
+round 80 (a stream guard that cuts a repeating answer and says so) and round 81
+(compression on the provider's own prompt size, a window-only screenshot, and the
+trust system that reveals the companion's name at 100 points); the working tree
+is what the user tests next.
 
 ## What it is
 
@@ -56,7 +58,7 @@ Checks and release:
 ```sh
 pnpm build                        # i18n check + vue-tsc + Vite
 pnpm check:i18n                   # six catalogs, same keys, no German leftovers
-cd src-tauri && cargo test --lib  # 59 passed, 13 ignored (live tests need DS_IDE_API_KEY)
+cd src-tauri && cargo test --lib  # 62 passed, 13 ignored (live tests need DS_IDE_API_KEY)
 pnpm tauri build                  # deb/rpm/AppImage, NSIS, dmg
 ```
 
@@ -120,6 +122,16 @@ connection test.
 
 ## Features worth knowing
 
+- **Trust and the name:** the companion picks its name early (`choose_name`), but the UI shows
+  the placeholder until 100 points are earned: 2 for the first turn of a day, 1 per finished
+  turn that ran a tool successfully (max 10/day), 1 per memory it writes (max 5/day), 3 when
+  the user corrects a memory (max 3/day). `trust_points` holds the rows; `TRUST_THRESHOLD` in
+  `db.rs` is the line. Crossing it sets `trustRevealed`, emits `trust://revealed` and shows a
+  banner; the partner page shows the progress and where the points came from. Installations
+  that already had a name are marked revealed by the migration.
+- **Window screenshots:** `screenshot` takes an optional `window` id. The desktop is captured
+  and cropped to that window (`image` crate, PNG); the answer says whether the crop happened.
+  A compositor that does not report window positions gets the whole desktop with a note.
 - **Runaway answers:** the stream is watched for a repeated tail (one block of up to 200
   bytes, at least 320 bytes and 24 repeats). On a hit the stream is cut, the repetition is
   removed and the turn ends with `stop_reason: "loop"` plus a message; what came before is

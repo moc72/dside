@@ -3184,3 +3184,64 @@ ein Screenshot nur des Browserfensters; Laufzeittest auf Windows/macOS;
 Punkte-/Vertrauenssystem (Name ab Schwelle) aus §35/§36.
 
 Kein Commit — der Nutzer testet zuerst.
+
+## 81. Echte Token, ein Fenster statt Desktop, Vertrauen über Zeit (2026-10-24, sechzigste Runde)
+
+Die zwei letzten offenen Punkte aus §80, vor einem Release abgearbeitet.
+
+### Kompression rechnet mit der Messung
+Bisher entschied `estimated_tokens` (Zeichen / 4) über die Kompression — ohne
+System-Prompt und ohne die Tool-Schemas, die der Provider mitzählt. Neu:
+- Tabelle `session_usage` speichert je Sitzung die `prompt_tokens` des letzten
+  Requests **und** wie viele Nachrichten er trug.
+- `prompt_size` nimmt diese Messung und addiert nur den Zuwachs seitdem
+  (`estimated_tokens` auf die neuen Nachrichten). Ist die Basis veraltet — neue
+  Sitzung, oder die Historie wurde gerade durch Kompression umgeschrieben —,
+  gilt wieder die Schätzung.
+- Der Log sagt, worauf entschieden wurde: `compaction: measured size … over
+  limit …`.
+Test `the_prompt_size_prefers_the_measurement_and_adds_the_growth`.
+
+### Screenshot nur des Browserfensters
+`screenshot { window: "browser-1" }` (neuer optionaler Parameter): Der Desktop
+wird aufgenommen und auf das Fensterrechteck zugeschnitten (`image`-Crate, nur
+PNG). Die Antwort nennt `window: true/false` und einen Hinweis, was passiert ist.
+Kann der Compositor keine Fensterposition nennen (manche Wayland-Sitzungen),
+kommt ehrlich der ganze Desktop mit `window: false` und einer Notiz zurück,
+statt einen falschen Ausschnitt zu liefern. Live geprüft: Desktop 3840×1080,
+Fenster bei 0,32 mit 1920×1000, Zuschnitt exakt 1920×1000, im Canvas 97 % helle
+Fläche bei 34 Farben — also die Seite, nicht der Desktop.
+
+### Vertrauen: der Name kommt später
+`trust_points` (kind, points, day, note) mit Tageskappen:
+- `day` — erster Turn des Tages, 2 Punkte (einmal pro Tag)
+- `turn` — ein beendeter Turn, in dem mindestens ein Werkzeug erfolgreich war,
+  1 Punkt (max. 10/Tag)
+- `memory` — eine Notiz, die der Begleiter selbst schreibt, 1 Punkt (max. 5/Tag)
+- `correction` — der Nutzer bearbeitet eine Notiz, 3 Punkte (max. 3/Tag)
+Schwelle `TRUST_THRESHOLD = 100`. Beim Überschreiten setzt `award_trust`
+`trustRevealed`, legt es fest und sendet `trust://revealed`; die App zeigt einen
+dezenten Banner („Dein Begleiter hat einen Namen: Ziggy."), der Begleiter-Tab
+schildert Herkunft und Fortschritt. Vorher steht dort der Platzhalter „Seeky"
+mit Balken („Vertrauen: 42 / 100"), und auch die Namensbedeutung bleibt
+verborgen — sie würde den Namen verraten. Bestehende Installationen mit
+gewähltem Namen werden bei der Migration als enthüllt markiert (Ziggy bleibt
+sichtbar); frische Installationen starten bei null.
+
+### Ein Fehler, den erst der Screenshot zeigte
+Der Begleiter-Tab war ungestylt: `.card`, `.row`, `.label` liegen scoped in
+`SettingsPage.vue` und erreichen eine Kindkomponente nicht. Die Panels tragen
+ihre Karten-Regeln jetzt selbst; vorher rendeten Fortschritt und Namenszeile
+als zusammenhanglose Blöcke. Auch die Balkenfarbe war zu blass (`--border`
+statt `--bg-elevated`).
+
+### Geprüft
+`cargo test --lib` **62 passed / 13 ignored** (zwei Vertrauens-Tests inkl.
+Migration, einer für `prompt_size`), `pnpm build` grün mit i18n-Check
+(479 Schlüssel in sechs Sprachen). Live: 99 Punkte gesetzt, ein Turn → 101,
+`revealed: true`, Banner sichtbar; verborgener und enthüllter Tab per
+Screenshot geprüft (`/tmp/dside-partner-trust3.png`,
+`/tmp/dside-partner-revealed.png`). Die echte Modell-Kompression ist durch den
+Unit-Test abgedeckt, nicht durch eine künstlich aufgeblähte Sitzung.
+
+Kein Commit — der Nutzer testet zuerst.

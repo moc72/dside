@@ -21,7 +21,7 @@ work area shows a preview, not an editor.*
 - One answer is a **timeline**: thinking, text and tool calls in the order they happened.
   Tool rows open to show the command, its output, and the approval state.
 - **Long-term memory** the user can read, search, correct and retire (nothing is deleted), with a visible marker for what the user wrote or rewrote, and optional project scoping.
-- **Context ring** showing how full the model's window is, and **compression**: older turns are folded into a summary the model writes itself (automatically at 75 %, or on click).
+- **Context ring** showing how full the model's window is, and **compression**: older turns are folded into a summary the model writes itself (automatically at 75 %, or on click). The automatic trigger uses the provider's own prompt size for the last request plus the growth since; only a session without a measurement falls back to a character estimate.
 - **Image attachments** by paste or picker; they stay with the message and are sent along.
 - **Follow mode**: files the partner reads or edits open in the work area (preview or code editor), pages it fetches open in the app's browser. The eye in the tab bar turns it off; the cursor stays in the composer.
 - **Retry** after a failed turn: the failed tail is rolled back, the same user message is sent again, and the error bubble survives a visit to Settings.
@@ -34,7 +34,7 @@ work area shows a preview, not an editor.*
   presentations (pptx, ppt, odp), RTF.
 - **Terminal:** a real PTY in a tab — ConPTY on Windows, the Unix PTY elsewhere. It stays alive while its tab exists; closing the tab stops the shell.
 - **Git:** status, stage/unstage, diff, commit, local branches and `pull --ff-only`. No push or merge UI; the terminal is there for that.
-- **Screen capture:** the eye in the composer captures the virtual desktop and attaches a 2000px JPEG. The `screenshot` tool lets the companion ask for a capture itself. The image is sent as an OpenAI `image_url` content part; `deepseek-flash` reads text and layout from it (tested). Very small images (for example 1×1) are rejected by the provider.
+- **Screen capture:** the eye in the composer captures the virtual desktop and attaches a 2000px JPEG. The `screenshot` tool lets the companion ask for a capture itself; with a `window` id it captures that browser window alone, cut out of the desktop, and says whether the crop worked. The image is sent as an OpenAI `image_url` content part; `deepseek-flash` reads text and layout from it (tested). Very small images (for example 1×1) are rejected by the provider.
 - **Logs:** an in-memory ring of the app's and engine's log lines, with a Logs tab and a read-only `logs` tool for the companion. Nothing is written to disk.
 - **Integrated browser.** With **Browser control** on, the partner can open, read and fill pages itself; the setting is under Settings → General. A local preview of workspace files (for example the HTML/CSS it just wrote) works without that switch.
 - **Preview:** `preview(path)` renders a workspace file (HTML/CSS with relative assets) in the app browser through a local, read-only server and returns the page's text and layout — viewport, element boxes, spacing, overflow and colours. Works without Browser control. Clicking and filling that page (`browser_click`, `browser_fill`) works without the switch too, so interactive states are testable. `width`/`height` lay the page out at a given CSS size, so a breakpoint can be measured instead of guessed. The answer carries `size.requested`, `size.effective` and `size.clamped`, so a measurement clamped by the window minimum (320×280) is not mistaken for the requested one.
@@ -45,6 +45,7 @@ work area shows a preview, not an editor.*
 - Sessions, open tabs, the last file and the window geometry survive a restart.
 - **Copy:** every answer has a copy button (icon only) that copies the raw Markdown source, code fences and tables included.
 - **Runaway answers:** if the model starts repeating itself, the stream is cut after a few hundred repeated characters and the turn says so; everything before the repetition is kept.
+- **Trust:** the companion chooses its name early, but you learn it only after 100 points earned over days — a day of use, finished tasks, its own notes, your corrections. The partner page shows the progress; nothing is awarded for a single click.
 - **First start** asks for mode, workspace and API key; **Settings → Diagnostics** checks the keyring, provider, database and detected editors.
 - **Keyboard shortcuts** are listed, searchable and editable under Settings → Keyboard shortcuts.
 - **Policies:** the companion's `bash` tool can be limited to an allowlist and writes can be kept inside the workspace. This is a policy, not an OS sandbox; the user's terminal stays free.
