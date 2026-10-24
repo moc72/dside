@@ -42,6 +42,10 @@ fn open_windows(app: &AppHandle) -> Vec<(u32, WebviewWindow)> {
 pub struct BrowserWindowInfo {
     pub id: String,
     pub url: String,
+    /// What the window calls itself. Without it "browser-1" is just a slot number.
+    pub title: String,
+    /// The newest window, which `browser_read` without an id would read.
+    pub newest: bool,
 }
 
 /// Opens a URL in a window we own.
@@ -83,9 +87,11 @@ pub fn open_browser_window(
 
     let label = format!("{PREFIX}{slot}");
     let window = WebviewWindowBuilder::new(&app, &label, WebviewUrl::External(target))
-        .title("DS.IDE — Webdesign")
+        .title("DS·IDE — Browser")
         .inner_size(1120.0, 840.0)
-        .min_inner_size(520.0, 400.0)
+        // Low enough to measure a narrow breakpoint (the companion's preview can ask for
+        // 400 px), high enough that the window still has usable chrome.
+        .min_inner_size(320.0, 280.0)
         // Following the companion must not take the keyboard away from the composer.
         .focused(raise_after)
         .build()
@@ -98,14 +104,18 @@ pub fn open_browser_window(
 
 #[tauri::command]
 pub fn browser_windows(app: AppHandle) -> Vec<BrowserWindowInfo> {
-    open_windows(&app)
-        .into_iter()
-        .map(|(_, window)| BrowserWindowInfo {
-            id: window.label().to_string(),
-            url: window
-                .url()
-                .map(|url| url.to_string())
-                .unwrap_or_default(),
+    let mut windows = open_windows(&app);
+    let newest = windows.last().map(|(_, window)| window.label().to_string());
+    windows
+        .drain(..)
+        .map(|(_, window)| {
+            let label = window.label().to_string();
+            BrowserWindowInfo {
+                title: window.title().unwrap_or_default(),
+                newest: newest.as_deref() == Some(label.as_str()),
+                url: without_marker(&window.url().map(|url| url.to_string()).unwrap_or_default()),
+                id: label,
+            }
         })
         .collect()
 }
@@ -171,7 +181,47 @@ const READ_SCRIPT: &str = r##"
       title: document.title,
       text: cap(document.body ? document.body.innerText : "", 8000),
       links,
-      fields
+      fields,
+      layout: (() => {
+        const elements = Array.from(document.querySelectorAll("body *"))
+          .map((el) => {
+            const rect = el.getBoundingClientRect();
+            const style = getComputedStyle(el);
+            if (rect.width <= 0 || rect.height <= 0 || style.display === "none" || style.visibility === "hidden") return null;
+            const leaf = el.children.length === 0;
+            return {
+              tag: el.tagName.toLowerCase(),
+              id: el.id || "",
+              classes: cap(typeof el.className === "string" ? el.className : "", 80),
+              text: leaf ? cap((el.textContent || "").trim(), 80) : "",
+              x: Math.round(rect.x),
+              y: Math.round(rect.y),
+              width: Math.round(rect.width),
+              height: Math.round(rect.height),
+              display: style.display,
+              position: style.position,
+              margin: [style.marginTop, style.marginRight, style.marginBottom, style.marginLeft].join(" "),
+              padding: [style.paddingTop, style.paddingRight, style.paddingBottom, style.paddingLeft].join(" "),
+              gap: style.gap && style.gap !== "normal" ? style.gap : "",
+              align: style.textAlign !== "start" ? style.textAlign : "",
+              // Overflow is what a too-long token looks like without seeing it.
+              overflow: (el.scrollWidth > el.clientWidth + 1 ? "x" : "") + (el.scrollHeight > el.clientHeight + 1 ? "y" : "") || "",
+              color: leaf ? style.color : "",
+              background: leaf ? style.backgroundColor : "",
+              fontSize: leaf ? style.fontSize : ""
+            };
+          })
+          .filter(Boolean)
+          .slice(0, 80);
+        return {
+          viewport: {
+            width: window.innerWidth,
+            height: window.innerHeight,
+            scrollHeight: document.documentElement ? document.documentElement.scrollHeight : 0
+          },
+          elements
+        };
+      })()
     };
     const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
     try {
@@ -222,6 +272,22 @@ pub struct BrowserPage {
     pub text: String,
     pub links: Vec<BrowserLink>,
     pub fields: Vec<BrowserField>,
+    /// Element boxes and the viewport: the only way to judge alignment without pixels.
+    #[serde(default)]
+    pub layout: serde_json::Value,
+    /// The document reported neither a title nor any text. It may genuinely be empty, but on
+    /// a freshly opened page it usually means the page is still loading — say so instead of
+    /// handing back an empty document that looks like a result.
+    #[serde(default)]
+    pub loading: bool,
+}
+
+impl BrowserPage {
+    /// Nothing has arrived yet. A page can carry a title from the document head while the
+    /// body is still empty; title alone is not evidence that there is something to read.
+    fn looks_unloaded(&self) -> bool {
+        self.text.trim().is_empty() && self.links.is_empty() && self.fields.is_empty()
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -234,6 +300,56 @@ pub struct BrowserFillField {
 pub struct BrowserFillResult {
     pub filled: i64,
     pub submitted: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserClickResult {
+    pub clicked: bool,
+    pub tag: String,
+    pub text: String,
+    /// The click likely started a navigation; the marker vanished before it could be read.
+    pub navigated: bool,
+    /// Where the window is after the click. A selector from an older read may no longer
+    /// match because the page changed; the URL is what tells those two cases apart.
+    pub url: String,
+}
+
+/// The URL a window is on. Used to decide whether a page is the companion's own preview:
+/// that one may be clicked without Browser control.
+pub fn window_url(app: &AppHandle, id: Option<&str>) -> Result<String, String> {
+    let window = pick_window(app, id)?;
+    window
+        .url()
+        .map(|url| url.to_string())
+        .map_err(|error| format!("browser: {error}"))
+}
+
+/// Resizes a browser window so the page is laid out at `width` CSS pixels. A layout measured
+/// in a 1120 px window says nothing about the narrow panel it may end up in; this is how the
+/// companion checks a breakpoint instead of guessing.
+pub fn set_viewport(
+    app: &AppHandle,
+    id: Option<&str>,
+    width: Option<u32>,
+    height: Option<u32>,
+) -> Result<(), String> {
+    let window = pick_window(app, id)?;
+    if width.is_none() && height.is_none() {
+        return Ok(());
+    }
+    let scale = window.scale_factor().unwrap_or(1.0).max(0.5);
+    let current = window
+        .inner_size()
+        .map_err(|error| format!("browser: {error}"))?;
+    let logical_width = width.map(|value| value as f64).unwrap_or(current.width as f64 / scale);
+    let logical_height = height.map(|value| value as f64).unwrap_or(current.height as f64 / scale);
+    window
+        .set_size(tauri::LogicalSize::new(
+            logical_width.clamp(240.0, 4000.0),
+            logical_height.clamp(200.0, 4000.0),
+        ))
+        .map_err(|error| format!("browser: {error}"))
 }
 
 fn pick_window(app: &AppHandle, id: Option<&str>) -> Result<WebviewWindow, String> {
@@ -283,6 +399,8 @@ pub async fn browser_read(app: AppHandle, id: Option<String>) -> Result<BrowserP
             let mut page: BrowserPage =
                 serde_json::from_str(&json).map_err(|error| format!("browser: {error}"))?;
             page.id = label;
+            page.loading = page.looks_unloaded();
+            follow_title(&window, &page);
             return Ok(page);
         }
     }
@@ -301,12 +419,66 @@ pub async fn browser_open_read(app: AppHandle, value: String) -> Result<BrowserP
         return Err("browser: empty url".to_string());
     }
     let label = open_browser_window(app.clone(), url, Some(true), Some(false))?;
+    read_when_loaded(app, label).await
+}
 
+/// Navigates a window the caller named and reads it back. `browser_read` without an id
+/// deliberately never navigates, because that would replace a page the user is looking at;
+/// an explicit window id is the caller taking that decision.
+pub async fn browser_open_read_in(
+    app: AppHandle,
+    value: String,
+    label: &str,
+) -> Result<BrowserPage, String> {
+    let url = normalize_url(&value);
+    if url.is_empty() {
+        return Err("browser: empty url".to_string());
+    }
+    let window = app
+        .get_webview_window(label)
+        .ok_or_else(|| format!("browser: no window '{label}'"))?;
+    window
+        .navigate(parse(&url)?)
+        .map_err(|error| format!("browser: {error}"))?;
+    read_when_loaded(app, label.to_string()).await
+}
+
+/// Shows a workspace page in the browser: an existing preview window is navigated (iterating
+/// on a page should not fill the desktop with windows), otherwise a new one is opened.
+pub async fn show_preview_read(app: AppHandle, url: String) -> Result<BrowserPage, String> {
+    let target = parse(&url)?;
+    let existing = open_windows(&app)
+        .into_iter()
+        .rev()
+        .map(|(_, window)| window)
+        .find(|window| {
+            window
+                .url()
+                .map(|current| crate::preview::is_preview_url(&app, &current.to_string()))
+                .unwrap_or(false)
+        });
+    let label = match existing {
+        Some(window) => {
+            window
+                .navigate(target)
+                .map_err(|error| format!("browser: {error}"))?;
+            window.label().to_string()
+        }
+        None => open_browser_window(app.clone(), url, Some(true), Some(false))?,
+    };
+    read_when_loaded(app, label).await
+}
+
+async fn read_when_loaded(app: AppHandle, label: String) -> Result<BrowserPage, String> {
     let mut last: Option<BrowserPage> = None;
     let mut last_error = String::new();
     for _ in 0..6 {
         match browser_read(app.clone(), Some(label.clone())).await {
-            Ok(page) if !page.url.is_empty() && page.url != "about:blank" => return Ok(page),
+            // A page that has its URL but no title and no text is still painting. Retrying is
+            // cheaper than handing the companion an empty document it would report as "leer".
+            Ok(page) if !page.url.is_empty() && page.url != "about:blank" && !page.loading => {
+                return Ok(page)
+            }
             Ok(page) => last = Some(page),
             Err(error) => last_error = error,
         }
@@ -321,6 +493,20 @@ pub async fn browser_open_read(app: AppHandle, value: String) -> Result<BrowserP
     } else {
         last_error
     })
+}
+
+/// Names the window after the page, the way a browser does. A window called "Browser" tells
+/// the user nothing when several are open; the page title does.
+fn follow_title(window: &WebviewWindow, page: &BrowserPage) {
+    let title = page.title.trim();
+    if title.is_empty() || page.loading {
+        return;
+    }
+    let mut short: String = title.chars().take(70).collect();
+    if title.chars().count() > 70 {
+        short.push('…');
+    }
+    let _ = window.set_title(&format!("{short} — DS·IDE"));
 }
 
 fn fill_script(fields: &[BrowserFillField], submit: bool, submit_selector: Option<&str>) -> String {
@@ -435,6 +621,150 @@ pub async fn browser_fill(
     Err("browser: the page did not confirm the fill (CSP or an unsupported page)".to_string())
 }
 
+/// Clicks one element. The marker is written before the click, because a click that starts a
+/// navigation takes any later marker with it: reporting first is what makes the difference
+/// between "clicked, page changed" and "nothing happened" visible from the host.
+fn click_script(selector: &str) -> String {
+    let selector_json = serde_json::to_string(selector).unwrap_or_else(|_| "\"\"".to_string());
+    format!(
+        r##"
+(() => {{
+  try {{
+    const selector = {selector_json};
+    const el = selector ? document.querySelector(selector) : null;
+    if (!el) {{
+      history.replaceState(null, "", location.pathname + location.search + "#__dside_click=missing:0:0:0");
+      return;
+    }}
+    el.scrollIntoView({{ block: "center", inline: "nearest" }});
+    const tag = el.tagName.toLowerCase();
+    const text = ((el.innerText || el.textContent || "").trim()).slice(0, 80);
+    const href = el.getAttribute("href") || "";
+    const marker =
+      "#__dside_click=ok:" +
+      (href ? "1" : "0") + ":" +
+      encodeURIComponent(tag) + ":" +
+      encodeURIComponent(text);
+    try {{
+      history.replaceState(null, "", location.pathname + location.search + marker);
+    }} catch (_) {{
+      location.hash = marker;
+    }}
+    el.click();
+  }} catch (error) {{
+    try {{
+      history.replaceState(null, "", location.pathname + location.search + "#__dside_click=error");
+    }} catch (_) {{}}
+  }}
+}})();
+"##
+    )
+}
+
+fn decode(value: &str) -> String {
+    let bytes = value.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' && index + 2 < bytes.len() {
+            let hex = std::str::from_utf8(&bytes[index + 1..index + 3]).ok();
+            if let Some(value) = hex.and_then(|value| u8::from_str_radix(value, 16).ok()) {
+                out.push(value);
+                index += 3;
+                continue;
+            }
+        }
+        out.push(bytes[index]);
+        index += 1;
+    }
+    String::from_utf8_lossy(&out).to_string()
+}
+
+/// The URL as a reader should see it: the host scripts hand data back through a fragment
+/// (`#__dside_click=…`), and that bookkeeping is not part of the page's address.
+fn without_marker(url: &str) -> String {
+    match url.find("#__dside_") {
+        Some(index) => url[..index].to_string(),
+        None => url.to_string(),
+    }
+}
+
+/// Clicks an element in a browser window. The caller decides whether the click is allowed
+/// (the companion's own preview page is, a foreign page needs Browser control).
+#[tauri::command]
+pub async fn browser_click(
+    app: AppHandle,
+    id: Option<String>,
+    selector: String,
+) -> Result<BrowserClickResult, String> {
+    let selector = selector.trim().to_string();
+    if selector.is_empty() {
+        return Err("browser: 'selector' is required".to_string());
+    }
+    if selector.len() > 400 {
+        return Err("browser: the selector is too long".to_string());
+    }
+    let window = pick_window(&app, id.as_deref())?;
+    window
+        .eval(&click_script(&selector))
+        .map_err(|error| format!("browser: {error}"))?;
+
+    for _ in 0..10 {
+        sleep(Duration::from_millis(50)).await;
+        let url = window
+            .url()
+            .map(|url| url.to_string())
+            .unwrap_or_default();
+        let Some((_, marker)) = url.split_once("#__dside_click=") else {
+            continue;
+        };
+        clear_hash(&window);
+        let mut parts = marker.splitn(4, ':');
+        let state = parts.next().unwrap_or("");
+        let href = parts.next().unwrap_or("0");
+        let tag = decode(parts.next().unwrap_or(""));
+        // The text comes last so colons inside it cannot shift the other fields.
+        let text = decode(parts.next().unwrap_or(""));
+        let current = without_marker(
+            &window
+                .url()
+                .map(|url| url.to_string())
+                .unwrap_or_default(),
+        );
+        return match state {
+            "ok" => Ok(BrowserClickResult {
+                clicked: true,
+                tag,
+                text,
+                navigated: href.starts_with('1'),
+                url: current,
+            }),
+            // A selector from an older read and a page that has since navigated produce the
+            // same "not found". Naming the current URL is what tells them apart.
+            "missing" => Err(format!(
+                "browser: no element matches {selector} — the window is now on {current}; \
+                 the page may have changed since the read, call browser_read again"
+            )),
+            _ => Err("browser: the click script failed on this page".to_string()),
+        };
+    }
+
+    // The marker was written before the click; if it is gone, the click almost certainly
+    // started a navigation. Say that instead of reporting a failure that did not happen.
+    Ok(BrowserClickResult {
+        clicked: true,
+        tag: String::new(),
+        text: String::new(),
+        navigated: true,
+        url: without_marker(
+            &window
+                .url()
+                .map(|url| url.to_string())
+                .unwrap_or_default(),
+        ),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -446,6 +776,46 @@ mod tests {
         let url = format!("https://example.test/#__dside_read={encoded}");
         assert_eq!(read_hash(&url).as_deref(), Some(json));
         assert!(read_hash("https://example.test/").is_none());
+    }
+
+    #[test]
+    fn the_reported_url_has_no_bookkeeping_fragment() {
+        assert_eq!(
+            without_marker("https://example.test/a?b=1#__dside_click=ok:0:button:Ja"),
+            "https://example.test/a?b=1"
+        );
+        assert_eq!(
+            without_marker("https://example.test/a#section"),
+            "https://example.test/a#section"
+        );
+    }
+
+    /// An empty document on a freshly opened page is usually a page that is still painting.
+    /// Saying so is better than handing back "leer" as if it were the result. A title from the
+    /// document head proves nothing: the body can still be empty.
+    #[test]
+    fn an_empty_document_looks_unloaded() {
+        let mut page = BrowserPage {
+            id: String::new(),
+            url: "https://example.test/".to_string(),
+            title: String::new(),
+            text: String::new(),
+            links: Vec::new(),
+            fields: Vec::new(),
+            layout: serde_json::json!({}),
+            loading: false,
+        };
+        assert!(page.looks_unloaded());
+        page.title = "Example".to_string();
+        assert!(page.looks_unloaded(), "a title alone is not content");
+        page.text = "hello".to_string();
+        assert!(!page.looks_unloaded());
+        page.text.clear();
+        page.links.push(BrowserLink {
+            text: "a".to_string(),
+            href: "https://example.test/a".to_string(),
+        });
+        assert!(!page.looks_unloaded(), "links count as loaded");
     }
 
     #[test]

@@ -69,6 +69,18 @@ pub fn engine_clear_session_grants(state: State<'_, EngineState>) -> Result<(), 
     Ok(())
 }
 
+/// The tools the user allowed permanently from a permission question.
+#[tauri::command]
+pub fn engine_trusted_tools(db: State<'_, Db>) -> Result<Vec<String>, String> {
+    db.trusted_tools()
+}
+
+/// Revokes every permanent tool grant; the next question is asked again.
+#[tauri::command]
+pub fn engine_clear_tool_grants(db: State<'_, Db>) -> Result<(), String> {
+    db.set_setting("trustedTools", "[]")
+}
+
 #[tauri::command]
 pub fn engine_reset(app: AppHandle, session_id: String) -> Result<(), String> {
     if let Some(db) = app.try_state::<Db>() {
@@ -935,6 +947,7 @@ fn permission_summary(name: &str, args: &Value) -> String {
         ),
         "bash" => format!("bash: {}", text("command")),
         "screenshot" => "screenshot: capture the current screen".to_string(),
+        "browser_click" => format!("browser_click: {}", text("selector")),
         _ => format!("{name}: {}", args),
     };
     if summary.chars().count() > 2000 {
@@ -955,6 +968,221 @@ async fn screenshot_tool(app: &AppHandle) -> tools::ToolOutcome {
         }
         Err(error) => tools::ToolOutcome::err(format!("screenshot: {error}")),
     }
+}
+
+/// Serves the workspace file on localhost and opens it in the app browser. The bridge that
+/// was missing: the page is shown, not copied anywhere, and the browser tools read it.
+async fn preview_tool(
+    app: &AppHandle,
+    workspace: &std::path::Path,
+    args: &Value,
+) -> tools::ToolOutcome {
+    use std::path::{Component, Path, PathBuf};
+
+    let raw = args
+        .get("path")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
+    if raw.is_empty() {
+        return tools::ToolOutcome::err("preview: 'path' is required");
+    }
+    let root = match workspace.canonicalize() {
+        Ok(root) => root,
+        Err(error) => {
+            return tools::ToolOutcome::err(format!("preview: workspace: {error}"));
+        }
+    };
+    let candidate = if Path::new(raw).is_absolute() {
+        PathBuf::from(raw)
+    } else {
+        root.join(raw)
+    };
+    let file = match candidate.canonicalize() {
+        Ok(file) => file,
+        Err(error) => {
+            return tools::ToolOutcome::err(format!("preview: {raw}: {error}"));
+        }
+    };
+    if !file.starts_with(&root) {
+        return tools::ToolOutcome::err("preview: the file is outside the workspace");
+    }
+    if !file.is_file() {
+        return tools::ToolOutcome::err(format!("preview: {raw} is not a file"));
+    }
+    let port = match crate::preview::ensure(app, &root).await {
+        Ok(port) => port,
+        Err(error) => {
+            return tools::ToolOutcome::err(format!("preview: {error}"));
+        }
+    };
+    let relative = file.strip_prefix(&root).unwrap_or(&file);
+    let encoded = relative
+        .components()
+        .filter_map(|component| match component {
+            Component::Normal(part) => Some(percent_encode(&part.to_string_lossy())),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("/");
+    let url = format!("http://127.0.0.1:{port}/{encoded}");
+    let width = args
+        .get("width")
+        .and_then(Value::as_u64)
+        .map(|value| value as u32);
+    let height = args
+        .get("height")
+        .and_then(Value::as_u64)
+        .map(|value| value as u32);
+    match crate::browser::show_preview_read(app.clone(), url.clone()).await {
+        Ok(page) => {
+            // A layout measured in the default window says nothing about the narrow panel it
+            // may end up in. Resize and read again so the boxes describe the requested size.
+            let requested = width.is_some() || height.is_some();
+            let mut page = page;
+            let mut settled = false;
+            if requested {
+                if let Err(error) = crate::browser::set_viewport(app, Some(&page.id), width, height)
+                {
+                    return tools::ToolOutcome::err(format!("preview: {error}"));
+                }
+                // The webview applies the size asynchronously. Poll instead of trusting one
+                // fixed sleep: the measurement is worth more than the wait. "Settled" means
+                // two identical readings — a clamped request never reaches its target, but it
+                // does come to rest, and that rest is what the boxes describe.
+                let started = std::time::Instant::now();
+                let mut previous: Option<Option<(u32, u32)>> = None;
+                for _ in 0..10 {
+                    tokio::time::sleep(std::time::Duration::from_millis(120)).await;
+                    let Ok(next) = crate::browser::browser_read(app.clone(), Some(page.id.clone()))
+                        .await
+                    else {
+                        continue;
+                    };
+                    page = next;
+                    let current = viewport_size(&page);
+                    if size_settled(current, width, height) {
+                        settled = true;
+                        break;
+                    }
+                    let stable = previous == Some(current);
+                    if stable && started.elapsed() >= std::time::Duration::from_millis(360) {
+                        settled = true;
+                        break;
+                    }
+                    previous = Some(current);
+                }
+            }
+            let size = describe_size(width, height, viewport_size(&page), requested, settled);
+            // The page comes back with the preview: geometry, overflow and colours are the
+            // only way to judge a layout without pixels, and asking for a second tool call
+            // would leave the companion with a page it cannot see.
+            let mut value = serde_json::to_value(&page).unwrap_or_else(|_| serde_json::json!({}));
+            if let Some(object) = value.as_object_mut() {
+                object.insert("preview".to_string(), serde_json::Value::String(url));
+                object.insert("size".to_string(), size);
+                object.insert(
+                    "hint".to_string(),
+                    serde_json::Value::String(
+                        "Layout is under `layout`: viewport plus the visible elements' boxes, spacing, overflow and text colours. `size.effective` is what was really measured — if it differs from `size.requested`, the window's minimum size clamped it. Without width/height the previous window size is kept. `screenshot` shows the whole desktop, not only this page.".to_string(),
+                    ),
+                );
+            }
+            tools::ToolOutcome::ok(
+                serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".to_string()),
+            )
+        }
+        Err(error) => tools::ToolOutcome::err(format!("preview: browser: {error}")),
+    }
+}
+
+
+/// A repeated block can be a whole sentence; the notice names it without dumping it into the
+/// timeline twice.
+fn truncate_for_notice(block: &str) -> String {
+    let cleaned = block.trim();
+    let mut short: String = cleaned.chars().take(40).collect();
+    if cleaned.chars().count() > 40 {
+        short.push('…');
+    }
+    format!("{short:?}")
+}
+
+fn percent_encode(segment: &str) -> String {
+    let mut out = String::new();
+    for byte in segment.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(byte as char);
+            }
+            _ => out.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    out
+}
+
+/// The viewport the page was actually laid out at, from its own layout snapshot.
+fn viewport_size(page: &crate::browser::BrowserPage) -> Option<(u32, u32)> {
+    let viewport = page.layout.get("viewport")?;
+    Some((
+        viewport.get("width")?.as_u64()? as u32,
+        viewport.get("height")?.as_u64()? as u32,
+    ))
+}
+
+/// A tolerance of one pixel: window chrome can round, and a measurement that differs by a
+/// pixel is still the requested size.
+fn size_settled(effective: Option<(u32, u32)>, width: Option<u32>, height: Option<u32>) -> bool {
+    let Some((actual_width, actual_height)) = effective else {
+        return true;
+    };
+    let close = |requested: Option<u32>, actual: u32| match requested {
+        Some(value) => actual.abs_diff(value) <= 1,
+        None => true,
+    };
+    close(width, actual_width) && close(height, actual_height)
+}
+
+/// The honest answer to "did I measure what I asked for?". A window has a minimum size, so a
+/// requested 240 px can become 320; a tool that reports only the request would let the reader
+/// believe a breakpoint was checked that never was.
+fn describe_size(
+    width: Option<u32>,
+    height: Option<u32>,
+    effective: Option<(u32, u32)>,
+    requested: bool,
+    settled: bool,
+) -> Value {
+    let effective_json = effective.map(|(width, height)| json!({ "width": width, "height": height }));
+    if !requested {
+        return json!({
+            "effective": effective_json,
+            "kept": "no width/height requested — the window keeps its previous size",
+        });
+    }
+
+    let mut clamped = Vec::new();
+    if let Some((actual_width, actual_height)) = effective {
+        if width.is_some_and(|want| actual_width.abs_diff(want) > 1) {
+            clamped.push("width");
+        }
+        if height.is_some_and(|want| actual_height.abs_diff(want) > 1) {
+            clamped.push("height");
+        }
+    }
+    let note = if !settled {
+        "the webview did not settle before the measurement; the boxes may describe an earlier layout"
+    } else if !clamped.is_empty() {
+        "the requested size was clamped by the window's minimum size (320×280)"
+    } else {
+        "measured at the requested size"
+    };
+    json!({
+        "requested": { "width": width, "height": height },
+        "effective": effective_json,
+        "clamped": clamped,
+        "note": note,
+    })
 }
 
 /// Blocks the turn until the user approves one write/edit/bash call. The frontend answers
@@ -981,6 +1209,7 @@ async fn approve_tool(
     if offer_session {
         options.push("session".to_string());
     }
+    options.push("always".to_string());
     options.push("deny".to_string());
     let mut event = EngineEvent::new(session_id, *seq, "action_required");
     event.action = Some(ActionEvent {
@@ -993,7 +1222,14 @@ async fn approve_tool(
 
     match tokio::time::timeout(std::time::Duration::from_secs(300), receiver).await {
         Ok(Ok(answer)) => {
-            if answer == "session" && offer_session {
+            if answer == "always" {
+                if let Some(db) = app.try_state::<Db>() {
+                    if let Err(error) = db.add_trusted_tool(name) {
+                        crate::log_line!("permission: could not remember {name}: {error}");
+                    }
+                }
+                true
+            } else if answer == "session" && offer_session {
                 if let Ok(mut grants) = app.state::<EngineState>().session_grants.lock() {
                     grants.insert(session_id.to_string());
                 }
@@ -1012,6 +1248,134 @@ fn has_session_grant(app: &AppHandle, session_id: &str) -> bool {
         .lock()
         .map(|grants| grants.contains(session_id))
         .unwrap_or(false)
+}
+
+/// A tool the user approved with "always" from a permission question. Persistent, unlike a
+/// session grant; it is what lets the danger floor stay silent for tools the user trusts.
+fn window_is_preview(app: &AppHandle, id: Option<&str>) -> bool {
+    crate::browser::window_url(app, id)
+        .map(|url| crate::preview::is_preview_url(app, &url))
+        .unwrap_or(false)
+}
+
+/// Clicks an element in a browser window. The companion's own preview page is part of looking
+/// at its work: it is served read-only from the workspace, and clicking a button there needs
+/// neither Browser control nor an approval. Any other page follows the browser rules.
+async fn browser_click_tool(
+    app: &AppHandle,
+    session_id: &str,
+    config: &EngineConfig,
+    args: &Value,
+    seq: &mut u64,
+) -> tools::ToolOutcome {
+    let id = args
+        .get("id")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let selector = args
+        .get("selector")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if selector.is_empty() {
+        return tools::ToolOutcome::err("browser_click: 'selector' is required");
+    }
+    let url = match crate::browser::window_url(app, id.as_deref()) {
+        Ok(url) => url,
+        Err(error) => return tools::ToolOutcome::err(format!("browser_click: {error}")),
+    };
+    let local = crate::preview::is_preview_url(app, &url);
+    if !local && !config.browser_control {
+        return tools::ToolOutcome::err(
+            "browser_click: Browser control is disabled in Settings → General (a page you opened with preview is exempt)",
+        );
+    }
+    if !local {
+        if config.permission == "read" {
+            return tools::ToolOutcome::err(
+                "browser_click: permission denied in Plan mode — ask the user to switch to Ask before changes or Full access",
+            );
+        }
+        let needs_question = config.permission == "ask"
+            && !has_session_grant(app, session_id)
+            && !has_tool_grant(app, "browser_click");
+        if needs_question
+            && !approve_tool(app, session_id, "browser_click", args, seq, true).await
+        {
+            return tools::ToolOutcome::err(
+                "permission denied by the user; do not retry this click without a new instruction",
+            );
+        }
+    }
+    match crate::browser::browser_click(app.clone(), id, selector).await {
+        Ok(result) => {
+            let value = serde_json::to_value(&result).unwrap_or_else(|_| json!({}));
+            let mut value = value;
+            if let Some(object) = value.as_object_mut() {
+                object.insert(
+                    "hint".to_string(),
+                    serde_json::Value::String(
+                        "Call browser_read (or preview again) to see what the click changed."
+                            .to_string(),
+                    ),
+                );
+            }
+            tools::ToolOutcome::ok(
+                serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".to_string()),
+            )
+        }
+        Err(error) => tools::ToolOutcome::err(format!("browser_click: {error}")),
+    }
+}
+
+fn has_tool_grant(app: &AppHandle, name: &str) -> bool {
+    app.try_state::<Db>()
+        .and_then(|db| db.trusted_tools().ok())
+        .map(|tools| tools.iter().any(|tool| tool == name))
+        .unwrap_or(false)
+}
+
+/// The configuration the running turn actually uses. The stored settings can be newer (the
+/// user may have flipped a switch mid-turn, or the turn is a scheduled one with full access);
+/// this answer is what the tools below it will see, so it is the one worth reporting.
+fn settings_tool(app: &AppHandle, config: &EngineConfig) -> tools::ToolOutcome {
+    let stored = app
+        .try_state::<Db>()
+        .and_then(|db| db.all_settings().ok())
+        .unwrap_or_default();
+    let read_bool = |key: &str| {
+        stored
+            .get(key)
+            .map(|value| value.trim().trim_matches('"') == "true")
+            .unwrap_or(false)
+    };
+    let trusted = app
+        .try_state::<Db>()
+        .and_then(|db| db.trusted_tools().ok())
+        .unwrap_or_default();
+    let value = json!({
+        "thisTurn": {
+            "workspace": config.workspace,
+            "permission": config.permission,
+            "browserControl": config.browser_control,
+            "commandPolicy": config.command_policy,
+            "allowedCommands": config.allowed_commands,
+            "workspaceOnly": config.workspace_only,
+            "model": config.model,
+            "reasoningEffort": config.reasoning_effort,
+        },
+        "stored": {
+            "permission": stored.get("permission").cloned().unwrap_or_default().trim_matches('"').to_string(),
+            "browserControl": read_bool("browserControl"),
+            "followCompanion": read_bool("followCompanion"),
+            "workspaceOnly": read_bool("workspaceOnly"),
+            "workspace": stored.get("workspace").cloned().unwrap_or_default().trim_matches('"').to_string(),
+        },
+        "trustedTools": trusted,
+        "note": "A change the user makes mid-turn reaches the tools with the next turn. preview of workspace files works without browser control; browser_read/browser_fill of other pages need it.",
+    });
+    tools::ToolOutcome::ok(serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".to_string()))
 }
 
 /// A small hard floor that survives full access: commands that can wipe the machine or
@@ -1667,6 +2031,25 @@ async fn run_turn(
         let message_id = turn_message_id;
         persist_turn(app, message_id, &said, tool_calls_json.as_deref(), &parts);
 
+        // A loop is cut inside the stream; tell the user instead of ending the turn as if it
+        // had finished. What came before the repetition is persisted above and stays.
+        if let Some(repeat) = &outcome.repeated {
+            seq += 1;
+            let mut notice = EngineEvent::new(session_id, seq, "error");
+            notice.error = Some(format!(
+                "Stopped: the model began repeating itself ({} in the {}, {}×). Everything before the repetition is kept; the rest was cut.",
+                truncate_for_notice(&repeat.block),
+                repeat.stream,
+                repeat.repeats
+            ));
+            emit(app, notice);
+            seq += 1;
+            let mut event = EngineEvent::new(session_id, seq, "turn_end");
+            event.stop_reason = Some("loop".to_string());
+            emit(app, event);
+            return (seq, Ok(()));
+        }
+
         messages.push(ChatMessage {
             role: "assistant".to_string(),
             image: None,
@@ -1759,25 +2142,40 @@ async fn run_turn(
                     &arguments,
                 )
                 .await
+            } else if call.function.name == "browser_windows" {
+                match serde_json::to_string_pretty(&crate::browser::browser_windows(app.clone())) {
+                    Ok(list) => tools::ToolOutcome::ok(list),
+                    Err(error) => tools::ToolOutcome::err(format!("browser_windows: {error}")),
+                }
             } else if call.function.name == "browser_read" {
-                if !config.browser_control {
+                let id = arguments
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .map(str::to_string);
+                let url = arguments
+                    .get("url")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string);
+                // A page the companion opened with `preview` is its own workspace served
+                // read-only; reading it back is part of the preview, so it does not need
+                // Browser control. Any other page does.
+                let target_is_preview = url.is_none() && window_is_preview(app, id.as_deref());
+                if !config.browser_control && !target_is_preview {
                     tools::ToolOutcome::err(
-                        "browser_read: Browser control is disabled in Settings → General",
+                        "browser_read: Browser control is disabled in Settings → General (a page you opened with preview is exempt)",
                     )
                 } else {
-                    let id = arguments
-                        .get("id")
-                        .and_then(Value::as_str)
-                        .map(str::to_string);
-                    let url = arguments
-                        .get("url")
-                        .and_then(Value::as_str)
-                        .map(str::trim)
-                        .filter(|value| !value.is_empty())
-                        .map(str::to_string);
-                    let page = match url {
-                        Some(url) => crate::browser::browser_open_read(app.clone(), url).await,
-                        None => crate::browser::browser_read(app.clone(), id).await,
+                    let page = match (url, id) {
+                        // url + id: navigate that window deliberately (see browser_windows).
+                        (Some(url), Some(id)) => {
+                            crate::browser::browser_open_read_in(app.clone(), url, &id).await
+                        }
+                        (Some(url), None) => {
+                            crate::browser::browser_open_read(app.clone(), url).await
+                        }
+                        (None, id) => crate::browser::browser_read(app.clone(), id).await,
                     };
                     match page {
                         Ok(page) => tools::ToolOutcome::ok(
@@ -1788,13 +2186,20 @@ async fn run_turn(
                     }
                 }
             } else if call.function.name == "browser_fill" {
-                if config.permission == "read" {
+                // The same rule as browser_click: a page the companion opened with `preview`
+                // is its own workspace served read-only, so filling it needs neither Browser
+                // control nor an approval. Any other page does.
+                let target_is_preview = window_is_preview(
+                    app,
+                    arguments.get("id").and_then(Value::as_str),
+                );
+                if config.permission == "read" && !target_is_preview {
                     tools::ToolOutcome::err(
                         "browser_fill: permission denied in Plan mode — ask the user to switch to Ask before changes or Full access",
                     )
-                } else if !config.browser_control {
+                } else if !config.browser_control && !target_is_preview {
                     tools::ToolOutcome::err(
-                        "browser_fill: Browser control is disabled in Settings → General",
+                        "browser_fill: Browser control is disabled in Settings → General (a page you opened with preview is exempt)",
                     )
                 } else {
                     let id = arguments
@@ -1815,8 +2220,10 @@ async fn run_turn(
                                 .get("submitSelector")
                                 .and_then(Value::as_str)
                                 .map(str::to_string);
-                            let needs_permission =
-                                config.permission == "ask" && !has_session_grant(app, session_id);
+                            let needs_permission = !target_is_preview
+                                && config.permission == "ask"
+                                && !has_session_grant(app, session_id)
+                                && !has_tool_grant(app, "browser_fill");
                             if needs_permission
                                 && !approve_tool(
                                     app,
@@ -1855,9 +2262,18 @@ async fn run_turn(
                         )),
                     }
                 }
+            } else if call.function.name == "browser_click" {
+                browser_click_tool(app, session_id, config, &arguments, &mut seq).await
+            } else if call.function.name == "settings" {
+                settings_tool(app, config)
+            } else if call.function.name == "preview" {
+                // Local preview deliberately ignores `browser_control`: it serves the user's
+                // own workspace on localhost. Reading a remote page stays gated.
+                preview_tool(app, &ctx.workspace, &arguments).await
             } else if call.function.name == "screenshot" {
-                let needs_permission =
-                    config.permission == "ask" && !has_session_grant(app, session_id);
+                let needs_permission = config.permission == "ask"
+                    && !has_session_grant(app, session_id)
+                    && !has_tool_grant(app, "screenshot");
                 if needs_permission
                     && !approve_tool(
                         app,
@@ -1880,6 +2296,7 @@ async fn run_turn(
                     config.permission == "ask" && has_session_grant(app, session_id);
                 let dangerous = is_dangerous_command(&call.function.name, &arguments);
                 let needs_question = config.permission != "read"
+                    && !has_tool_grant(app, &call.function.name)
                     && (dangerous || (config.permission == "ask" && !session_allowed));
                 if needs_question {
                     if approve_tool(
@@ -2029,5 +2446,43 @@ mod estimate_tests {
 
         // 2 tokens of text, 100 tokens of arguments, 1000 for the picture.
         assert!(estimated_tokens(&[message]) >= 1100);
+    }
+
+    /// A measurement that silently differs from the request is worse than no measurement:
+    /// the reader would believe a breakpoint was checked that never was.
+    #[test]
+    fn a_clamped_size_is_reported_as_clamped() {
+        let clamped = describe_size(Some(240), Some(600), Some((320, 600)), true, true);
+        assert_eq!(clamped["effective"]["width"], 320);
+        assert_eq!(clamped["effective"]["height"], 600);
+        assert_eq!(clamped["clamped"], json!(["width"]));
+        assert!(clamped["note"].as_str().unwrap().contains("clamped"));
+        // A clamped request comes to rest at the minimum; that is not "never settled".
+        assert!(!clamped["note"].as_str().unwrap().contains("did not settle"));
+
+        let exact = describe_size(Some(400), Some(700), Some((400, 700)), true, true);
+        assert_eq!(exact["clamped"], json!([]));
+        assert!(exact["note"].as_str().unwrap().contains("requested"));
+
+        let unsettled = describe_size(Some(400), None, Some((1120, 840)), true, false);
+        assert!(unsettled["note"].as_str().unwrap().contains("settle"));
+    }
+
+    /// "No width/height" must not look like "measured at the default"; the window keeps the
+    /// size of the previous call.
+    #[test]
+    fn a_call_without_a_size_says_it_kept_the_previous_one() {
+        let kept = describe_size(None, None, Some((320, 600)), false, false);
+        assert!(kept["kept"].as_str().unwrap().contains("previous"));
+        assert!(kept.get("clamped").is_none());
+        assert_eq!(kept["effective"]["width"], 320);
+    }
+
+    #[test]
+    fn the_size_settles_within_a_pixel() {
+        assert!(size_settled(Some((400, 700)), Some(400), Some(700)));
+        assert!(size_settled(Some((401, 699)), Some(400), Some(700)));
+        assert!(!size_settled(Some((320, 600)), Some(240), Some(600)));
+        assert!(size_settled(None, Some(400), Some(600)));
     }
 }

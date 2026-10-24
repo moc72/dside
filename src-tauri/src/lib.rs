@@ -11,6 +11,7 @@ mod db;
 mod engine;
 mod git_panel;
 mod logs;
+mod preview;
 mod pty;
 mod secret;
 mod skills;
@@ -1154,6 +1155,7 @@ pub fn run() {
         )
         .manage(engine::EngineState::default())
         .manage(pty::PtyState::default())
+        .manage(preview::PreviewState::default())
         .manage(test_bridge::TestBridgeState::default())
         .setup(|app| {
             let directory = app.path().app_data_dir()?;
@@ -1216,6 +1218,8 @@ pub fn run() {
             engine::engine_set_config,
             engine::engine_configured,
             engine::engine_clear_session_grants,
+            engine::engine_trusted_tools,
+            engine::engine_clear_tool_grants,
             engine::engine_send,
             engine::engine_retry,
             engine::session_compact,
@@ -1227,6 +1231,7 @@ pub fn run() {
             browser::browser_close,
             browser::browser_read,
             browser::browser_fill,
+            browser::browser_click,
             splash_visible,
             log_message,
             splash_ready,
@@ -1286,6 +1291,7 @@ pub fn run() {
             git_panel::git_panel_pull,
             capture::capture_screen,
             logs::log_tail,
+            preview::preview_start,
             test_bridge::test_bridge_report,
         ])
         .run(tauri::generate_context!())
