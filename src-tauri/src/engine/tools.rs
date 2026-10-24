@@ -332,10 +332,12 @@ pub fn definitions() -> Vec<Value> {
             "type": "function",
             "function": {
                 "name": "screenshot",
-                "description": "Capture the user's current screen and look at it. Use it when the user asks what is on screen, when a visual UI problem needs the actual pixels, or when words are insufficient. It captures the whole desktop; in ask mode the user is prompted first.",
+                "description": "Capture the user's current screen and look at it. Use it when the user asks what is on screen, when a visual UI problem needs the actual pixels, or when words are insufficient. Without `window` it captures the whole desktop; pass a browser window id (see browser_windows) to get only that window, cut out of the desktop — the answer says whether the crop worked. In ask mode the user is prompted first.",
                 "parameters": {
                     "type": "object",
-                    "properties": {}
+                    "properties": {
+                        "window": { "type": "string", "description": "Optional browser window id (browser-1, …) to capture that window alone." }
+                    }
                 }
             }
         }),

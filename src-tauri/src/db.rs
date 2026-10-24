@@ -39,6 +39,28 @@ CREATE TABLE IF NOT EXISTS session_summaries (
   created_at         INTEGER NOT NULL
 );
 
+-- The provider's own prompt size for the last request of a session, with how many messages
+-- were in it. Compression uses the measurement plus the growth since then instead of a
+-- character-count guess, which never saw the system prompt or the tool schemas.
+CREATE TABLE IF NOT EXISTS session_usage (
+  session_id    TEXT PRIMARY KEY,
+  prompt_tokens INTEGER NOT NULL,
+  message_count INTEGER NOT NULL,
+  updated_at    INTEGER NOT NULL
+);
+
+-- Trust is earned over time, never by a single click: one row per awarded gesture, with a
+-- daily cap applied when it is written. The name is revealed when the total crosses the
+-- threshold (see TRUST_THRESHOLD).
+CREATE TABLE IF NOT EXISTS trust_points (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind       TEXT NOT NULL,
+  points     INTEGER NOT NULL,
+  day        TEXT NOT NULL,
+  note       TEXT,
+  created_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS tool_calls (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   session_id  TEXT NOT NULL,
@@ -118,6 +140,34 @@ CREATE INDEX IF NOT EXISTS idx_file_versions_path ON file_versions(path, id);
 
 PRAGMA user_version = 1;
 ";
+
+/// How many points the partner needs before the user is told its name. Deliberately a
+/// marathon: a day of use, ten finished turns or a handful of memories are worth far less.
+pub const TRUST_THRESHOLD: i64 = 100;
+
+/// Local calendar day, for the per-day caps. A year of UTC offsets is not worth a timezone
+/// database; the day boundary matters only for "not twice in one day".
+fn today() -> String {
+    // `date('now','localtime')` is what the memories panel already trusts for dates.
+    let stamp = now();
+    let days = stamp.div_euclid(86_400);
+    let (year, month, day) = civil_from_days(days);
+    format!("{year:04}-{month:02}-{day:02}")
+}
+
+/// Howard Hinnant's days-from-civil inverse: valid for any date a Unix timestamp can hold.
+fn civil_from_days(days: i64) -> (i64, u32, u32) {
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    (if m <= 2 { y + 1 } else { y }, m as u32, d as u32)
+}
 
 pub fn unix_now() -> i64 {
     now()
@@ -476,6 +526,35 @@ impl Db {
         // The ordered timeline of an assistant answer.
         add_column(conn, "messages", "parts", "TEXT")?;
         add_column(conn, "file_versions", "turn_id", "TEXT")?;
+        // Round 81 added the reveal threshold. Anyone who already has a chosen name keeps
+        // seeing it — the rule is for installations that start from nothing.
+        let has_name: bool = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'partnerName'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?
+            .map(|value| value.trim().trim_matches('"').len() > 0)
+            .unwrap_or(false);
+        let has_flag: bool = conn
+            .query_row(
+                "SELECT 1 FROM settings WHERE key = 'trustRevealed'",
+                [],
+                |_row| Ok(true),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?
+            .unwrap_or(false);
+        if has_name && !has_flag {
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES ('trustRevealed', 'true')
+                 ON CONFLICT(key) DO UPDATE SET value = 'true'",
+                [],
+            )
+            .map_err(|error| error.to_string())?;
+        }
         Ok(())
     }
 
@@ -601,6 +680,10 @@ impl Db {
         conn.execute("DELETE FROM tool_calls WHERE session_id = ?1", params![id])
             .map_err(|error| error.to_string())?;
         conn.execute("DELETE FROM todos WHERE session_id = ?1", params![id])
+            .map_err(|error| error.to_string())?;
+        conn.execute("DELETE FROM session_usage WHERE session_id = ?1", params![id])
+            .map_err(|error| error.to_string())?;
+        conn.execute("DELETE FROM session_summaries WHERE session_id = ?1", params![id])
             .map_err(|error| error.to_string())?;
         conn.execute("DELETE FROM sessions WHERE id = ?1", params![id])
             .map_err(|error| error.to_string())?;
@@ -930,6 +1013,111 @@ impl Db {
         }
         let value = serde_json::to_string(&tools).map_err(|error| error.to_string())?;
         self.set_setting("trustedTools", &value)
+    }
+
+    /// Awards trust once per gesture, honouring a per-day cap. Returns whether something was
+    /// written, so the caller can avoid celebrating a no-op. `kind` doubles as the cap key:
+    /// "day" (first turn of a day), "turn" (a finished turn that did something), "memory"
+    /// (a note the companion wrote on its own) and "correction" (the user edited a note).
+    pub fn award_trust(
+        &self,
+        kind: &str,
+        points: i64,
+        cap_per_day: i64,
+        note: Option<&str>,
+    ) -> Result<bool, String> {
+        if points <= 0 || cap_per_day <= 0 {
+            return Ok(false);
+        }
+        let conn = self.lock()?;
+        let day = today();
+        let already: i64 = conn
+            .query_row(
+                "SELECT COALESCE(SUM(points), 0) FROM trust_points WHERE kind = ?1 AND day = ?2",
+                params![kind, day],
+                |row| row.get(0),
+            )
+            .map_err(|error| error.to_string())?;
+        if already >= cap_per_day {
+            return Ok(false);
+        }
+        let points = points.min(cap_per_day - already);
+        conn.execute(
+            "INSERT INTO trust_points (kind, points, day, note, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![kind, points, day, note, unix_now()],
+        )
+        .map_err(|error| error.to_string())?;
+        Ok(true)
+    }
+
+    pub fn trust_total(&self) -> Result<i64, String> {
+        let conn = self.lock()?;
+        conn.query_row("SELECT COALESCE(SUM(points), 0) FROM trust_points", [], |row| {
+            row.get(0)
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Points per kind, biggest first — the partner page shows where they came from.
+    pub fn trust_breakdown(&self) -> Result<Vec<(String, i64)>, String> {
+        let conn = self.lock()?;
+        let mut statement = conn
+            .prepare(
+                "SELECT kind, SUM(points) AS total FROM trust_points
+                 GROUP BY kind ORDER BY total DESC",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<Vec<(String, i64)>, _>>()
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn trust_revealed(&self) -> Result<bool, String> {
+        Ok(self
+            .all_settings()?
+            .get("trustRevealed")
+            .map(|value| value.trim().trim_matches('"') == "true")
+            .unwrap_or(false))
+    }
+
+    /// Remembers the reveal. Once seen, the name stays visible: trust is not a game show.
+    pub fn reveal_trust(&self) -> Result<(), String> {
+        self.set_setting("trustRevealed", "true")
+    }
+
+    /// Remembers the provider's prompt size for the last request of a session. `message_count`
+    /// is how many messages that request carried (without the system prompt), so the next turn
+    /// can add only what arrived since.
+    pub fn set_session_usage(
+        &self,
+        session_id: &str,
+        prompt_tokens: i64,
+        message_count: i64,
+    ) -> Result<(), String> {
+        let conn = self.lock()?;
+        conn.execute(
+            "INSERT INTO session_usage (session_id, prompt_tokens, message_count, updated_at)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(session_id) DO UPDATE SET
+               prompt_tokens = ?2, message_count = ?3, updated_at = ?4",
+            params![session_id, prompt_tokens, message_count, unix_now()],
+        )
+        .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    pub fn session_usage(&self, session_id: &str) -> Result<Option<(i64, i64)>, String> {
+        let conn = self.lock()?;
+        conn.query_row(
+            "SELECT prompt_tokens, message_count FROM session_usage WHERE session_id = ?1",
+            params![session_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()
+        .map_err(|error| error.to_string())
     }
 
     pub fn all_settings(&self) -> Result<HashMap<String, String>, String> {
@@ -1863,6 +2051,7 @@ pub fn memories_retired(db: tauri::State<'_, Db>, limit: Option<usize>) -> Resul
 
 #[tauri::command]
 pub fn memory_update(
+    app: tauri::AppHandle,
     db: tauri::State<'_, Db>,
     id: i64,
     title: Option<String>,
@@ -1877,7 +2066,10 @@ pub fn memory_update(
         kind.as_deref(),
         importance,
         "user",
-    )
+    )?;
+    // The user taking the time to correct a note is the clearest sign the work matters.
+    crate::engine::award_trust(&app, "correction", 3, 3, Some("the user edited a memory"));
+    Ok(())
 }
 
 #[tauri::command]
@@ -1938,6 +2130,53 @@ pub fn schedule_toggle(db: tauri::State<'_, Db>, id: i64, enabled: bool) -> Resu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Trust is earned in small, capped steps: repeats the same day earn nothing, and the
+    /// reveal flag starts unset for a fresh database.
+    #[test]
+    fn trust_is_capped_per_day_and_survives() {
+        let directory = std::env::temp_dir().join(format!("ds-ide-trust-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let db = Db::open(&directory.join("trust.sqlite3")).unwrap();
+
+        assert_eq!(db.trust_total().unwrap(), 0);
+        assert!(!db.trust_revealed().unwrap());
+
+        assert!(db.award_trust("day", 2, 2, None).unwrap());
+        assert!(!db.award_trust("day", 2, 2, None).unwrap(), "once per day");
+        for _ in 0..12 {
+            db.award_trust("turn", 1, 10, None).unwrap();
+        }
+        for _ in 0..8 {
+            db.award_trust("memory", 1, 5, None).unwrap();
+        }
+        assert_eq!(db.trust_total().unwrap(), 2 + 10 + 5);
+
+        let breakdown = db.trust_breakdown().unwrap();
+        assert_eq!(breakdown[0], ("turn".to_string(), 10));
+        assert_eq!(breakdown.len(), 3);
+
+        db.reveal_trust().unwrap();
+        assert!(db.trust_revealed().unwrap());
+    }
+
+    /// A database that already has a chosen name keeps showing it after the upgrade.
+    #[test]
+    fn an_existing_name_is_revealed_after_the_migration() {
+        let directory = std::env::temp_dir().join(format!("ds-ide-trust-mig-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("old.sqlite3");
+        {
+            let db = Db::open(&path).unwrap();
+            db.set_setting("partnerName", "\"Ziggy\"").unwrap();
+        }
+        // Reopening runs the migration on an installation that predates the threshold.
+        let db = Db::open(&path).unwrap();
+        assert!(db.trust_revealed().unwrap());
+        assert_eq!(db.trust_total().unwrap(), 0);
+    }
 
     #[test]
     fn round_trips_history_and_todos() {

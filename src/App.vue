@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import Resizer from "./components/Resizer.vue";
 import TitleBar from "./components/TitleBar.vue";
@@ -13,6 +14,9 @@ import SettingsPage from "./components/settings/SettingsPage.vue";
 import FirstRunDialog from "./components/FirstRunDialog.vue";
 import { deepSeekMark } from "./components/deepseek-mark";
 import { firstRun } from "./stores/settings";
+import { partnerDisplayName, partnerReveal, refreshPartnerName } from "./stores/partner";
+import Icon from "./components/Icon.vue";
+import { t } from "./i18n";
 import {
   CENTER_MIN,
   railAuto,
@@ -99,6 +103,12 @@ onMounted(() => {
     return;
   }
   void invoke("log_message", { text: "main window: mounted" }).catch(() => undefined);
+  // Crossing the trust threshold is a moment, and it happens mid-conversation: the engine
+  // announces it once, the banner says it, the partner page shows the rest.
+  void listen<{ name?: string }>("trust://revealed", (event) => {
+    partnerReveal.value = event.payload?.name?.trim() || "";
+    void refreshPartnerName();
+  }).catch(() => undefined);
 });
 
 const bodyStyle = computed(() => {
@@ -190,6 +200,14 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
     </div>
   </div>
 
+    <div v-if="partnerReveal !== null" class="reveal-banner" role="status">
+      <Icon name="sparkle" :size="14" />
+      <span>{{ t("partner.revealBanner", { name: partnerReveal || partnerDisplayName }) }}</span>
+      <button type="button" :aria-label="t('common.close')" @click="partnerReveal = null">
+        <Icon name="x" :size="12" />
+      </button>
+    </div>
+
     <FirstRunDialog v-if="firstRun" />
     <SearchDialog v-if="searchOpen" />
     <WebDesignPanel />
@@ -197,6 +215,48 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
 </template>
 
 <style scoped>
+/* A quiet banner, not a dialog: the reveal should not interrupt the work it came from. */
+.reveal-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(520px, calc(100vw - 32px));
+  padding: 9px 10px 9px 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 12px;
+  transform: translateX(-50%);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 45%);
+}
+
+.reveal-banner span {
+  flex: 1;
+  min-width: 0;
+}
+
+.reveal-banner button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.reveal-banner button:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
 .ide {
   display: flex;
   flex-direction: column;

@@ -58,6 +58,28 @@ pub fn engine_configured(app: AppHandle) -> bool {
         .unwrap_or(false)
 }
 
+/// What the user has earned the right to see: points, threshold and whether the name is out.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrustStatus {
+    pub points: i64,
+    pub threshold: i64,
+    pub revealed: bool,
+    pub name: Option<String>,
+    pub breakdown: Vec<(String, i64)>,
+}
+
+#[tauri::command]
+pub fn trust_status(db: State<'_, Db>) -> Result<TrustStatus, String> {
+    Ok(TrustStatus {
+        points: db.trust_total()?,
+        threshold: crate::db::TRUST_THRESHOLD,
+        revealed: db.trust_revealed()?,
+        name: db.partner_name()?,
+        breakdown: db.trust_breakdown()?,
+    })
+}
+
 /// The user changed the permission stage: drop all "allow for this session" grants.
 #[tauri::command]
 pub fn engine_clear_session_grants(state: State<'_, EngineState>) -> Result<(), String> {
@@ -369,6 +391,22 @@ fn estimated_tokens(messages: &[ChatMessage]) -> i64 {
 const COMPACT_AT: f64 = 0.75;
 const KEEP_RECENT: usize = 8;
 
+/// What the next request will probably cost. The provider's own count for the last request is
+/// exact — it includes the system prompt and the tool schemas, which the character estimate
+/// never sees — so it is used when it still describes a prefix of what is loaded. Only the
+/// messages that arrived since are estimated. Without a measurement (a new session, or one
+/// whose history was just rewritten by compression) the estimate stands alone.
+fn prompt_size(baseline: Option<(i64, i64)>, loaded: &[ChatMessage]) -> (i64, &'static str) {
+    let estimate = estimated_tokens(loaded);
+    match baseline {
+        Some((tokens, count)) if count >= 0 && (loaded.len() as i64) >= count => {
+            let since = &loaded[count as usize..];
+            (tokens + estimated_tokens(since), "measured")
+        }
+        _ => (estimate, "estimated"),
+    }
+}
+
 /// Replaces the older half of a conversation with a summary the model writes itself. The
 /// summary goes into the database and is what later turns send instead of those messages.
 pub async fn compact_session(
@@ -524,11 +562,18 @@ pub async fn send_prompt(
                 }
             }
             db.touch_session(session_id)?;
+            // The first turn of a day is what a streak is made of; the cap makes repeats free.
+            award_trust(app, "day", 2, 2, Some("first turn of the day"));
             let mut loaded = db.load_llm_messages(session_id)?;
             // Too big to send whole? Fold the older part into a summary first, then send that.
             if let Some(window) = config.context_window.filter(|window| *window > 0) {
                 let limit = (window as f64 * COMPACT_AT) as i64;
-                if estimated_tokens(&loaded) > limit {
+                let baseline = db.session_usage(session_id).unwrap_or(None);
+                let (used, basis) = prompt_size(baseline, &loaded);
+                if used > limit {
+                    crate::log_line!(
+                        "compaction: {basis} size {used} over limit {limit}, compressing"
+                    );
                     match compact_session(app, session_id, KEEP_RECENT).await {
                         Ok(Some(report)) => {
                             crate::log_line!(
@@ -793,6 +838,9 @@ fn memory_tool(app: &AppHandle, args: &Value, workspace: &str) -> tools::ToolOut
             match db.insert_memory_with_title(kind, scope, title, text, None, "seeky") {
                 Ok(id) => {
                     let _ = db.set_memory_workspace(id, workspace.trim());
+                    // Thinking about what to keep is the behaviour trust is for; a flood of
+                    // notes earns nothing extra.
+                    award_trust(app, "memory", 1, 5, Some("wrote a memory"));
                     let place = if workspace.trim().is_empty() {
                         ""
                     } else {
@@ -957,12 +1005,58 @@ fn permission_summary(name: &str, args: &Value) -> String {
     summary
 }
 
-async fn screenshot_tool(app: &AppHandle) -> tools::ToolOutcome {
+/// Awards trust and, when the total crosses the threshold for the first time, reveals the
+/// name: it is written down as seen and announced once. Trust is earned across days, not by
+/// a single click — the caps live in `Db::award_trust`.
+pub(crate) fn award_trust(app: &AppHandle, kind: &str, points: i64, cap_per_day: i64, note: Option<&str>) {
+    let Some(db) = app.try_state::<Db>() else {
+        return;
+    };
+    match db.award_trust(kind, points, cap_per_day, note) {
+        Ok(true) => {
+            let total = db.trust_total().unwrap_or(0);
+            if total >= crate::db::TRUST_THRESHOLD && !db.trust_revealed().unwrap_or(true) {
+                if let Err(error) = db.reveal_trust() {
+                    crate::log_line!("trust: could not reveal the name: {error}");
+                    return;
+                }
+                let name = db.partner_name().ok().flatten().unwrap_or_default();
+                crate::log_line!("trust: threshold reached at {total} points, name revealed");
+                let _ = app.emit(
+                    "trust://revealed",
+                    json!({ "name": name, "points": total, "threshold": crate::db::TRUST_THRESHOLD }),
+                );
+            }
+        }
+        Ok(false) => {}
+        Err(error) => crate::log_line!("trust: could not award {kind}: {error}"),
+    }
+}
+
+async fn screenshot_tool(app: &AppHandle, args: &Value) -> tools::ToolOutcome {
+    let window = args
+        .get("window")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    if let Some(id) = window {
+        return match crate::capture::capture_window(app.clone(), id.to_string()) {
+            Ok(shot) => {
+                let data = format!("data:{};base64,{}", shot.mime, shot.data_base64);
+                tools::ToolOutcome::ok(format!(
+                    "Screenshot of {id}: {} — the image follows in the next user message.",
+                    shot.note
+                ))
+                .with_image(data)
+            }
+            Err(error) => tools::ToolOutcome::err(format!("screenshot: {error}")),
+        };
+    }
     match crate::capture::capture_screen(app.clone()) {
         Ok(shot) => {
             let data = format!("data:{};base64,{}", shot.mime, shot.data_base64);
             tools::ToolOutcome::ok(
-                "Screenshot captured. The image follows in the next user message.",
+                "Screenshot of the whole desktop captured. The image follows in the next user message.",
             )
             .with_image(data)
         }
@@ -1961,6 +2055,8 @@ async fn run_turn(
     let turn_id = turn_message_id.map(|id| id.to_string());
     let mut parts: Vec<Value> = Vec::new();
     let mut said = String::new();
+    // A turn only counts once a tool actually succeeded; a failed turn earns nothing.
+    let mut successful_tools = 0usize;
     // One row per turn means one tool_calls list for the whole turn. Overwriting it per round
     // left every earlier round's tool results without their call — the provider rejects that
     // ("tool must be a response to a preceding tool_calls"), which broke the conversation
@@ -1981,6 +2077,10 @@ async fn run_turn(
         running.status = Some("running".to_string());
         emit(app, running);
 
+        // How many messages this request carries, without the system prompt at index 0. The
+        // provider's usage report is stored against this count so the next turn can add only
+        // what arrived after it.
+        let sent_messages = messages.len().saturating_sub(1) as i64;
         let mut streamed_seq = seq;
         let stream_result = {
             let mut on_delta = |kind: deepseek::DeltaKind, chunk: &str| {
@@ -2062,6 +2162,15 @@ async fn run_turn(
             tool_call_id: None,
         });
 
+        if outcome.prompt_tokens > 0 {
+            if let Some(db) = app.try_state::<Db>() {
+                if let Err(error) =
+                    db.set_session_usage(session_id, outcome.prompt_tokens as i64, sent_messages)
+                {
+                    crate::log_line!("engine: could not remember the prompt size: {error}");
+                }
+            }
+        }
         if outcome.total_tokens > 0 {
             seq += 1;
             let mut event = EngineEvent::new(session_id, seq, "usage");
@@ -2074,6 +2183,9 @@ async fn run_turn(
         }
 
         if !has_tool_calls {
+            if successful_tools > 0 {
+                award_trust(app, "turn", 1, 10, Some("finished a turn that did something"));
+            }
             seq += 1;
             let mut event = EngineEvent::new(session_id, seq, "turn_end");
             event.stop_reason = Some("end_turn".to_string());
@@ -2289,7 +2401,7 @@ async fn run_turn(
                         "permission denied by the user; the screenshot was not taken",
                     )
                 } else {
-                    screenshot_tool(app).await
+                    screenshot_tool(app, &arguments).await
                 }
             } else if requires_approval(&call.function.name) {
                 let session_allowed =
@@ -2340,6 +2452,7 @@ async fn run_turn(
                 tools::execute(&call.function.name, &arguments, &ctx, &mut todos).await
             };
             if !tool_outcome.is_error {
+                successful_tools += 1;
                 record_file_snapshot(
                     app,
                     session_id,
@@ -2446,6 +2559,25 @@ mod estimate_tests {
 
         // 2 tokens of text, 100 tokens of arguments, 1000 for the picture.
         assert!(estimated_tokens(&[message]) >= 1100);
+    }
+
+    /// The provider's count includes the system prompt and the tool schemas; the estimate
+    /// never did. Using the measurement plus the growth since is what makes the trigger
+    /// honest, and a stale baseline (history rewritten by compression) must fall back.
+    #[test]
+    fn the_prompt_size_prefers_the_measurement_and_adds_the_growth() {
+        let messages = vec![ChatMessage::user("x".repeat(400))];
+        let (size, basis) = prompt_size(Some((50_000, 0)), &messages);
+        assert_eq!(basis, "measured");
+        assert_eq!(size, 50_100);
+
+        let (size, basis) = prompt_size(Some((50_000, 9)), &messages);
+        assert_eq!(basis, "estimated");
+        assert_eq!(size, 100);
+
+        let (size, basis) = prompt_size(None, &messages);
+        assert_eq!(basis, "estimated");
+        assert_eq!(size, 100);
     }
 
     /// A measurement that silently differs from the request is worse than no measurement:
