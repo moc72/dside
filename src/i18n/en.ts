@@ -258,6 +258,10 @@ export const en: Messages = {
     notWired: "Not wired up yet: no model backend is connected.",
     reasoning: "Reasoning",
     characters: "characters",
+    copyMarkdown: "Copy markdown",
+    copied: "Copied",
+    copyFailed: "Copy failed",
+    screenshotAlt: "Screenshot",
   },
   search: {
     title: "Search sessions and messages",
@@ -422,7 +426,7 @@ export const en: Messages = {
         "Show files and pages it opens in the work area — the cursor stays in the composer.",
       browserControl: "Browser control",
       browserControlDesc:
-        "The companion may open pages in the integrated browser, read them and fill in forms. Only enable deliberately.",
+        "The companion may open pages in the integrated browser, read them and fill in forms. Only enable deliberately. The local preview of its own files does not need this permission.",
     },
   },
   common: {
@@ -512,6 +516,9 @@ export const en: Messages = {
     fullHint: "Full access until you take it back.",
     requestTitle: "The companion asks",
     allowSession: "Allow for this session",
+    allowAlways: "Always allow (permanent)",
+    trusted: "Permanently allowed tools",
+    revoke: "Revoke permissions",
     allow: "Allow once",
     deny: "Deny",
     onceHint: "Only this one action will run.",

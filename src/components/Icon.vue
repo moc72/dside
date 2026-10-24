@@ -40,6 +40,7 @@ const shapes: Record<string, string[]> = {
   user: ["M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", "M4 21a8 8 0 0 1 16 0"],
   x: ["M6 6l12 12", "M18 6L6 18"],
   send: ["M12 19V5", "M5 12l7-7 7 7"],
+  copy: ["M9 9h12v12H9z", "M5 15H3V3h12v2"],
   "arrow-left": ["M19 12H5", "M12 19l-7-7 7-7"],
   "arrow-right": ["M5 12h14", "M12 5l7 7-7 7"],
   reload: ["M20 12a8 8 0 1 1-2.4-5.7", "M20 4v4h-4"],

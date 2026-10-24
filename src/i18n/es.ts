@@ -258,6 +258,10 @@ export const es: Messages = {
     notWired: "No conectado aún: no hay backend de modelo conectado.",
     reasoning: "Razonando",
     characters: "caracteres",
+    copyMarkdown: "Copiar Markdown",
+    copied: "Copiado",
+    copyFailed: "No se pudo copiar",
+    screenshotAlt: "Captura de pantalla",
   },
   search: {
     title: "Buscar sesiones y mensajes",
@@ -418,7 +422,7 @@ export const es: Messages = {
         "Mostrar en el área de trabajo los archivos y páginas que abre — el cursor permanece en el campo de escritura.",
       browserControl: "Control del navegador",
       browserControlDesc:
-        "El compañero puede abrir páginas en el navegador integrado, leerlas y rellenar formularios. Actívalo solo a propósito.",
+        "El compañero puede abrir páginas en el navegador integrado, leerlas y rellenar formularios. Actívalo solo a propósito. La vista previa local de sus propios archivos no necesita este permiso.",
     },
   },
   common: {
@@ -508,6 +512,9 @@ export const es: Messages = {
     fullHint: "Acceso completo hasta que lo retires.",
     requestTitle: "El compañero pregunta",
     allowSession: "Permitir para esta sesión",
+    allowAlways: "Permitir siempre (permanente)",
+    trusted: "Herramientas permitidas de forma permanente",
+    revoke: "Revocar permisos",
     allow: "Permitir una vez",
     deny: "Denegar",
     onceHint: "Solo se ejecutará esta acción.",

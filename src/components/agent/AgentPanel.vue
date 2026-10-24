@@ -170,6 +170,13 @@ onBeforeUnmount(() => {
           >
             {{ t("permission.allowSession") }}
           </button>
+          <button
+            v-if="pendingAction.options.includes('always')"
+            type="button"
+            @click="answer('always')"
+          >
+            {{ t("permission.allowAlways") }}
+          </button>
           <button type="button" class="deny" @click="answer('deny')">
             {{ t("permission.deny") }}
           </button>

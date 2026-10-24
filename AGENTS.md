@@ -9,7 +9,8 @@ Fallback, falls diese Datei fehlt.
 - **pnpm 10** verwenden. Andere Majors haben inkompatible Store-Layouts; pnpm 12 bricht
   zusätzlich an `ERR_PNPM_IGNORED_BUILDS` (he-tree-vue).
 - `pnpm build` — vue-tsc und Vite. Der Hauptchunk ist groß (Monaco + PDF + Office); die
-  Chunk-Warnung ist bekannt.
+  Chunk-Warnung ist bekannt. Der Build beginnt mit `scripts/check-i18n.mjs`: alle sechs
+  Kataloge müssen dieselben Schlüssel haben, doppelte Schlüssel und deutsche Reste fallen auf.
 - `cd src-tauri && cargo test --lib` — die Unit-Tests. Die `live_*`-Tests sind ignoriert und
   brauchen `DS_IDE_API_KEY`.
 - Windows-Release: `cargo build --release --features tauri/custom-protocol`. Ohne das

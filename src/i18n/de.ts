@@ -257,6 +257,10 @@ export const de = {
     notWired: "Noch nicht angebunden: Es ist kein Modell-Backend verbunden.",
     reasoning: "Denken",
     characters: "Zeichen",
+    copyMarkdown: "Markdown kopieren",
+    copied: "Kopiert",
+    copyFailed: "Kopieren fehlgeschlagen",
+    screenshotAlt: "Bildschirmaufnahme",
   },
   search: {
     title: "Sitzungen und Nachrichten durchsuchen",
@@ -422,7 +426,7 @@ export const de = {
         "Dateien und Webseiten, die er öffnet, im Arbeitsbereich zeigen — der Fokus bleibt im Eingabefeld.",
       browserControl: "Browser-Steuerung",
       browserControlDesc:
-        "Der Begleiter darf Seiten im integrierten Browser öffnen, lesen und Formulare ausfüllen. Nur bewusst einschalten.",
+        "Der Begleiter darf Seiten im integrierten Browser öffnen, lesen und Formulare ausfüllen. Nur bewusst einschalten. Die lokale Vorschau eigener Dateien braucht diese Freigabe nicht.",
     },
   },
   common: {
@@ -512,6 +516,9 @@ export const de = {
     fullHint: "Vollzugriff, bis du ihn zurücknimmst.",
     requestTitle: "Der Companion fragt",
     allowSession: "Für diese Sitzung erlauben",
+    allowAlways: "Immer erlauben (dauerhaft)",
+    trusted: "Dauerhaft erlaubte Werkzeuge",
+    revoke: "Freigaben zurücknehmen",
     allow: "Einmal erlauben",
     deny: "Ablehnen",
     onceHint: "Nur diese eine Aktion wird ausgeführt.",

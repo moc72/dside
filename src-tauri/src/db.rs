@@ -909,6 +909,29 @@ impl Db {
         Ok(())
     }
 
+    /// Tools the user allowed permanently from a permission question. Stored in the settings
+    /// table so it survives restarts; the user can only grow this list from the dialog.
+    pub fn trusted_tools(&self) -> Result<Vec<String>, String> {
+        let value = self
+            .all_settings()?
+            .get("trustedTools")
+            .cloned()
+            .unwrap_or_default();
+        if value.trim().is_empty() {
+            return Ok(Vec::new());
+        }
+        serde_json::from_str::<Vec<String>>(&value).map_err(|error| error.to_string())
+    }
+
+    pub fn add_trusted_tool(&self, name: &str) -> Result<(), String> {
+        let mut tools = self.trusted_tools()?;
+        if !tools.iter().any(|tool| tool == name) {
+            tools.push(name.to_string());
+        }
+        let value = serde_json::to_string(&tools).map_err(|error| error.to_string())?;
+        self.set_setting("trustedTools", &value)
+    }
+
     pub fn all_settings(&self) -> Result<HashMap<String, String>, String> {
         let conn = self.lock()?;
         let mut statement = conn

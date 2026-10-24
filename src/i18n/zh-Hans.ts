@@ -257,6 +257,10 @@ export const zhHans: Messages = {
     notWired: "未连接: 未连接模型后端。",
     reasoning: "思考",
     characters: "字符",
+    copyMarkdown: "复制 Markdown",
+    copied: "已复制",
+    copyFailed: "复制失败",
+    screenshotAlt: "屏幕截图",
   },
   search: {
     title: "搜索会话和消息",
@@ -418,7 +422,7 @@ export const zhHans: Messages = {
       followCompanionDesc: "在伙伴打开文件或网页时于工作区显示——光标仍留在输入框。",
       browserControl: "浏览器控制",
       browserControlDesc:
-        "伙伴可以在内置浏览器中打开并阅读网页、填写表单。请有意识地开启。",
+        "伙伴可以在内置浏览器中打开并阅读网页、填写表单。请有意识地开启。预览自己的本地文件不需要此权限。",
     },
   },
   common: {
@@ -508,6 +512,9 @@ export const zhHans: Messages = {
     fullHint: "完全访问，直到你收回。",
     requestTitle: "伙伴询问",
     allowSession: "允许本次会话",
+    allowAlways: "始终允许（永久）",
+    trusted: "永久允许的工具",
+    revoke: "撤销授权",
     allow: "允许一次",
     deny: "拒绝",
     onceHint: "只执行这一次操作。",

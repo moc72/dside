@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
 import Icon from "../Icon.vue";
 import MarkdownText from "./MarkdownText.vue";
 import { t } from "../../i18n";
@@ -57,6 +57,85 @@ function showChange(tool: { name: string; arguments?: string }): void {
 function retryMessage(id: string): void {
   void retryTurn(id);
 }
+
+/**
+ * Copies the answer as markdown, exactly as the model wrote it. `message.text` is the
+ * joined source, not the rendered HTML, so code fences and tables survive the copy.
+ */
+const copiedId = ref<string | null>(null);
+const failedId = ref<string | null>(null);
+let copyTimer: number | undefined;
+
+function copyLabel(id: string): string {
+  if (copiedId.value === id) return t("message.copied");
+  if (failedId.value === id) return t("message.copyFailed");
+  return t("message.copyMarkdown");
+}
+
+/** Older webviews lack the async clipboard; the selection fallback still copies on a click. */
+function copyWithSelection(text: string): boolean {
+  const area = document.createElement("textarea");
+  area.value = text;
+  area.setAttribute("readonly", "");
+  area.style.position = "fixed";
+  area.style.top = "-1000px";
+  area.style.opacity = "0";
+  document.body.append(area);
+  area.select();
+  let copied = false;
+  try {
+    copied = document.execCommand("copy");
+  } finally {
+    area.remove();
+  }
+  return copied;
+}
+
+/**
+ * The raw answer. `parts` is the timeline the list already has; `text` is the joined
+ * fallback for messages loaded before parts existed. Using both means the action is not
+ * tied to whichever field happens to be filled for an older turn.
+ */
+function messageMarkdown(message: ChatMessage): string {
+  const fromParts = (message.parts ?? [])
+    .filter((part) => part.kind === "text")
+    .map((part) => part.text)
+    .join("\n\n")
+    .trim();
+  return fromParts || message.text.trim();
+}
+
+function hasMarkdown(message: ChatMessage): boolean {
+  return message.role === "assistant" && messageMarkdown(message).length > 0;
+}
+
+async function copyMessage(message: ChatMessage): Promise<void> {
+  const text = messageMarkdown(message);
+  if (!text) return;
+  try {
+    if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+    else if (!copyWithSelection(text)) throw new Error("copy failed");
+    copiedId.value = message.id;
+    failedId.value = null;
+  } catch {
+    if (copyWithSelection(text)) {
+      copiedId.value = message.id;
+      failedId.value = null;
+    } else {
+      copiedId.value = null;
+      failedId.value = message.id;
+    }
+  }
+  if (copyTimer !== undefined) window.clearTimeout(copyTimer);
+  copyTimer = window.setTimeout(() => {
+    copiedId.value = null;
+    failedId.value = null;
+  }, 1800);
+}
+
+onBeforeUnmount(() => {
+  if (copyTimer !== undefined) window.clearTimeout(copyTimer);
+});
 </script>
 
 <template>
@@ -156,7 +235,7 @@ function retryMessage(id: string): void {
                 v-if="part.tool.image"
                 class="tool-image"
                 :src="part.tool.image"
-                alt="Screenshot"
+                :alt="t('message.screenshotAlt')"
               />
               <button
                 v-if="
@@ -178,6 +257,26 @@ function retryMessage(id: string): void {
           </template>
 
         </template>
+
+        <div
+          v-if="!message.streaming && hasMarkdown(message)"
+          class="message-actions"
+        >
+          <button
+            class="copy"
+            :class="{ copied: copiedId === message.id, failed: failedId === message.id }"
+            type="button"
+            :title="copyLabel(message.id)"
+            :aria-label="copyLabel(message.id)"
+            @click="copyMessage(message)"
+          >
+            <Icon
+              :name="copiedId === message.id ? 'check' : failedId === message.id ? 'x' : 'copy'"
+              :size="13"
+            />
+            <span class="sr-only" aria-live="polite">{{ copyLabel(message.id) }}</span>
+          </button>
+        </div>
 
         <div v-if="message.streaming && !(message.parts ?? []).length" class="pending">
           <span class="dot"></span><span class="dot"></span><span class="dot"></span>
@@ -426,6 +525,59 @@ function retryMessage(id: string): void {
 
 .tool-diff:hover {
   background: var(--bg-hover);
+}
+
+/* The answer's action row: one place for the copy (and later the thumbs). */
+.message-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 3px;
+}
+
+.copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  line-height: 1.4;
+  opacity: 0.55;
+  cursor: pointer;
+}
+
+.copy:hover,
+.copy:focus-visible {
+  border-color: var(--border);
+  background: var(--bg-hover);
+  color: var(--text);
+  opacity: 1;
+}
+
+.copy.copied {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.copy.failed {
+  color: var(--danger);
+  opacity: 1;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .tool {

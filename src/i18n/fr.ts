@@ -257,6 +257,10 @@ export const fr: Messages = {
     notWired: "Non connecté : aucun backend de modèle connecté.",
     reasoning: "Réflexion",
     characters: "caractères",
+    copyMarkdown: "Copier le Markdown",
+    copied: "Copié",
+    copyFailed: "Échec de la copie",
+    screenshotAlt: "Capture d'écran",
   },
   search: {
     title: "Recherche de sessions et de messages",
@@ -421,7 +425,7 @@ export const fr: Messages = {
         "Afficher dans l'espace de travail les fichiers et pages qu'il ouvre — le curseur reste dans le champ de saisie.",
       browserControl: "Contrôle du navigateur",
       browserControlDesc:
-        "Le compagnon peut ouvrir des pages dans le navigateur intégré, les lire et remplir des formulaires. À activer en connaissance de cause.",
+        "Le compagnon peut ouvrir des pages dans le navigateur intégré, les lire et remplir des formulaires. À activer en connaissance de cause. L'aperçu local de ses propres fichiers ne nécessite pas cette autorisation.",
     },
   },
   common: {
@@ -511,6 +515,9 @@ export const fr: Messages = {
     fullHint: "Accès complet jusqu'à ce que vous le retiriez.",
     requestTitle: "Le compagnon demande",
     allowSession: "Autoriser pour cette session",
+    allowAlways: "Toujours autoriser (permanent)",
+    trusted: "Outils autorisés en permanence",
+    revoke: "Révoquer les autorisations",
     allow: "Autoriser une fois",
     deny: "Refuser",
     onceHint: "Seule cette action sera exécutée.",

@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
+    "build": "node scripts/check-i18n.mjs && vue-tsc --noEmit && vite build",
+    "check:i18n": "node scripts/check-i18n.mjs",
     "preview": "vite preview",
     "tauri": "tauri"
   },

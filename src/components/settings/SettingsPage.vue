@@ -181,6 +181,24 @@ async function removeKey() {
 }
 
 const systemName = ref("");
+/** Tools the user allowed permanently; shown with a way back. */
+const trustedTools = ref<string[]>([]);
+
+async function loadTrustedTools(): Promise<void> {
+  try {
+    trustedTools.value = await invoke<string[]>("engine_trusted_tools");
+  } catch {
+    trustedTools.value = [];
+  }
+}
+
+async function clearToolGrants(): Promise<void> {
+  try {
+    await invoke("engine_clear_tool_grants");
+  } finally {
+    trustedTools.value = [];
+  }
+}
 
 /** True while the stored id is one the provider reports — then a picker makes sense. */
 const modelIsKnown = computed(() => modelChoices().some((entry) => entry.id === settings.model));
@@ -197,6 +215,7 @@ async function openLink(url: string) {
 onMounted(async () => {
   settingsItem.value = null;
   await refreshSecret();
+  await loadTrustedTools();
   try {
     systemName.value = await invoke<string>("default_display_name");
   } catch {
@@ -528,6 +547,15 @@ watch(activeItem, (value) => {
             </div>
           </div>
           <p class="hint">{{ t("permission.hint") }}</p>
+          <div v-if="trustedTools.length" class="row">
+            <div class="text">
+              <div class="label">{{ t("permission.trusted") }}</div>
+              <div class="desc">{{ trustedTools.join(", ") }}</div>
+            </div>
+            <button class="segment" type="button" @click="clearToolGrants">
+              {{ t("permission.revoke") }}
+            </button>
+          </div>
         </div>
 
         <p class="hint" :class="{ warn: secretBackend === 'file' }">{{ secretHint }}</p>
