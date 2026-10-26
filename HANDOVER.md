@@ -3,6 +3,9 @@
 This is the short handover for taking the project over. `PROGRESS.md` is the authoritative
 log (German, one section per round); `AGENTS.md` describes how to work in the repository.
 
+**Repository:** https://github.com/modestcoders-com/dside (moved from `moc72/dside` on
+2026-10-26; the old path redirects). `origin` is the local Gitea at 192.168.0.40.
+
 **Status:** `v0.5.0` is tagged (2026-10-24) and its CI run built Linux, Windows and macOS
 green; the GitHub release is a **draft** until the user publishes it. Tagged with it:
 `preview` (workspace HTML/CSS in the app browser with layout data and breakpoint sizes),

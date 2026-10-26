@@ -12,9 +12,9 @@ export const links = {
   /** Project home page. */
   home: "https://modestcoders.eu",
   /** Source and issue tracker. */
-  github: "https://github.com/moc72/dside",
+  github: "https://github.com/modestcoders-com/dside",
   /** Bug reports and questions. */
-  issues: "https://github.com/moc72/dside/issues",
+  issues: "https://github.com/modestcoders-com/dside/issues",
   /** Direct contact. */
   mail: "mailto:me@modestcoders.eu",
 } as const;

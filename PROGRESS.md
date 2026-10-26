@@ -3340,3 +3340,28 @@ Dort steckt dieselbe Konstellation (`body { overflow: hidden }`, `scrollIntoView
 lohnt derselbe Fix: `html` mit absichern und Enthüllen lokal scrollen.
 
 Kein Commit — der Nutzer testet zuerst.
+
+## 84. Umzug nach modestcoders-com (2026-10-26, dreiundsechzigste Runde)
+
+Das Repository liegt nicht mehr unter `moc72/dside`, sondern in der neuen Organisation:
+**https://github.com/modestcoders-com/dside**
+
+Der Transfer lief über die GitHub-API (`POST /repos/moc72/dside/transfer`,
+`new_owner: modestcoders-com`) mit dem vorhandenen Token — Status 202, danach
+nachgeprüft: Standardbranch `main`, Tag `v0.5.0`, Workflow `release`, alle
+bisherigen Releases **und die Draft-Release v0.5.0 mit ihren 7 Assets** sind
+mitgekommen. Der alte Pfad leitet auf den neuen weiter.
+
+- Git-Remote `github` zeigt jetzt auf
+  `https://github.com/modestcoders-com/dside.git`; `origin` (lokaler Gitea unter
+  `192.168.0.40`) bleibt unverändert.
+- `src/engine/links.ts` (Konto-Menü: GitHub, Feedback/Issues) nennt die neue
+  Adresse. Alte Nennungen in `_handover/`-Schnappschüssen bleiben, wie sie sind —
+  das sind historische Kopien.
+- Actions: `allowed_actions: all`, Workflow-Rechte `read` als Standard, aber die
+  Workflow-Datei setzt selbst `permissions: contents: write`; keine Secrets nötig,
+  weil nur `GITHUB_TOKEN` verwendet wird. Ein Transfer nimmt **keine** Secrets mit
+  — hier ist keine vorhanden, also folgenlos.
+
+Geprüft: `git push github main` („Everything up-to-date"), `git ls-remote` sieht
+`v0.5.0`, Release-Liste über die API bestätigt Draft und Assets, `pnpm build` grün.
