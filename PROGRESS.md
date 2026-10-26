@@ -3301,3 +3301,42 @@ Zeilen und den Knopf, Nachladen ergibt 160 ohne Sprung, Slide und Archiv wie obe
 Testumgebung unter `/tmp` neu aufgebaut (die alte war aufgeräumt).
 
 Kein Commit — der Nutzer testet zuerst.
+
+## 83. Die Seite scrollte sich selbst weg (2026-10-26, zweiundsechzigste Runde)
+
+Der Nutzer sah in seinem Fenster, dass der Inhalt „zu weit nach oben gerutscht“ war.
+Reproduziert mit einer **Kopie** seiner Daten (Original unberührt): Der Viewport war
+scrollbar — `document.scrollingElement.scrollHeight` maß **53 988 px** bei 869 px
+Fensterhöhe, und `scrollTop = 500` ließ sich setzen.
+
+### Ursache
+`body { overflow: hidden }` allein genügt nicht: Nach der CSS-Regel wandert die
+Deklaration an den **Viewport**, und der wird dadurch ein versteckter, aber weiterhin
+per Skript scrollbarer Container. Das `<html>`-Element bleibt `overflow: visible`, also
+zählt WebKit den Inhalt der inneren Scrollflächen (die lange Unterhaltung) zur
+Dokumenthöhe. Jedes `scrollIntoView` oder ein `focus()` auf ein Element außerhalb des
+Sichtbereichs konnte damit das ganze Fenster um Tausende Pixel verschieben — oben
+abgeschnitten, unten eine Lücke. Genau das Bild im Bericht.
+
+### Änderung
+- `html { overflow: hidden; overscroll-behavior: none }` zusätzlich zu `body`; damit ist
+  das Dokument selbst nicht mehr scrollbar. Messwert danach: `scrollHeight` **869**
+  (vorher 53 988), `scrollTop = 5000` bleibt **0**.
+- `ViewFileTab.revealFile` scrollt nicht mehr per `scrollIntoView` (das läuft **alle**
+  scrollbaren Vorfahren hoch), sondern rechnet die Zeile gegen `.tree-body` und setzt nur
+  dort `scrollTop`. Ein enthüllter Dateieintrag kann die Seite also nicht mehr bewegen.
+- Sicherheitsnetz in `main.ts`: Ein `scroll`-Listener am Fenster setzt die Wurzel auf 0,
+  falls irgendein künftiger Pfad sie doch verschiebt.
+
+### Geprüft
+Live im Fenster mit der Datenkopie: `scrollIntoView` auf eine tiefe Nachricht und
+`scrollTop = 5000` bewegen nichts mehr; `.tree-body` scrollt weiterhin lokal (Pfad beim
+Öffnen eines Datei-Tabs), Titelbar 44 px, Chat und Composer füllen das Fenster.
+`pnpm build` grün (490 i18n-Schlüssel), `cargo test --lib` **63 passed / 13 ignored**.
+Die Kopie der Daten unter `/tmp/dside-theirs` wurde danach gelöscht.
+
+### Für den Fork
+Dort steckt dieselbe Konstellation (`body { overflow: hidden }`, `scrollIntoView`), also
+lohnt derselbe Fix: `html` mit absichern und Enthüllen lokal scrollen.
+
+Kein Commit — der Nutzer testet zuerst.

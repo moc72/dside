@@ -12,7 +12,13 @@ screenshots and the trust system that reveals the companion's name at 100 points
 
 The working tree adds round 82 (2026-10-26), taken from the user's own fork: paged history
 for long threads, sliding side panels and archive management. The fork's companion/project
-database model is deliberately not part of DS.IDE. No version bump yet; the user tests first.
+database model is deliberately not part of DS.IDE.
+
+Round 83 fixes a layout bug found in real use: the document itself could scroll (WebKit
+inflated its scroll height to the length of the conversation), so a follow/reveal scroll
+shifted the whole window upwards. `html` is pinned now, the tree reveal scrolls only its own
+list, and a scroll listener keeps the root at the origin. No version bump yet; the user tests
+first.
 
 ## What it is
 

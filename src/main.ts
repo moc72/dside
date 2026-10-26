@@ -22,6 +22,22 @@ async function boot(): Promise<void> {
   initLastUsage(ui.lastUsage);
 }
 
+/**
+ * The document must stay at the origin. `overflow: hidden` on html/body prevents scrolling,
+ * but a stray `scrollIntoView` or a focus inside a very long conversation can still move an
+ * embedded scroll container's root in some webviews; this puts it back immediately.
+ */
+function pinDocument(): void {
+  const root = document.scrollingElement;
+  if (!root) return;
+  if (root.scrollTop !== 0 || root.scrollLeft !== 0) {
+    root.scrollTop = 0;
+    root.scrollLeft = 0;
+  }
+}
+window.addEventListener("scroll", pinDocument, { passive: true });
+
 void boot().finally(() => {
   createApp(App).mount("#app");
+  pinDocument();
 });

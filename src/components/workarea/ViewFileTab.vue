@@ -314,9 +314,27 @@ async function revealFile(path: string): Promise<void> {
   }
   if (!found) return;
   await nextTick();
-  document
-    .querySelector<HTMLElement>(".tree .row.selected")
-    ?.scrollIntoView({ block: "nearest" });
+  scrollTreeRowIntoView();
+}
+
+/**
+ * Brings the selected row into the tree's own view by scrolling only the tree list. It used
+ * to call `scrollIntoView`, which walks every scrollable ancestor — including the document,
+ * where a long conversation makes the page tens of thousands of pixels tall. Following a file
+ * could then shift the whole window upwards.
+ */
+function scrollTreeRowIntoView(): void {
+  const row = document.querySelector<HTMLElement>(".tree .row.selected");
+  if (!row) return;
+  const list = row.closest<HTMLElement>(".tree-body");
+  if (!list) return;
+  const rowBox = row.getBoundingClientRect();
+  const listBox = list.getBoundingClientRect();
+  if (rowBox.top < listBox.top) {
+    list.scrollTop -= listBox.top - rowBox.top;
+  } else if (rowBox.bottom > listBox.bottom) {
+    list.scrollTop += rowBox.bottom - listBox.bottom;
+  }
 }
 
 watch(

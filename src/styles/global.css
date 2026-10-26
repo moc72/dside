@@ -138,12 +138,23 @@ body,
   margin: 0;
 }
 
+/* The app owns every scroll area inside its panels; the document itself must never scroll.
+   `body { overflow: hidden }` alone is not enough: it propagates to the viewport, which then
+   becomes a scroll container that is hidden but still scrollable from script — a single
+   `scrollIntoView` could push the whole window content thousands of pixels up and leave the
+   top clipped. Setting it on `html` too keeps the document fixed. */
+html {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font);
   font-size: 13px;
   overflow: hidden;
+  overscroll-behavior: none;
 }
 
 button,
