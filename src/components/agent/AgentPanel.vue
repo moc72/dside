@@ -5,7 +5,14 @@ import MessageList from "./MessageList.vue";
 import Composer from "./Composer.vue";
 import { t } from "../../i18n";
 import { activeSessionId, messages } from "../../stores/sessions";
-import { answerAction, initEngine, pendingAction, running } from "../../composables/useEngine";
+import {
+  answerAction,
+  historyHasMore,
+  initEngine,
+  loadOlderHistory,
+  pendingAction,
+  running,
+} from "../../composables/useEngine";
 
 const composer = ref<InstanceType<typeof Composer> | null>(null);
 
@@ -79,6 +86,30 @@ function onScroll(): void {
   following.value = isAtBottom(element);
 }
 
+const loadingOlder = ref(false);
+
+/**
+ * Older messages are prepended, so the scroll height grows above the current line. Keep that
+ * line where it was — otherwise reading back through a long conversation would jump to a new
+ * place with every page.
+ */
+async function loadOlder(): Promise<void> {
+  const element = scrollEl.value;
+  if (!element || loadingOlder.value) return;
+  const beforeHeight = element.scrollHeight;
+  const beforeTop = element.scrollTop;
+  // Appending is what the list follows; prepending must not trigger a jump to the bottom.
+  following.value = false;
+  loadingOlder.value = true;
+  try {
+    await loadOlderHistory(activeSessionId.value);
+    await nextTick();
+    element.scrollTop = beforeTop + (element.scrollHeight - beforeHeight);
+  } finally {
+    loadingOlder.value = false;
+  }
+}
+
 function jumpToBottom(smooth: boolean): void {
   const element = scrollEl.value;
   if (!element) return;
@@ -129,7 +160,13 @@ onBeforeUnmount(() => {
   <section class="agent">
     <div class="scroll-wrap">
       <div ref="scrollEl" class="scroll" @scroll="onScroll">
-        <MessageList ref="listEl" :messages="messages" />
+        <MessageList
+          ref="listEl"
+          :messages="messages"
+          :has-older="historyHasMore[activeSessionId] ?? false"
+          :loading-older="loadingOlder"
+          @load-older="loadOlder"
+        />
       </div>
 
       <button

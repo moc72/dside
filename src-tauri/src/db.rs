@@ -861,17 +861,40 @@ impl Db {
             .map_err(|error| error.to_string())
     }
 
+    /// The whole conversation. Only used for small things (tests, exports); the UI reads pages.
     pub fn load_history(&self, session_id: &str) -> Result<Vec<HistoryMessage>, String> {
+        self.load_history_page(session_id, None, 0)
+    }
+
+    /// One page of the conversation, oldest first. `before_id` continues from a message the
+    /// caller already has; `limit` 0 means everything. A long thread is read in pages so the
+    /// window opens at once instead of waiting for hundreds of rows and every tool call in
+    /// them.
+    pub fn load_history_page(
+        &self,
+        session_id: &str,
+        before_id: Option<i64>,
+        limit: usize,
+    ) -> Result<Vec<HistoryMessage>, String> {
         let conn = self.lock()?;
-        let mut statement = conn
-            .prepare(
-                "SELECT id, role, content, parts FROM messages
-                 WHERE session_id = ?1 AND role IN ('user', 'assistant')
-                 ORDER BY id",
-            )
-            .map_err(|error| error.to_string())?;
-        let rows = statement
-            .query_map([session_id], |row| {
+        let mut sql = String::from(
+            "SELECT id, role, content, parts FROM messages
+             WHERE session_id = ?1 AND role IN ('user', 'assistant')",
+        );
+        let mut args: Vec<rusqlite::types::Value> = vec![session_id.to_string().into()];
+        if let Some(before) = before_id {
+            args.push(before.into());
+            sql.push_str(&format!(" AND id < ?{}", args.len()));
+        }
+        if limit > 0 {
+            // Newest first to make the LIMIT cheap, then turned around for reading.
+            sql.push_str(&format!(" ORDER BY id DESC LIMIT {limit}"));
+        } else {
+            sql.push_str(" ORDER BY id");
+        }
+        let mut statement = conn.prepare(&sql).map_err(|error| error.to_string())?;
+        let mut rows = statement
+            .query_map(rusqlite::params_from_iter(args.iter()), |row| {
                 Ok((
                     row.get::<_, i64>(0)?,
                     row.get::<_, String>(1)?,
@@ -879,11 +902,15 @@ impl Db {
                     row.get::<_, Option<String>>(3)?,
                 ))
             })
+            .map_err(|error| error.to_string())?
+            .collect::<Result<Vec<_>, _>>()
             .map_err(|error| error.to_string())?;
+        if limit > 0 {
+            rows.reverse();
+        }
 
-        let mut history = Vec::new();
-        for row in rows {
-            let (id, role, content, parts) = row.map_err(|error| error.to_string())?;
+        let mut history = Vec::with_capacity(rows.len());
+        for (id, role, content, parts) in rows {
             history.push(HistoryMessage {
                 id: format!("m{id}"),
                 role,
@@ -1937,6 +1964,18 @@ pub fn session_delete(db: tauri::State<'_, Db>, id: String) -> Result<(), String
     db.delete_session(&id)
 }
 
+/// Deletes several sessions in one call. The archive uses it for "delete all"; deleting a
+/// single row would otherwise cost one IPC round trip per archived task.
+#[tauri::command]
+pub fn session_delete_many(db: tauri::State<'_, Db>, ids: Vec<String>) -> Result<usize, String> {
+    let mut deleted = 0;
+    for id in ids {
+        db.delete_session(&id)?;
+        deleted += 1;
+    }
+    Ok(deleted)
+}
+
 #[tauri::command]
 pub fn session_update(
     db: tauri::State<'_, Db>,
@@ -1951,8 +1990,15 @@ pub fn session_update(
 pub fn session_history(
     db: tauri::State<'_, Db>,
     session_id: String,
+    before_id: Option<String>,
+    limit: Option<usize>,
 ) -> Result<Vec<HistoryMessage>, String> {
-    db.load_history(&session_id)
+    // The frontend identifies a message as "m{rowid}"; the row id is what the query needs.
+    let before = before_id
+        .as_deref()
+        .and_then(|id| id.strip_prefix('m'))
+        .and_then(|id| id.parse::<i64>().ok());
+    db.load_history_page(&session_id, before, limit.unwrap_or(80).min(500))
 }
 
 #[derive(Serialize)]
@@ -2176,6 +2222,44 @@ mod tests {
         let db = Db::open(&path).unwrap();
         assert!(db.trust_revealed().unwrap());
         assert_eq!(db.trust_total().unwrap(), 0);
+    }
+
+    /// A long thread is read newest-first in pages; the second page continues from the first
+    /// message of the first without repeating or skipping one.
+    #[test]
+    fn history_pages_continue_where_the_previous_one_stopped() {
+        let directory = std::env::temp_dir().join(format!("ds-ide-pages-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let db = Db::open(&directory.join("pages.sqlite3")).unwrap();
+        db.ensure_session("s1", "Paging", "project", "/tmp").unwrap();
+        for index in 0..5 {
+            db.insert_message("s1", if index % 2 == 0 { "user" } else { "assistant" },
+                Some(&format!("m{index}")), None, None)
+                .unwrap();
+        }
+
+        let newest = db.load_history_page("s1", None, 2).unwrap();
+        assert_eq!(newest.len(), 2);
+        assert_eq!(newest[1].text, "m4");
+
+        let older = db
+            .load_history_page("s1", Some(newest[0].id.trim_start_matches('m').parse().unwrap()), 2)
+            .unwrap();
+        assert_eq!(older.len(), 2);
+        assert_eq!(older[0].text, "m1");
+        assert_eq!(older[1].text, "m2");
+
+        let rest = db
+            .load_history_page("s1", Some(older[0].id.trim_start_matches('m').parse().unwrap()), 2)
+            .unwrap();
+        assert_eq!(rest.len(), 1);
+        assert_eq!(rest[0].text, "m0");
+
+        // The unpaged read is still the whole conversation, oldest first.
+        let all = db.load_history("s1").unwrap();
+        assert_eq!(all.len(), 5);
+        assert_eq!(all[0].text, "m0");
     }
 
     #[test]

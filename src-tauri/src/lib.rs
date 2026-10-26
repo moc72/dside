@@ -1246,6 +1246,7 @@ pub fn run() {
             db::session_history,
             db::session_resume,
             db::session_delete,
+            db::session_delete_many,
             db::session_update,
             db::session_todos,
             db::settings_all,

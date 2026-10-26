@@ -12,6 +12,7 @@ import KeyboardPanel from "./KeyboardPanel.vue";
 import RudderDialog from "../RudderDialog.vue";
 import SandboxPanel from "./SandboxPanel.vue";
 import WorkspacePicker from "../WorkspacePicker.vue";
+import ConfirmDialog from "../ConfirmDialog.vue";
 import { locale, localeLabel, locales, setLocale, t } from "../../i18n";
 import type { Locale, MessageKey } from "../../i18n";
 import type { PermissionMode } from "../../types";
@@ -230,10 +231,46 @@ onMounted(async () => {
 interface ArchivedSession {
   id: string;
   title: string;
+  workspace: string;
   updatedAt: number;
 }
 
 const archived = ref<ArchivedSession[]>([]);
+const archivedQuery = ref("");
+const archivedProject = ref("");
+/** Which session the confirmation is about; `"all"` means the whole archive. */
+const archiveDeleteId = ref<string | null>(null);
+const archivedBusy = ref(false);
+
+/** The folders the archive actually contains, by their last path segment. */
+const archivedProjects = computed(() => {
+  const seen = new Map<string, string>();
+  for (const session of archived.value) {
+    if (!session.workspace || seen.has(session.workspace)) continue;
+    seen.set(session.workspace, projectLabel(session.workspace));
+  }
+  return [...seen.entries()].map(([value, label]) => ({ value, label }));
+});
+
+function projectLabel(workspace: string): string {
+  return workspace.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || workspace;
+}
+
+const filteredArchived = computed(() => {
+  const needle = archivedQuery.value.trim().toLowerCase();
+  return archived.value.filter((session) => {
+    if (archivedProject.value && session.workspace !== archivedProject.value) return false;
+    if (!needle) return true;
+    return (
+      session.title.toLowerCase().includes(needle) ||
+      session.workspace.toLowerCase().includes(needle)
+    );
+  });
+});
+
+function archivedDate(session: ArchivedSession): string {
+  return new Date(session.updatedAt * 1000).toLocaleDateString();
+}
 
 async function loadArchived() {
   try {
@@ -247,6 +284,41 @@ async function restore(id: string) {
   await invoke("session_archive", { id, archived: false });
   await loadArchived();
 }
+
+/**
+ * Deleting a conversation is not reversible, so it asks first — with the app's own dialog, the
+ * same one the file history uses, not a browser confirm.
+ */
+async function deleteArchived(): Promise<void> {
+  const target = archiveDeleteId.value;
+  if (!target) return;
+  archivedBusy.value = true;
+  try {
+    if (target === "all") {
+      await invoke("session_delete_many", { ids: archived.value.map((session) => session.id) });
+    } else {
+      await invoke("session_delete", { id: target });
+    }
+  } finally {
+    archivedBusy.value = false;
+    archiveDeleteId.value = null;
+    await loadArchived();
+  }
+}
+
+const archiveDeleteTitle = computed(() =>
+  archiveDeleteId.value === "all" ? t("archived.deleteAllTitle") : t("archived.deleteTitle"),
+);
+
+const archiveDeleteMessage = computed(() =>
+  archiveDeleteId.value === "all"
+    ? t("archived.confirmDeleteAll", { count: archived.value.length })
+    : t("archived.confirmDelete"),
+);
+
+watch([archivedQuery, archivedProject], () => {
+  archiveDeleteId.value = null;
+});
 
 watch(activeItem, (value) => {
   if (value === "archived") void loadArchived();
@@ -586,18 +658,72 @@ watch(activeItem, (value) => {
       </template>
 
       <template v-else-if="activeItem === 'archived'">
-        <h1 class="title">{{ t("archived.title") }}</h1>
-        <p class="hint">{{ t("archived.hint") }}</p>
+        <div class="archive-head">
+          <div>
+            <h1 class="title">{{ t("archived.title") }}</h1>
+            <p class="hint">{{ t("archived.hint") }}</p>
+          </div>
+          <button
+            v-if="archived.length"
+            class="mini-text danger"
+            type="button"
+            :disabled="archivedBusy"
+            @click="archiveDeleteId = 'all'"
+          >
+            <Icon name="archive" :size="13" />
+            {{ t("archived.deleteAll") }}
+          </button>
+        </div>
+
+        <div v-if="archived.length" class="archive-tools">
+          <label class="archive-search">
+            <Icon name="search" :size="14" />
+            <input
+              v-model="archivedQuery"
+              type="search"
+              :placeholder="t('archived.search')"
+              :aria-label="t('archived.search')"
+            />
+          </label>
+          <select v-model="archivedProject" class="input archive-filter">
+            <option value="">{{ t("archived.allProjects") }}</option>
+            <option v-for="project in archivedProjects" :key="project.value" :value="project.value">
+              {{ project.label }}
+            </option>
+          </select>
+        </div>
 
         <p v-if="archived.length === 0" class="hint">{{ t("archived.empty") }}</p>
+        <p v-else-if="filteredArchived.length === 0" class="hint">
+          {{ t("archived.noMatch") }}
+        </p>
 
         <div v-else class="card">
-          <div v-for="session in archived" :key="session.id" class="row">
+          <div v-for="session in filteredArchived" :key="session.id" class="row">
             <div class="text">
               <div class="label">{{ session.title || t("archived.untitled") }}</div>
+              <div class="desc archive-meta">
+                <Icon name="folder" :size="12" />
+                <span>{{ projectLabel(session.workspace) }}</span>
+                <span>·</span>
+                <span>{{ archivedDate(session) }}</span>
+              </div>
             </div>
-            <button class="mini-text" type="button" @click="restore(session.id)">
+            <button
+              class="mini-text"
+              type="button"
+              :disabled="archivedBusy"
+              @click="restore(session.id)"
+            >
               {{ t("archived.restore") }}
+            </button>
+            <button
+              class="mini-text danger"
+              type="button"
+              :disabled="archivedBusy"
+              @click="archiveDeleteId = session.id"
+            >
+              {{ t("archived.delete") }}
             </button>
           </div>
         </div>
@@ -608,6 +734,17 @@ watch(activeItem, (value) => {
         <p>{{ t("common.comingSoon") }}</p>
       </div>
     </main>
+
+    <ConfirmDialog
+      :open="archiveDeleteId !== null"
+      :title="archiveDeleteTitle"
+      :message="archiveDeleteMessage"
+      :confirm-label="t('archived.delete')"
+      :cancel-label="t('common.cancel')"
+      danger
+      @confirm="deleteArchived"
+      @cancel="archiveDeleteId = null"
+    />
 
     <RudderDialog
       :open="rudderOpen"
@@ -939,6 +1076,56 @@ watch(activeItem, (value) => {
   color: var(--danger);
 }
 
+.archive-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.archive-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0 12px;
+}
+
+.archive-search {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 180px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-muted);
+}
+
+.archive-search input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.archive-filter {
+  width: auto;
+  min-width: 140px;
+}
+
+.archive-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
 .mini-text {
   padding: 5px 12px;
   border: 1px solid var(--border-strong);
@@ -946,6 +1133,21 @@ watch(activeItem, (value) => {
   background: transparent;
   color: var(--text);
   font-size: 12px;
+}
+
+.mini-text.danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.mini-text.danger:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: var(--bg-hover);
+}
+
+.mini-text:disabled {
+  opacity: 0.6;
 }
 
 .mini-text:hover {

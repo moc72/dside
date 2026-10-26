@@ -6,6 +6,8 @@ defineProps<{
 const emit = defineEmits<{ start: [event: PointerEvent] }>();
 
 function onPointerDown(event: PointerEvent) {
+  // Without this the drag selects text across the panels instead of moving the divider.
+  event.preventDefault();
   emit("start", event);
 }
 </script>

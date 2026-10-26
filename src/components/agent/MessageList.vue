@@ -12,7 +12,11 @@ import type { ChatMessage } from "../../types";
 
 defineProps<{
   messages: ChatMessage[];
+  hasOlder?: boolean;
+  loadingOlder?: boolean;
 }>();
+
+const emit = defineEmits<{ loadOlder: [] }>();
 
 /** The compressed summary of the open session, if it has been compressed. */
 const resume = computed(() => resumesBySession[activeSessionId.value] ?? null);
@@ -140,6 +144,17 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="messages">
+    <button
+      v-if="hasOlder"
+      class="load-older"
+      type="button"
+      :disabled="loadingOlder"
+      @click="emit('loadOlder')"
+    >
+      <Icon :name="loadingOlder ? 'reload' : 'chevron-up'" :size="13" />
+      <span>{{ loadingOlder ? t("message.loadingOlder") : t("message.loadOlder") }}</span>
+    </button>
+
     <details v-if="resume" class="resume">
       <summary>
         <Icon name="clock" :size="13" />
@@ -298,6 +313,43 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   padding: 20px 6px;
+}
+
+/* Reads backwards through a long thread, one page at a time. Quiet on purpose: it sits above
+   the conversation and should not compete with it. */
+.load-older {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  align-self: center;
+  margin: 0 0 14px;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.load-older:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.load-older:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.load-older:disabled .icon {
+  animation: spin 1.1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* The compressed past of the conversation, one click away. It sits above the live timeline

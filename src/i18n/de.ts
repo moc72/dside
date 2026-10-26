@@ -37,6 +37,17 @@ export const de = {
     empty: "Nichts archiviert.",
     untitled: "Ohne Titel",
     restore: "Reaktivieren",
+    search: "Archivierte Aufgaben durchsuchen",
+    allProjects: "Alle Projekte",
+    delete: "Löschen",
+    deleteAll: "Alle löschen",
+    deleteTitle: "Aufgabe löschen?",
+    deleteAllTitle: "Alle archivierten Aufgaben löschen?",
+    confirmDelete:
+      "Diese Aufgabe wird endgültig gelöscht — samt Verlauf, Werkzeugausgaben und Dateiversionen. Das lässt sich nicht rückgängig machen.",
+    confirmDeleteAll:
+      "Alle {count} archivierten Aufgaben werden endgültig gelöscht. Das lässt sich nicht rückgängig machen.",
+    noMatch: "Nichts gefunden.",
   },
   account: {
     settings: "Einstellungen",
@@ -257,6 +268,8 @@ export const de = {
     notWired: "Noch nicht angebunden: Es ist kein Modell-Backend verbunden.",
     reasoning: "Denken",
     characters: "Zeichen",
+    loadOlder: "Ältere Nachrichten laden",
+    loadingOlder: "Lädt ältere…",
     copyMarkdown: "Markdown kopieren",
     copied: "Kopiert",
     copyFailed: "Kopieren fehlgeschlagen",

@@ -2,6 +2,7 @@ import { reactive, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
+  ChatMessage,
   EngineEvent,
   MessagePart,
   Session,
@@ -390,9 +391,18 @@ export async function loadSessions(): Promise<void> {
  */
 export const resumesBySession = reactive<Record<string, SessionResume | null>>({});
 
-export async function loadHistory(sessionId: string): Promise<void> {
-  const rows = await invoke<DbHistoryRow[]>("session_history", { sessionId });
-  messagesBySession[sessionId] = rows.filter(hasSomethingToSay).map((row) => {
+/**
+ * How many messages one page holds. A long thread used to arrive whole — hundreds of rows,
+ * each with its tool calls, all rendered at once — so the window opened slowly and scrolling
+ * dragged. It now opens with the newest page and reads older ones on demand.
+ */
+const HISTORY_PAGE = 80;
+
+/** Sessions that still have older messages behind the first one on screen. */
+export const historyHasMore = reactive<Record<string, boolean>>({});
+
+function mapHistoryRows(rows: DbHistoryRow[]): ChatMessage[] {
+  return rows.filter(hasSomethingToSay).map((row) => {
     const tools = row.tools.map(
       (tool): ToolActivity => ({
         id: tool.id,
@@ -405,12 +415,22 @@ export async function loadHistory(sessionId: string): Promise<void> {
     );
     return {
       id: row.id,
-      role: row.role === "user" ? "user" : "assistant",
+      role: row.role === "user" ? ("user" as const) : ("assistant" as const),
       text: row.text,
       tools,
       parts: timelineFor(row, tools),
     };
   });
+}
+
+export async function loadHistory(sessionId: string): Promise<void> {
+  const rows = await invoke<DbHistoryRow[]>("session_history", {
+    sessionId,
+    limit: HISTORY_PAGE,
+  });
+  // A full page means there is probably more behind it; a short one is the beginning.
+  historyHasMore[sessionId] = rows.length === HISTORY_PAGE;
+  messagesBySession[sessionId] = mapHistoryRows(rows);
 
   try {
     resumesBySession[sessionId] = await invoke<SessionResume | null>("session_resume", {
@@ -419,6 +439,25 @@ export async function loadHistory(sessionId: string): Promise<void> {
   } catch {
     resumesBySession[sessionId] = null;
   }
+}
+
+/**
+ * Reads the next older page and puts it in front. The caller keeps the scroll position: the
+ * list grows upwards, so the line the reader was on must not move.
+ */
+export async function loadOlderHistory(sessionId: string): Promise<number> {
+  const current = messagesBySession[sessionId] ?? [];
+  const first = current[0]?.id;
+  if (!first || !historyHasMore[sessionId]) return 0;
+  const rows = await invoke<DbHistoryRow[]>("session_history", {
+    sessionId,
+    beforeId: first,
+    limit: HISTORY_PAGE,
+  });
+  historyHasMore[sessionId] = rows.length === HISTORY_PAGE;
+  const older = mapHistoryRows(rows);
+  messagesBySession[sessionId] = [...older, ...current];
+  return older.length;
 }
 
 /**

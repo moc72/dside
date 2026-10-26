@@ -111,13 +111,27 @@ onMounted(() => {
   }).catch(() => undefined);
 });
 
-const bodyStyle = computed(() => {
-  const columns: string[] = [];
-  if (railVisible.value) columns.push(`${railWidth.value}%`);
-  columns.push("minmax(0, 1fr)");
-  if (workVisible.value) columns.push(`${workWidth.value}%`);
-  return { gridTemplateColumns: columns.join(" ") };
-});
+/**
+ * The grid always keeps three columns, with a hidden side collapsed to 0 %. That is what makes
+ * the change animatable: adding or removing a column would snap, changing its width slides.
+ * The panels stay mounted while hidden (inert, so nothing inside can be focused), which also
+ * keeps their state — the tree, the terminal, the open tab.
+ */
+const bodyStyle = computed(() => ({
+  gridTemplateColumns: `${railVisible.value ? railWidth.value : 0}% minmax(0, 1fr) ${
+    workVisible.value ? workWidth.value : 0
+  }%`,
+}));
+
+/**
+ * A collapsed column still leaves its 10 px gap behind. Pulling the middle panel over by that
+ * much keeps it flush with the window edge while the rail slides away — animated together with
+ * the column, so both edges move as one.
+ */
+const centerStyle = computed(() => ({
+  marginLeft: railVisible.value ? "0px" : "-10px",
+  marginRight: workVisible.value ? "0px" : "-10px",
+}));
 
 function startDrag(which: "rail" | "work", event: PointerEvent) {
   const container = body.value;
@@ -125,6 +139,8 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
   const total = container.clientWidth;
   if (total <= 0) return;
 
+  // Dragging must be immediate; the slide transition would lag behind the pointer.
+  document.body.classList.add("is-resizing");
   const startX = event.clientX;
   const startRail = railWidth.value;
   const startWork = workWidth.value;
@@ -153,6 +169,7 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
   };
 
   const onUp = () => {
+    document.body.classList.remove("is-resizing");
     handle.removeEventListener("pointermove", onMove);
     handle.removeEventListener("pointerup", onUp);
     handle.removeEventListener("pointercancel", onUp);
@@ -180,9 +197,19 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
     <TitleBar />
     <div class="stage">
       <div ref="body" class="body" :style="bodyStyle">
-        <LeftRail v-if="railVisible" class="card" />
-        <AgentPanel class="card" />
-        <WorkArea v-if="workVisible" class="card" />
+        <LeftRail
+          class="card side-panel left-panel"
+          :class="{ hidden: !railVisible }"
+          :aria-hidden="railVisible ? undefined : 'true'"
+          :inert="railVisible ? undefined : true"
+        />
+        <AgentPanel class="card center-panel" :style="centerStyle" />
+        <WorkArea
+          class="card side-panel right-panel"
+          :class="{ hidden: !workVisible }"
+          :aria-hidden="workVisible ? undefined : 'true'"
+          :inert="workVisible ? undefined : true"
+        />
 
         <Resizer
           v-if="railVisible"
@@ -279,6 +306,60 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
   gap: 10px;
+  transition: grid-template-columns 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* A side panel slides out of its edge and fades while its column collapses. 320 ms reads as a
+   deliberate movement without making the next click wait; the fork this came from used 1.15 s,
+   which is lovely to watch and slow to live with. */
+.side-panel {
+  min-width: 0;
+  overflow: hidden;
+  transition:
+    opacity 220ms ease,
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-width 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.left-panel {
+  transform-origin: left center;
+}
+
+.right-panel {
+  transform-origin: right center;
+}
+
+.left-panel.hidden {
+  transform: translateX(-18px);
+}
+
+.right-panel.hidden {
+  transform: translateX(18px);
+}
+
+.side-panel.hidden {
+  border-width: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.center-panel {
+  transition: margin 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* While a divider is dragged, every transition on the layout is in the way. */
+body.is-resizing .body,
+body.is-resizing .side-panel,
+body.is-resizing .center-panel {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .body,
+  .side-panel,
+  .center-panel {
+    transition-duration: 1ms;
+  }
 }
 
 /* The splash window is chrome-less: it shows the brand and nothing else. */

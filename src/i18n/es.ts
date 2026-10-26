@@ -38,6 +38,17 @@ export const es: Messages = {
     empty: "Nada archivado.",
     untitled: "Sin título",
     restore: "Restaurar",
+    search: "Buscar tareas archivadas",
+    allProjects: "Todos los proyectos",
+    delete: "Eliminar",
+    deleteAll: "Eliminar todo",
+    deleteTitle: "¿Eliminar esta tarea?",
+    deleteAllTitle: "¿Eliminar todas las tareas archivadas?",
+    confirmDelete:
+      "Esta tarea se elimina definitivamente: su historial, la salida de herramientas y las versiones de archivos. No se puede deshacer.",
+    confirmDeleteAll:
+      "Se eliminarán definitivamente las {count} tareas archivadas. No se puede deshacer.",
+    noMatch: "Nada encontrado.",
   },
   account: {
     settings: "Configuración",
@@ -258,6 +269,8 @@ export const es: Messages = {
     notWired: "No conectado aún: no hay backend de modelo conectado.",
     reasoning: "Razonando",
     characters: "caracteres",
+    loadOlder: "Cargar mensajes anteriores",
+    loadingOlder: "Cargando anteriores…",
     copyMarkdown: "Copiar Markdown",
     copied: "Copiado",
     copyFailed: "No se pudo copiar",

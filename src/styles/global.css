@@ -166,6 +166,14 @@ button {
   border-radius: 12px;
 }
 
+/* While a divider is dragged: no text selection, one cursor everywhere. */
+body.is-resizing,
+body.is-resizing * {
+  cursor: col-resize !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
