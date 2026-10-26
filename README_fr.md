@@ -51,6 +51,8 @@ Le partenaire de développement intégré à l'application se nomme **Ziggy**. C
 - **Persistance totale après redémarrage** : sessions, onglets ouverts, dernier fichier consulté, disposition de la fenêtre — tout est conservé.
 - **Copie :** chaque réponse dispose d'un bouton de copie (icône seule) qui copie le Markdown source, blocs de code et tableaux compris.
 - **Réponses qui s'emballent :** si le modèle se met à se répéter, le flux est coupé après quelques centaines de caractères répétés et le tour l'indique ; tout ce qui précède est conservé.
+- **Les longues conversations** s'ouvrent avec les 80 derniers messages ; les précédents se chargent par pages sans faire sauter la ligne en cours de lecture.
+- **Archives :** rechercher et filtrer les tâches archivées par projet, les réactiver ou les supprimer (une ou toutes) avec confirmation.
 - **Confiance :** le compagnon choisit son nom tôt, mais vous ne l'apprenez qu'après 100 points gagnés au fil des jours — journées d'utilisation, tâches terminées, ses propres notes, vos corrections. La page du compagnon montre la progression ; un simple clic ne rapporte rien.
 - **Premier lancement** : configuration du mode, de l'espace de travail et de la clé API. La section **Paramètres → Diagnostic** permet de vérifier le trousseau d'accès, le fournisseur, la base de données et les éditeurs détectés.
 - **Raccourcis clavier** : consultables, accessibles via une fonction de recherche et modifiables dans **Paramètres → Raccourcis clavier**.

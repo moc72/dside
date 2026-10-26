@@ -3,30 +3,16 @@
 This is the short handover for taking the project over. `PROGRESS.md` is the authoritative
 log (German, one section per round); `AGENTS.md` describes how to work in the repository.
 
-**Status:** `v0.4.13` is public. The current head (`53606ec`) carries the round-70
-changes (the dev-only UI test bridge, a reveal refresh for files written after the
-tree was read, and the round-69 browser/recall/restore/follow work); it is not
-tagged yet. The working tree adds round 71 (copy action, tool-registry test),
-round 72 (workspace preview server + `preview` tool, layout data in
-`browser_read`, permanent tool grants with a revoke button), round 73 (the
-preview no longer needs Browser control, the layout reports overflow and text
-colours, and a read-only `settings` tool reports the running turn's
-configuration), round 74 (i18n parity check wired into the build, README
-feature lists completed in six languages, dead prototype panel removed) and
-round 75 (`browser_click`, one reused preview window, and the preview window
-exempt from Browser control for read/click/fill), round 76 (capture attempts no
-longer print a failed tool's stderr when a later tool succeeds), round 77
-(`preview` takes `width`/`height` to measure a breakpoint; the browser window's
-minimum size dropped to 320×280 so narrow layouts are reachable) and round 78
-(`size.requested/effective/clamped` so a clamped measurement is visible, adaptive
-settling instead of a fixed sleep, `loading` for a not-yet-painted page, the
-current URL in `browser_click` answers and errors, and browser window titles that
-follow the page) and round 79 (`browser_windows` as a tool, `browser_read(url, id)`
-for a deliberate navigation, and `loading` keyed on content rather than a title),
-round 80 (a stream guard that cuts a repeating answer and says so) and round 81
-(compression on the provider's own prompt size, a window-only screenshot, and the
-trust system that reveals the companion's name at 100 points); the working tree
-is what the user tests next.
+**Status:** `v0.5.0` is tagged (2026-10-24) and its CI run built Linux, Windows and macOS
+green; the GitHub release is a **draft** until the user publishes it. Tagged with it:
+`preview` (workspace HTML/CSS in the app browser with layout data and breakpoint sizes),
+`browser_click`, `browser_windows`, permanent tool grants, the copy action, the guard that
+cuts a repeating answer, compression on the provider's own prompt size, window-only
+screenshots and the trust system that reveals the companion's name at 100 points.
+
+The working tree adds round 82 (2026-10-26), taken from the user's own fork: paged history
+for long threads, sliding side panels and archive management. The fork's companion/project
+database model is deliberately not part of DS.IDE. No version bump yet; the user tests first.
 
 ## What it is
 
@@ -58,7 +44,7 @@ Checks and release:
 ```sh
 pnpm build                        # i18n check + vue-tsc + Vite
 pnpm check:i18n                   # six catalogs, same keys, no German leftovers
-cd src-tauri && cargo test --lib  # 62 passed, 13 ignored (live tests need DS_IDE_API_KEY)
+cd src-tauri && cargo test --lib  # 63 passed, 13 ignored (live tests need DS_IDE_API_KEY)
 pnpm tauri build                  # deb/rpm/AppImage, NSIS, dmg
 ```
 
@@ -137,6 +123,14 @@ connection test.
   removed and the turn ends with `stop_reason: "loop"` plus a message; what came before is
   kept. Reasoning is stored and shown but never sent back to the provider, so a model cannot
   read its own loop back in.
+- **Long threads:** the newest 80 messages open first (`HISTORY_PAGE`); older ones are read in
+  pages with `session_history(beforeId, limit)` and prepended while the scroll position is
+  kept. The engine still sends the whole history — this is a display concern only.
+- **Side panels** stay mounted and slide over their grid column (320 ms, reduced-motion aware,
+  transitions off while a divider is dragged). Hidden panels are `inert` and `aria-hidden`.
+- **Archive:** search, project filter, restore, delete one and delete all — the deletions ask
+  through the app's own dialog, and `session_delete_many` removes the whole archive in one
+  call.
 - **Timeline:** thinking, text and tool calls in the order they happened; tool rows open to
   show the command, output and approval state. Every assistant answer has a **copy markdown**
   action that copies the raw source (code fences and tables included).

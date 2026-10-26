@@ -51,6 +51,8 @@ Der Programmierpartner innerhalb der Anwendung heißt **Ziggy**. Diesen Namen ha
 - **Alles bleibt nach einem Neustart erhalten** – Sitzungen, geöffnete Tabs, die zuletzt bearbeitete Datei sowie die Fensterkonfiguration.
 - **Kopieren:** Jede Antwort hat einen Kopier-Button (nur Symbol), der den rohen Markdown-Quelltext inklusive Codeblöcken und Tabellen kopiert.
 - **Ausreißer:** Beginnt das Modell sich zu wiederholen, wird der Strom nach wenigen hundert wiederholten Zeichen abgebrochen und der Turn sagt es; alles davor bleibt erhalten.
+- **Lange Unterhaltungen** öffnen mit den neuesten 80 Nachrichten; ältere lassen sich seitenweise nachladen, ohne dass die gelesene Zeile springt.
+- **Archiv:** Archivierte Aufgaben durchsuchen, nach Projekt filtern, reaktivieren oder einzeln/alle löschen — jeweils mit Bestätigung.
 - **Vertrauen:** Der Begleiter wählt seinen Namen früh, doch du erfährst ihn erst nach 100 Punkten, die über Tage wachsen — Nutzungstage, erledigte Aufgaben, eigene Notizen, deine Korrekturen. Die Begleiterseite zeigt den Fortschritt; für einen einzelnen Klick gibt es nichts.
 - **Beim ersten Start** werden Modus, Arbeitsbereich (Workspace) und API-Schlüssel abgefragt; unter **Einstellungen → Diagnose** lassen sich Schlüsselbund, Provider, Datenbank und erkannte Editoren überprüfen.
 - **Tastenkürzel** sind unter „Einstellungen → Tastenkürzel“ aufgelistet, durchsuchbar und anpassbar.

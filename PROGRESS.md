@@ -3245,3 +3245,59 @@ Screenshot geprüft (`/tmp/dside-partner-trust3.png`,
 Unit-Test abgedeckt, nicht durch eine künstlich aufgeblähte Sitzung.
 
 Kein Commit — der Nutzer testet zuerst.
+
+## 82. Aus dem Fork übernommen: Seiten, Slide, Archiv (2026-10-26, einundsechzigste Runde)
+
+Der Nutzer hat einen eigenen Fork (`~/Projects/surprise/app`) für seine VSCode-Companions
+gebaut und zwei Dinge genannt: die Slide-Animation der Seitenpanels und das seitenweise
+Laden langer Threads. Beides ist übernommen, dazu die Archivverwaltung; das DB-System des
+Forks (Companions/Projects/Qdrant) bleibt bewusst draußen.
+
+### Lange Threads laden in Seiten
+- Rust: `Db::load_history_page(session_id, before_id, limit)` — die neuesten N Zeilen per
+  `ORDER BY id DESC LIMIT`, fürs Lesen umgedreht; `after_id`-Nachbar heißt hier `before_id`,
+  weil rückwärts gelesen wird. `load_history` bleibt als „alles" für Tests/Export.
+  Command `session_history` nimmt `beforeId` (Format `m{rowid}`) und `limit` (Default 80,
+  Deckel 500); Test `history_pages_continue_where_the_previous_one_stopped`.
+- Frontend: `HISTORY_PAGE = 80`, `historyHasMore` pro Sitzung, `loadOlderHistory` stellt die
+  ältere Seite voran. Der Aufrufer merkt sich `scrollHeight`/`scrollTop` und korrigiert nach
+  dem Einfügen — die gelesene Zeile bleibt stehen (gemessen: 12 px Abweichung durch
+  Rahmen-Rundung). Der „Ältere Nachrichten laden"-Knopf sitzt über dem Verlauf, mit
+  Spinner-Zustand.
+- Gemessen an einer Sitzung mit 200 realistischen Nachrichten (je ~4 KB): erste Seite
+  **657 KB / 19 ms** statt **1642 KB / 43 ms** für alles; dazu 80 statt 200 DOM-Zeilen.
+  Bei echten Werkzeugausgaben fällt der Unterschied größer aus.
+
+### Slide statt Sprung
+Die Seitenpanels bleiben jetzt gemountet und werden über ihre Grid-Spalte ein- und
+ausgefahren (`0%` statt Entfernen der Spalte — nur so ist der Übergang animierbar), mit
+`opacity`/`translateX`, `inert` und `aria-hidden` im versteckten Zustand. Weil eine
+0-%-Spalte ihren 10-px-Gap behält, zieht ein negativer Rand am Mittelpanel die Kante mit —
+sonst bliebe ein 10-px-Versatz. Getestet: Spalte 241 → 98 → 0 px bei 60 ms,
+Deckkraft 0,50, danach `inert`, Panel weiterhin im DOM, Mittelkante exakt bei 10 px.
+Dauer **320 ms** statt der 1,15 s im Fork: die Bewegung soll sich nach Absicht anfühlen,
+nicht nach Warten; eine Konstante, falls es langsamer gewünscht ist. `prefers-reduced-motion`
+setzt sie auf 1 ms. Während des Ziehens am Trenner schaltet `body.is-resizing` alle
+Übergänge ab und sperrt die Textauswahl.
+
+### Archivverwaltung
+Suche (Titel und Pfad), Projektfilter (aus den vorhandenen Workspaces), Datum je Eintrag,
+Löschen einzeln und „Alle löschen" — jeweils über den app-eigenen `ConfirmDialog`
+(Fokus auf „Abbrechen"), nicht über einen zweiten Klick. Neuer Command
+`session_delete_many`; einzeln nutzt `session_delete`. Sechs Sprachen. Live geprüft:
+Suche filtert, Projektfilter greift, Dialog nennt „Alle 1 archivierten Aufgaben …",
+Bestätigen entfernt Zeile und DB-Satz, danach der Leerzustand.
+
+### Bewusst nicht übernommen
+Companion-/Projekt-Datenmodell, Synchronic, Qdrant, KiloCode-Import, die neue Shell
+(Titelbar weg, Companion-Picker, `SelectField` statt nativer Selects) und die
+Composer-Umbauten — das ist die Identität des Forks, nicht ein Gewinn für DS.IDE. Die
+Backend-Unterschiede dort sind bis auf Companion-Felder reine rustfmt-Formatierung.
+
+### Geprüft
+`cargo test --lib` **63 passed / 13 ignored**, `pnpm build` grün mit i18n-Check
+(490 Schlüssel in sechs Sprachen). Live über die Brücke: 200-Nachrichten-Sitzung zeigt 80
+Zeilen und den Knopf, Nachladen ergibt 160 ohne Sprung, Slide und Archiv wie oben.
+Testumgebung unter `/tmp` neu aufgebaut (die alte war aufgeräumt).
+
+Kein Commit — der Nutzer testet zuerst.
