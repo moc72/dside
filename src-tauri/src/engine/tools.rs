@@ -192,7 +192,7 @@ pub fn definitions() -> Vec<Value> {
             "type": "function",
             "function": {
                 "name": "memory",
-                "description": "Long-term memory, kept across sessions. Use 'add' to remember a durable fact, preference, event or project detail about the user or about yourself; 'update' to correct a note you got wrong; 'list' to review what is stored; 'forget' to set an entry aside by id (it stays in the database but is no longer recalled); 'curate' to get a hygiene report (exact duplicates and long-unused entries) and then decide deliberately. Notes the user edited are marked as theirs. Every note records whether it was verified or assumed: 'assumed' notes are recalled with an [unverified] marker, so a guess cannot quietly become a remembered fact.",
+                "description": "Long-term memory, kept across sessions. Use 'add' to remember a durable fact, preference, event or project detail about the user or about yourself — only what you could not recover by reading the files, the git log or the project's AGENTS.md, and only for a note that will still matter in a week; 'update' to correct a note you got wrong; 'list' to review what is stored; 'forget' to set an entry aside by id (it stays in the database but is no longer recalled); 'curate' to get a hygiene report (exact duplicates and long-unused entries) and then decide deliberately. Notes the user edited are marked as theirs. Every note records whether it was verified or assumed: 'assumed' notes are recalled with an [unverified] marker, so a guess cannot quietly become a remembered fact.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -297,6 +297,39 @@ pub fn definitions() -> Vec<Value> {
                         "description": { "type": "string", "description": "Short label shown to the user, three to five words." }
                     },
                     "required": ["prompt"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "verify",
+                "description": "Have a claim checked by an independent reader. It gets the workspace read-only — no writing, no commands — looks for the evidence, probes one edge, and answers with a report that ends in VERDICT: PASS or VERDICT: FAIL. A FAIL comes back to you as a failed tool. Use it before you report work you could not check yourself, and for claims about the state of the project. Costs one model call.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "claim": { "type": "string", "description": "What should be checked, as a checkable statement or a short list: what you changed, what you claim about it, and where to look." },
+                        "description": { "type": "string", "description": "Short label shown to the user, three to five words." }
+                    },
+                    "required": ["claim"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "schedule",
+                "description": "Set yourself a reminder, or list and cancel the ones you set. Use it when you hand something off that you will not see finish in this turn: a push whose CI has to be watched, a long build, a deploy, a question only the user can answer. The reminder starts a new turn with your prompt, so it must be self-contained. A reminder fires once; a repeating one needs at least five minutes. At most three of yours can be active in a session.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": { "type": "string", "enum": ["add", "list", "cancel"] },
+                        "prompt": { "type": "string", "description": "What future-you should do, written as a complete instruction. Required for 'add'." },
+                        "in_minutes": { "type": "number", "description": "When the reminder should fire, in minutes from now (default 10, at least 1)." },
+                        "repeat_minutes": { "type": "number", "description": "Turn it into a repeating schedule with this interval instead of a single reminder (at least 5)." },
+                        "id": { "type": "number", "description": "Reminder id, required for 'cancel'." }
+                    },
+                    "required": ["action"]
                 }
             }
         }),

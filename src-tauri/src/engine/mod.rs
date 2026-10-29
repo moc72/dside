@@ -1,4 +1,5 @@
 pub mod deepseek;
+pub mod prompts;
 pub mod tools;
 pub mod types;
 
@@ -668,7 +669,20 @@ pub async fn run_due_schedules(app: &AppHandle) {
     };
 
     for schedule in due {
-        let _ = db.mark_schedule_run(schedule.id, now + schedule.interval_seconds);
+        // A reminder is a promise to look once. Disable it before running, so a one-shot can
+        // never fire twice even if the turn it starts fails.
+        if schedule.one_shot {
+            let _ = db.stamp_schedule_run(schedule.id);
+            let _ = db.disable_schedule(schedule.id);
+        } else {
+            let _ = db.mark_schedule_run(schedule.id, now + schedule.interval_seconds);
+        }
+        crate::log_line!(
+            "scheduler: running {} ({}): {}",
+            schedule.id,
+            if schedule.one_shot { "reminder" } else { "schedule" },
+            schedule.created_by
+        );
         if let Err(error) = send_prompt(app, &schedule.session_id, &schedule.prompt, &[], false, true).await {
             crate::log_line!("scheduler: schedule {} failed: {error}", schedule.id);
         }
@@ -1231,6 +1245,41 @@ async fn preview_tool(
 }
 
 
+/// Reads the verifier's verdict. The gate is closed by default: a report without a verdict line
+/// is a failed check, not a pass with a formatting problem. A FAIL returns as a tool error so
+/// the caller cannot mistake it for a confirmation and move on.
+fn verdict_outcome(report: &str) -> tools::ToolOutcome {
+    let mut verdicts: Vec<bool> = Vec::new();
+    for line in report.lines() {
+        let line = line.trim();
+        // A model writing `verdict: pass` made no mistake worth failing it over; a line that
+        // merely *contains* the words still does not count, because the prefix is required.
+        let upper = line.to_uppercase();
+        if let Some(rest) = upper.strip_prefix("VERDICT:") {
+            let rest = rest.trim().trim_end_matches(['.', '!']).to_string();
+            if rest == "PASS" {
+                verdicts.push(true);
+            } else if rest == "FAIL" {
+                verdicts.push(false);
+            }
+        }
+    }
+    match verdicts.as_slice() {
+        [true] => tools::ToolOutcome::ok(format!("Verification passed.\n\n{report}")),
+        [false] => tools::ToolOutcome::err(format!(
+            "Verification FAILED — the claims do not hold against the workspace. Fix the cause \
+             before reporting anything to the user, then verify again.\n\n{report}"
+        )),
+        [] => tools::ToolOutcome::err(format!(
+            "Verification gave no verdict, so it does not count. Ask it again and require the \
+             final line 'VERDICT: PASS' or 'VERDICT: FAIL'.\n\n{report}"
+        )),
+        _ => tools::ToolOutcome::err(format!(
+            "Verification gave more than one verdict, so it does not count. Ask for exactly one.\n\n{report}"
+        )),
+    }
+}
+
 /// A repeated block can be a whole sentence; the notice names it without dumping it into the
 /// timeline twice.
 fn truncate_for_notice(block: &str) -> String {
@@ -1386,6 +1435,103 @@ fn has_session_grant(app: &AppHandle, session_id: &str) -> bool {
 
 /// A tool the user approved with "always" from a permission question. Persistent, unlike a
 /// session grant; it is what lets the danger floor stay silent for tools the user trusts.
+/// Self-reminders. A turn cannot watch a push finish or wait for a deploy; a reminder starts a
+/// fresh turn later, on this session, with a prompt that has to stand on its own.
+fn schedule_tool(app: &AppHandle, session_id: &str, args: &Value) -> tools::ToolOutcome {
+    const MAX_ACTIVE: i64 = 3;
+    let Some(db) = app.try_state::<Db>() else {
+        return tools::ToolOutcome::err("schedule: database unavailable");
+    };
+    let action = args.get("action").and_then(Value::as_str).unwrap_or("list");
+    match action {
+        "add" => {
+            let prompt = args
+                .get("prompt")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty());
+            let Some(prompt) = prompt else {
+                return tools::ToolOutcome::err(
+                    "schedule: 'prompt' is required — write it as an instruction to your future                      self, complete enough to act on without this conversation",
+                );
+            };
+            match db.companion_reminder_count(session_id) {
+                Ok(count) if count >= MAX_ACTIVE => {
+                    return tools::ToolOutcome::err(format!(
+                        "schedule: {count} of your reminders are already active in this session.                          Cancel one you no longer need before adding another."
+                    ))
+                }
+                Ok(_) => {}
+                Err(error) => return tools::ToolOutcome::err(format!("schedule: {error}")),
+            }
+            let minutes = args
+                .get("in_minutes")
+                .and_then(Value::as_f64)
+                .unwrap_or(10.0);
+            let delay = (minutes * 60.0).round() as i64;
+            let repeat = args
+                .get("repeat_minutes")
+                .and_then(Value::as_f64)
+                .map(|value| (value * 60.0).round() as i64);
+            match db.create_reminder(session_id, prompt, delay, repeat, "companion") {
+                Ok(id) => {
+                    let when = if delay % 60 == 0 {
+                        format!("{} min", delay / 60)
+                    } else {
+                        format!("{delay} s")
+                    };
+                    tools::ToolOutcome::ok(match repeat {
+                        Some(interval) => format!(
+                            "Reminder #{id} set: every {} min, first in {when}. The app must be                              running for it to fire.",
+                            interval / 60
+                        ),
+                        None => format!(
+                            "Reminder #{id} set for {when} from now, once. The app must be                              running for it to fire."
+                        ),
+                    })
+                }
+                Err(error) => tools::ToolOutcome::err(format!("schedule: {error}")),
+            }
+        }
+        "list" => match db.list_schedules() {
+            Ok(rows) => {
+                let mine: Vec<String> = rows
+                    .into_iter()
+                    .filter(|row| row.session_id == session_id && row.created_by == "companion")
+                    .map(|row| {
+                        let when = row.next_run_at - crate::db::unix_now();
+                        format!(
+                            "#{} in {} min{} — {}",
+                            row.id,
+                            (when.max(0) / 60),
+                            if row.one_shot { "" } else { ", repeating" },
+                            row.prompt.chars().take(90).collect::<String>()
+                        )
+                    })
+                    .collect();
+                if mine.is_empty() {
+                    tools::ToolOutcome::ok("No reminders of yours are scheduled.")
+                } else {
+                    tools::ToolOutcome::ok(mine.join("\n"))
+                }
+            }
+            Err(error) => tools::ToolOutcome::err(format!("schedule: {error}")),
+        },
+        "cancel" => {
+            let Some(id) = args.get("id").and_then(Value::as_i64) else {
+                return tools::ToolOutcome::err("schedule: 'id' is required for cancel");
+            };
+            match db.delete_schedule(id) {
+                Ok(()) => tools::ToolOutcome::ok(format!("Reminder #{id} cancelled")),
+                Err(error) => tools::ToolOutcome::err(format!("schedule: {error}")),
+            }
+        }
+        other => tools::ToolOutcome::err(format!(
+            "schedule: unknown action '{other}' — use add, list or cancel"
+        )),
+    }
+}
+
 fn window_is_preview(app: &AppHandle, id: Option<&str>) -> bool {
     crate::browser::window_url(app, id)
         .map(|url| crate::preview::is_preview_url(app, &url))
@@ -1617,7 +1763,7 @@ fn record_file_snapshot(
 /// through the parent's UI), and a hard inner turn cap.
 #[cfg(test)]
 pub async fn task_tool(config: &EngineConfig, args: &Value) -> tools::ToolOutcome {
-    task_tool_with_snapshots(None, "", None, config, args).await
+    task_tool_with_snapshots(None, "", None, config, args, false).await
 }
 
 /// The implementation. `app` is `None` in tests, where there is no database to write to.
@@ -1627,17 +1773,24 @@ async fn task_tool_with_snapshots(
     turn_id: Option<&str>,
     config: &EngineConfig,
     args: &Value,
+    verifier: bool,
 ) -> tools::ToolOutcome {
     const MAX_INNER_TURNS: u32 = 8;
     const MAX_ANSWER_CHARS: usize = 20_000;
 
+    // A verifier is given a claim; a general worker a task. Same machinery, different framing.
+    let field = if verifier { "claim" } else { "prompt" };
     let prompt = args
-        .get("prompt")
+        .get(field)
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|value| !value.is_empty());
     let Some(prompt) = prompt else {
-        return tools::ToolOutcome::err("task: 'prompt' is required");
+        return tools::ToolOutcome::err(if verifier {
+            "verify: 'claim' is required — state what should be checked and where to look"
+        } else {
+            "task: 'prompt' is required"
+        });
     };
     if config.api_key.trim().is_empty() {
         return tools::ToolOutcome::err("task: engine is not configured");
@@ -1657,22 +1810,39 @@ async fn task_tool_with_snapshots(
         workspace_only: config.workspace_only,
     };
 
-    let definitions: Vec<Value> = tools::definitions()
-        .into_iter()
-        .filter(|tool| {
-            let name = tool
-                .pointer("/function/name")
-                .and_then(Value::as_str)
-                .unwrap_or("");
-            name != "task" && name != "ask_user" && name != "screenshot"
-        })
-        .collect();
+    // A verifier judges; a general sub-agent works. The verifier gets an allowlist instead of
+    // the full tool set — not because it might be careless, but because a read-only reader is
+    // worth more than one that could quietly fix what it was supposed to report.
 
-    let mut sub_system = "You are a sub-agent inside DS.IDE, working on one self-contained task. \
-         You have tools (read, write, edit, bash, glob, grep, web_fetch, skill). \
-         Do the work and answer with the result and the evidence needed to trust it. \
-         Do not ask questions — nobody can answer them here."
-        .to_string();
+    let definitions: Vec<Value> = if verifier {
+        tools::definitions()
+            .into_iter()
+            .filter(|tool| {
+                let name = tool
+                    .pointer("/function/name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("");
+                prompts::VERIFIER_TOOLS.contains(&name)
+            })
+            .collect()
+    } else {
+        tools::definitions()
+            .into_iter()
+            .filter(|tool| {
+                let name = tool
+                    .pointer("/function/name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("");
+                name != "task" && name != "ask_user" && name != "screenshot"
+            })
+            .collect()
+    };
+
+    let mut sub_system = String::from(prompts::WORKER_BASE);
+    if verifier {
+        sub_system.push_str("\n\n");
+        sub_system.push_str(prompts::VERIFIER_PROMPT);
+    }
     if let Some(rules) = project_instructions(&workspace) {
         sub_system.push_str(
             "\n\n## Project instructions\n\
@@ -1682,7 +1852,11 @@ async fn task_tool_with_snapshots(
     }
     let mut messages = vec![
         ChatMessage::system(sub_system),
-        ChatMessage::user(prompt.to_string()),
+        ChatMessage::user(if verifier {
+            format!("## What to verify\n\n{prompt}\n\nThe workspace is {workspace}. Check the claims above against it.")
+        } else {
+            prompt.to_string()
+        }),
     ];
     let mut todos: Vec<Value> = Vec::new();
 
@@ -1716,6 +1890,9 @@ async fn task_tool_with_snapshots(
                 return tools::ToolOutcome::ok("(the sub-agent returned no answer)");
             }
             let capped: String = answer.chars().take(MAX_ANSWER_CHARS).collect();
+            if verifier {
+                return verdict_outcome(&capped);
+            }
             return tools::ToolOutcome::ok(capped);
         }
 
@@ -1809,6 +1986,29 @@ mod tests {
             "read",
             &json!({ "command": "sudo rm -rf /" })
         ));
+    }
+
+    /// The verification gate. A PASS is a confirmation, a FAIL comes back as an error so it
+    /// cannot be mistaken for one, and anything without exactly one verdict does not count.
+    #[test]
+    fn a_verifier_verdict_is_fail_closed() {
+        let pass = verdict_outcome("### Check: file exists\n**Result:** PASS\n\nVERDICT: PASS");
+        assert!(!pass.is_error, "a single PASS is a confirmation");
+
+        let fail = verdict_outcome("### Check: file exists\n**Result:** FAIL\n\nVERDICT: FAIL");
+        assert!(fail.is_error, "a FAIL must reach the caller as an error");
+        assert!(fail.content.contains("Verification FAILED"));
+
+        // No verdict, lowercase, or a decorated line: the gate stays shut.
+        let silent = verdict_outcome("Everything looks fine.");
+        assert!(silent.is_error);
+        assert!(silent.content.contains("no verdict"));
+
+        let confused = verdict_outcome("VERDICT: PASS\nVERDICT: FAIL");
+        assert!(confused.is_error, "two verdicts mean none of them count");
+
+        let shouty = verdict_outcome("  verdict:   pass  ");
+        assert!(!shouty.is_error, "case and spacing are not the point");
     }
 
     /// A note written from reasoning is recalled with a marker, so a guess cannot quietly
@@ -2311,6 +2511,8 @@ async fn run_turn(
                 recall_tool(app, &arguments, &config.workspace)
             } else if call.function.name == "memory" {
                 memory_tool(app, &arguments, &config.workspace)
+            } else if call.function.name == "schedule" {
+                schedule_tool(app, session_id, &arguments)
             } else if call.function.name == "name_ideas" {
                 let ideas = crate::search_names(
                     arguments.get("meaning").and_then(Value::as_str),
@@ -2333,6 +2535,17 @@ async fn run_turn(
                     turn_id.as_deref(),
                     config,
                     &arguments,
+                    false,
+                )
+                .await
+            } else if call.function.name == "verify" {
+                task_tool_with_snapshots(
+                    Some(app),
+                    session_id,
+                    turn_id.as_deref(),
+                    config,
+                    &arguments,
+                    true,
                 )
                 .await
             } else if call.function.name == "browser_windows" {

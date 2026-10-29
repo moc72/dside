@@ -123,6 +123,19 @@ connection test.
 
 ## Features worth knowing
 
+- **Verifier:** `verify` hands a claim to a second reader with a read-only allowlist (read,
+  glob, grep, logs, settings, recall, web_fetch, browser_read, browser_windows, preview, skill).
+  It answers in `Check / Method / Evidence / Result` blocks and ends with `VERDICT: PASS` or
+  `VERDICT: FAIL`; a FAIL comes back as a **failed tool**, and a report without exactly one
+  verdict counts as not verified. It is its own tool rather than a role of `task`, because
+  `task` is off in everyday mode while a reader belongs in both.
+- **Self-reminders:** `schedule` (add/list/cancel) sets one-shot or repeating reminders on the
+  session; `schedules.one_shot` and `created_by` mark them, a fired one-shot disables itself
+  before the turn and keeps `last_run_at`, and at most three active per session. Scheduled runs
+  in Ask mode are read-only, since no one can approve from a timer.
+- **Prompt layout:** the main persona lives in `src/engine/persona.ts` (frontend, follows the
+  user's settings); sub-agent and verifier prompts live in `src-tauri/src/engine/prompts.rs`.
+  Keep the shared discipline — nothing reported without a tool result — in both.
 - **Evidence rule:** the persona states that no fact about the world (line numbers, file
   contents, command output, database rows, test results) may be reported unless a tool result in
   the same turn says it; a plan is not a result. Compression keeps that distinction — verified

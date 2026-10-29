@@ -14,7 +14,6 @@ import {
   openInEditor,
   useEditors,
 } from "../composables/useEditors";
-import { everydayMode } from "../engine/mode";
 
 const EDITOR_DOWNLOAD_URL = "https://code.visualstudio.com/download";
 
@@ -85,8 +84,10 @@ async function openDownload() {
 
 <template>
   <div class="toolbar">
-    <!-- Everyday mode has no code editor to hand things to, so the picker goes away. -->
-    <div v-if="!everydayMode" class="editor-wrap">
+    <!-- Always offered, in every mode. The integration is the user's own editor, not a code
+         panel of ours, and "everyday" is exactly where opening a document in VS Code belongs.
+         Hiding it there left a fresh install with no way to open the workspace at all. -->
+    <div class="editor-wrap">
       <div class="editor">
         <button
           class="editor-open"

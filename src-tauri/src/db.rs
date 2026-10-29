@@ -118,7 +118,12 @@ CREATE TABLE IF NOT EXISTS schedules (
   enabled          INTEGER NOT NULL DEFAULT 1,
   last_run_at      INTEGER,
   next_run_at      INTEGER NOT NULL,
-  created_at       INTEGER NOT NULL
+  created_at       INTEGER NOT NULL,
+  -- A one-shot reminder (check the CI in twenty minutes) switches itself off after running;
+  -- a repeating schedule keeps going. created_by separates what the user set up from what the
+  -- companion set for itself, so the companion reminders can be capped.
+  one_shot         INTEGER NOT NULL DEFAULT 0,
+  created_by       TEXT NOT NULL DEFAULT 'user'
 );
 CREATE INDEX IF NOT EXISTS idx_schedules_due ON schedules(enabled, next_run_at);
 
@@ -182,11 +187,13 @@ fn row_to_schedule(row: &rusqlite::Row<'_>) -> rusqlite::Result<ScheduleRow> {
         enabled: row.get::<_, i32>(4)? != 0,
         last_run_at: row.get(5)?,
         next_run_at: row.get(6)?,
+        one_shot: row.get::<_, i32>(7)? != 0,
+        created_by: row.get(8)?,
     })
 }
 
-const SCHEDULE_COLUMNS: &str =
-    "id, session_id, prompt, interval_seconds, enabled, last_run_at, next_run_at";
+const SCHEDULE_COLUMNS: &str = "id, session_id, prompt, interval_seconds, enabled, last_run_at, \
+     next_run_at, one_shot, created_by";
 
 fn row_to_memory(row: &rusqlite::Row<'_>) -> rusqlite::Result<MemoryRow> {
     Ok(MemoryRow {
@@ -393,6 +400,9 @@ pub struct ScheduleRow {
     pub enabled: bool,
     pub last_run_at: Option<i64>,
     pub next_run_at: i64,
+    pub one_shot: bool,
+    /// `user` for one the user set up, `companion` for a self-reminder.
+    pub created_by: String,
 }
 
 #[derive(Serialize)]
@@ -533,6 +543,9 @@ impl Db {
         // The ordered timeline of an assistant answer.
         add_column(conn, "messages", "parts", "TEXT")?;
         add_column(conn, "file_versions", "turn_id", "TEXT")?;
+        // Every schedule that existed before this was set up by the user and repeats.
+        add_column(conn, "schedules", "one_shot", "INTEGER NOT NULL DEFAULT 0")?;
+        add_column(conn, "schedules", "created_by", "TEXT NOT NULL DEFAULT 'user'")?;
         // Round 81 added the reveal threshold. Anyone who already has a chosen name keeps
         // seeing it — the rule is for installations that start from nothing.
         let has_name: bool = conn
@@ -1240,6 +1253,75 @@ impl Db {
             .map_err(|error| error.to_string())?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|error| error.to_string())
+    }
+
+    /// A reminder the companion sets for itself. `delay_seconds` is when it first fires;
+    /// `repeat_seconds` turns it into a repeating schedule instead of a one-shot.
+    pub fn create_reminder(
+        &self,
+        session_id: &str,
+        prompt: &str,
+        delay_seconds: i64,
+        repeat_seconds: Option<i64>,
+        created_by: &str,
+    ) -> Result<i64, String> {
+        let stamp = now();
+        let delay = delay_seconds.clamp(60, 7 * 24 * 3600);
+        let (interval, one_shot) = match repeat_seconds {
+            Some(repeat) => (repeat.clamp(300, 7 * 24 * 3600), 0),
+            None => (delay, 1),
+        };
+        let conn = self.lock()?;
+        conn.execute(
+            "INSERT INTO schedules
+               (session_id, prompt, interval_seconds, enabled, next_run_at, created_at,
+                one_shot, created_by)
+             VALUES (?1, ?2, ?3, 1, ?4, ?5, ?6, ?7)",
+            params![
+                session_id,
+                prompt,
+                interval,
+                stamp + delay,
+                stamp,
+                one_shot,
+                created_by
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    /// How many active reminders the companion has set for this session. The cap keeps a
+    /// helpful habit from becoming a token leak.
+    pub fn companion_reminder_count(&self, session_id: &str) -> Result<i64, String> {
+        let conn = self.lock()?;
+        conn.query_row(
+            "SELECT COUNT(*) FROM schedules
+             WHERE session_id = ?1 AND created_by = 'companion' AND enabled = 1",
+            params![session_id],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())
+    }
+
+    /// Records that a one-shot reminder ran, without rescheduling it. The time stays in the
+    /// database so the reminder can be read back later; it is simply not due again.
+    pub fn stamp_schedule_run(&self, id: i64) -> Result<(), String> {
+        let conn = self.lock()?;
+        conn.execute(
+            "UPDATE schedules SET last_run_at = ?2 WHERE id = ?1",
+            params![id, now()],
+        )
+        .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    /// Switching a one-shot off after it ran, so a reminder cannot become a loop.
+    pub fn disable_schedule(&self, id: i64) -> Result<(), String> {
+        let conn = self.lock()?;
+        conn.execute("UPDATE schedules SET enabled = 0 WHERE id = ?1", params![id])
+            .map_err(|error| error.to_string())?;
+        Ok(())
     }
 
     pub fn mark_schedule_run(&self, id: i64, next_run_at: i64) -> Result<(), String> {
@@ -2313,6 +2395,59 @@ mod tests {
         let all = db.load_history("s1").unwrap();
         assert_eq!(all.len(), 5);
         assert_eq!(all[0].text, "m0");
+    }
+
+    /// A self-reminder fires once and switches itself off, a repeating one keeps its next run,
+    /// and the active count is what the cap is enforced against.
+    #[test]
+    fn a_reminder_fires_once_and_a_schedule_repeats() {
+        let directory = std::env::temp_dir().join(format!("ds-ide-remind-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let db = Db::open(&directory.join("remind.sqlite3")).unwrap();
+        db.ensure_session("s1", "Reminders", "project", "/tmp").unwrap();
+
+        let now = unix_now();
+        let once = db
+            .create_reminder("s1", "check the CI", 60, None, "companion")
+            .unwrap();
+        let repeating = db
+            .create_reminder("s1", "look at the log", 60, Some(3600), "companion")
+            .unwrap();
+
+        let rows = db.list_schedules().unwrap();
+        let one = rows.iter().find(|row| row.id == once).unwrap();
+        assert!(one.one_shot, "no repeat means one-shot");
+        assert_eq!(one.created_by, "companion");
+        assert!(one.next_run_at >= now + 60);
+
+        let repeat = rows.iter().find(|row| row.id == repeating).unwrap();
+        assert!(!repeat.one_shot);
+        assert_eq!(repeat.interval_seconds, 3600);
+
+        assert_eq!(db.companion_reminder_count("s1").unwrap(), 2);
+        let due = db.due_schedules(now + 61).unwrap();
+        assert_eq!(due.len(), 2, "both are due a minute later");
+
+        // The runner disables a one-shot instead of rescheduling it.
+        db.disable_schedule(once).unwrap();
+        db.stamp_schedule_run(once).unwrap();
+        assert_eq!(db.companion_reminder_count("s1").unwrap(), 1);
+        let ran = db
+            .list_schedules()
+            .unwrap()
+            .into_iter()
+            .find(|row| row.id == once)
+            .unwrap();
+        assert!(ran.last_run_at.is_some(), "a fired reminder remembers when");
+        let enabled: Vec<i64> = db
+            .list_schedules()
+            .unwrap()
+            .into_iter()
+            .filter(|row| row.enabled)
+            .map(|row| row.id)
+            .collect();
+        assert_eq!(enabled, vec![repeating]);
     }
 
     #[test]

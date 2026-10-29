@@ -3481,3 +3481,93 @@ scheitern dürfen, Scheitern benennen, Beleg nennen.
 Ein eigener Test war zuerst grün aus dem falschen Grund — `[unverified]` steht auch
 in der Kopfzeile des Recall-Blocks, also matchte die Prüfung die Erklärung statt der
 Notizzeile. Ersetzt durch einen Test, der die Zeile selbst prüft.
+
+## 87. Was aus dem Daemon zu holen war (2026-10-29, sechsundsechzigste Runde)
+
+Der Nutzer hat `_handover/MiniMaxCode-3.1.4/daemon` gelegt und um eine genaue
+Prüfung gebeten: keine Kopie, sondern ähnliche Ergebnisse auf eigenem Weg. Gelesen
+wurden `agents/_default` (Basis-, Worker- und Session-Prompts), `agents/*`
+(mavis, verifier, planner, coder, general, skill-editor), `prompts/`
+(llm-gate-classifier, memory-cleanup-curator), `internal-skills/` und die
+Skill-Struktur.
+
+### Übernommen: der Verifier
+Der wertvollste Fund. Ein zweiter Leser mit **nur lesenden** Werkzeugen prüft eine
+Behauptung gegen den Workspace und endet mit `VERDICT: PASS` oder `VERDICT: FAIL`.
+Der Prompt (`src-tauri/src/engine/prompts.rs`) ist in DS.IDEs Stimme geschrieben und
+verlangt: pro Prüfung Methode, zitierte Evidenz und Ergebnis; mindestens eine
+bewusst gewählte Gegenprobe; und eine Liste der Ausreden, die nicht als Prüfung
+zählen („der Bericht sagt, es sei erledigt", „sieht korrekt aus", „vermutlich grün").
+Ohne Verdikt gilt die Prüfung als **nicht bestanden** (fail-closed), bei zwei
+Verdikten ebenso.
+
+Eigenes Werkzeug `verify` statt einer Rolle in `task`. Grund: `task` ist im
+Alltagsmodus abgeschaltet (kein Sub-Agent), aber ein Verifier liest nur — er gehört
+in beide Modi. Der Verifier bekommt eine Werkzeug-Allowlist statt des vollen Satzes:
+read, glob, grep, logs, settings, recall, web_fetch, browser_read, browser_windows,
+preview, skill. Kein Schreiben, kein Bash — kann er eine Behauptung nur mit einem
+Build prüfen, sagt er das als Lücke, nicht als Pass.
+
+`verdict_outcome` liest das Verdikt: PASS → ok, FAIL → **Tool-Fehler** (der Aufrufer
+kann es nicht für Bestätigung halten), kein oder mehrere Verdikte → Fehler. Test
+`a_verifier_verdict_is_fail_closed`.
+
+### Übernommen: eine Basis für Unteragenten
+Der Daemon trennt Basis-Prompt, Worker-Prompt und Session-Rolle (root/branch).
+DS.IDE hatte für Unteragenten einen Satz. `prompts::WORKER_BASE` sagt jetzt das
+Nötige: erst arbeiten, dann berichten; nichts behaupten ohne Tool-Ergebnis; ein Plan
+ist kein Ergebnis; sagen, was nicht ging. Die Haupt-Persona bleibt im Frontend
+(`persona.ts`), weil sie den Einstellungen des Nutzers folgen muss — die Trennung
+ist im Handover notiert.
+
+### Übernommen: Selbst-Erinnerungen
+`Self-Reminder via Cron` war im Daemon Pflicht nach jeder asynchronen Übergabe.
+In DS.IDE gibt es jetzt ein Werkzeug `schedule` (add/list/cancel) und einmalige
+Reminder: `schedules.one_shot` und `created_by` (Migration), `create_reminder`,
+`stamp_schedule_run`, `disable_schedule`. Läuft ein Reminder, schaltet er sich
+**vor** dem Turn ab — auch wenn der Turn scheitert — und merkt sich die Zeit. Ein
+eigener Test deckt beides ab (`a_reminder_fires_once_and_a_schedule_repeats`).
+Grenzen: höchstens drei aktive Selbst-Erinnerungen pro Sitzung, einmalig ab einer
+Minute, wiederholend ab fünf Minuten. Die Persona sagt: „Push and done" ist nicht
+fertig — wer etwas übergibt, was er nicht mehr sieht, stellt eine Erinnerung.
+
+### Übernommen: Memory-Disziplin
+Der Daemon fragt „nur für dieses Projekt? → Projektgedächtnis; überall gültig? →
+Agent; würde es für einen anderen Nutzer anders lauten? → Nutzer" und speichert
+nichts, was aus Code, Git oder AGENTS.md nachlesbar ist. Das steht jetzt in der
+Persona (engste Ebene zuerst, nichts doppelt Ableitbares) und in der
+Werkzeugbeschreibung von `memory`.
+
+### Nicht übernommen, und warum
+- **LLM-Gate-Classifier** (ein Modell entscheidet über jede Tool-Freigabe): DS.IDE
+  hat Stufen und einen Danger-Floor; ein zusätzlicher Modellaufruf pro Werkzeug
+  wäre langsamer und teurer als die jetzige Regel.
+- **Team-Engine, Sessions als Nachrichtenkanal, `mavis`-CLI**: DS.IDE hat eine
+  Sitzung pro Nutzer und einen Sub-Agenten; die Topologie des Daemons ist eine
+  andere Baustelle, nicht ein Feature.
+- **Skill-Evolution im Nachtlauf, Qdrant, MCP-Onboarding**: eigene Produkte.
+- **`<media />`-Ausgabe**: DS.IDE zeigt Dateien im Dateibaum und schickt Bilder
+  bereits als Content-Parts.
+- **Memory-Curator als Nachtlauf**: die Regeln (HOT/Topic/Dedup, MERGE/DOWNSHIFT)
+  sind gut, aber ein nächtlicher LLM-Lauf um Memories zu sortieren ist für eine
+  Desktop-App mit einem Nutzer zu viel. Der bestehende `memory curate`-Report
+  bleibt der Einstieg.
+
+### Noch offen (bewusst)
+Ein Verifier, der `bash` **nur lesend** ausführen dürfte (Build/Tests), wäre der
+nächste Schritt. Dafür bräuchte es eine Klassifizierung von Kommandos nach
+Lesewirkung — das ist ein eigenes Vorhaben, nicht ein Parameter.
+
+### Geprüft
+`cargo test --lib` **70 passed / 13 ignored**, `pnpm build` grün (492 Schlüssel).
+Live in der Testumgebung:
+- Editor-Dropdown wieder da, auch im Alltagsmodus (`mode: everyday`,
+  `editorWrap: true`, Label „Code - OSS"). Ursache: `v-if="!everydayMode"` — der
+  Picker war in der Voreinstellung neuer Installationen komplett unsichtbar.
+- `verify` mit **falscher** Behauptung: `verify fehlgeschlagen` (32,9 s), Befund
+  „Datei existiert nicht, die Kandidatin hat 43 Zeilen, keine Funktion parseConfig".
+- `verify` mit **wahrer** Behauptung: `verify fertig` (15,8 s), Zitat der
+  PROGRESS-Zeile 3423.
+- `schedule` → DB-Zeile `one_shot=1, created_by=companion`, nach 2 Minuten
+  `scheduler: running 1 (reminder): companion`, danach `enabled=0`, `last_run_at`
+  gesetzt, und der Turn lief als User-Nachricht 16 mit Antwort 17.
