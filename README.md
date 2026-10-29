@@ -7,7 +7,7 @@ An agentic desktop IDE on **Tauri v2** (no Electron) with **DeepSeek** as the mo
 > The authoritative status, every design decision and the open list live in
 > [PROGRESS.md](./PROGRESS.md) — not in this file.
 
-![DS·IDE in Chinese: chat, work area with the README, and the file tree](docs/dside_zh.png)
+![DS·IDE in Chinese: chat, work area with the README, and the file tree](docs/dside_050.webp)
 
 *The same window in Chinese — one of six languages. The chat runs next to the files; the
 work area shows a preview, not an editor.*

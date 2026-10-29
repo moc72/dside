@@ -6,7 +6,7 @@
 
 ---
 
-![DS·IDE](docs/dside_zh.png)
+![DS·IDE](docs/dside_050.webp)
 
 *Dasselbe Fenster auf Chinesisch – eine von sechs verfügbaren Sprachen. Der Chat befindet sich neben den Dateien; der Arbeitsbereich zeigt eine Vorschau, keinen Editor.*
 

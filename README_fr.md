@@ -6,7 +6,7 @@
 
 ---
 
-![DS·IDE](docs/dside_zh.png)
+![DS·IDE](docs/dside_050.webp)
 
 *La même fenêtre en chinois — l'une des six langues disponibles. Le chat s'affiche à côté des fichiers ; l'espace de travail présente un aperçu, et non un éditeur de code classique.*
 
