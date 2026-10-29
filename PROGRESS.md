@@ -3415,3 +3415,8 @@ Umschalter in der Leiste holt ihn zurück (220 px, `aria-pressed="true"`).
 `cargo test --lib` **66 passed / 13 ignored** (drei neue), `pnpm build` grün mit
 i18n-Check (490 Schlüssel). Screenshots der wiederhergestellten Ansicht:
 `/tmp/dside-tree-restored.png`, `/tmp/dside-tree-visible.png`.
+
+### 0.5.1 (diese Runde)
+Version auf **0.5.1** gehoben, `cargo test --lib` 66 grün, `pnpm build` grün.
+Tag und Draft siehe Release-Abschnitt.
+

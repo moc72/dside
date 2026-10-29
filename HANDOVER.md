@@ -6,8 +6,10 @@ log (German, one section per round); `AGENTS.md` describes how to work in the re
 **Repository:** https://github.com/modestcoders-com/dside (moved from `moc72/dside` on
 2026-10-26; the old path redirects). `origin` is the local Gitea at 192.168.0.40.
 
-**Status:** `v0.5.0` is tagged (2026-10-24) and its CI run built Linux, Windows and macOS
-green; the GitHub release is a **draft** until the user publishes it. Tagged with it:
+**Status:** `v0.5.1` is tagged (2026-10-29) with the two fixes from the 0.5.0 test
+(no black screenshots on Wayland, reachable file tree); its release is a draft until the user
+publishes it. `v0.5.0` (2026-10-24) is the earlier draft with preview, click, trust and the loop
+guard. Tagged with it:
 `preview` (workspace HTML/CSS in the app browser with layout data and breakpoint sizes),
 `browser_click`, `browser_windows`, permanent tool grants, the copy action, the guard that
 cuts a repeating answer, compression on the provider's own prompt size, window-only
