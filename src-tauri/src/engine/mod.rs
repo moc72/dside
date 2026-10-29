@@ -18,9 +18,15 @@ use types::{ActionEvent, ChatMessage, EngineConfig, EngineEvent, ToolEvent, Usag
 const EVENT_CHANNEL: &str = "engine://event";
 
 const DEFAULT_SYSTEM_PROMPT: &str = "You are the coding partner inside DS.IDE, a desktop agentic IDE. \
-You have full tool access: read, write, edit, bash, glob, grep, todowrite. \
-Work directly without unnecessary confirmation, do exactly the work that was asked, report faithfully \
-what succeeded, what failed and what is unverified, and answer in the user's language.";
+You have tools for files (read, write, edit, glob, grep), a shell (bash, if the policy allows it), \
+the web and rendering (web_fetch, browser_read, browser_click, browser_fill, browser_windows, preview), \
+looking and remembering (screenshot, logs, recall, memory, settings), and planning \
+(todowrite, task, ask_user). \
+Work directly without unnecessary confirmation and do exactly the work that was asked. \
+Nothing you report may come from nowhere: a line number, a file's contents, a command's output, a row in \
+the database or a test result is only yours to state if a tool result in this turn says it. If you did not \
+look, say so. Never claim 'done', 'saved' or 'created' without the tool result that confirms it. \
+Answer in the user's language.";
 
 #[derive(Default)]
 pub struct SessionState {
@@ -464,8 +470,12 @@ pub async fn compact_session(
         "You compress the earlier part of a conversation so it can be replaced by your summary. \
          Keep what still matters: decisions and their reasons, facts about the user, the state of \
          the work, open tasks and next steps, and anything the user asked you to remember. Drop \
-         pleasantries, repetition and detail that no longer influences anything. Write notes, not \
-         prose, in the user's language. Never answer the conversation — only summarise it.",
+         pleasantries, repetition and detail that no longer influences anything. \
+         Keep the difference between what was checked and what was only assumed: a statement a tool \
+         result confirmed stays a fact, and anything that was merely claimed is kept as an open \
+         question ('unverified: ...'), never as a fact. Never turn a plan into a result while \
+         summarising, and never add facts the conversation did not contain. \
+         Write notes, not prose, in the user's language. Never answer the conversation — only summarise it.",
     );
     let messages = vec![instructions, ChatMessage::user(transcript)];
 
@@ -678,6 +688,8 @@ fn recall_block(rows: &[crate::db::MemoryRow]) -> String {
          - `[you]` — your own note. `[user]` — what you know about the user. `[session]` — tied to one task.\n\
          - `(written by the user)` and `(changed by the user)` mean the wording is theirs, not\n\
          something you inferred or guessed. Take it as given.\n\
+         - `[unverified]` marks a note you wrote from reasoning or assumption, not from something\n\
+         you checked. It is a lead, not a fact: look it up before you rely on it or repeat it.\n\
          You are this person's partner, so use these notes the way a colleague would use what\n\
          they remember: silently, and without reciting them back.\n",
     );
@@ -697,7 +709,13 @@ fn recall_block(rows: &[crate::db::MemoryRow]) -> String {
         } else {
             " (project)"
         };
-        block.push_str(&format!("- [{scope}]{project} {}{marker}\n", row.text));
+        // Only the companion's own notes can be unverified; the user's wording is theirs.
+        let unverified = if row.basis == "assumed" && row.origin != "user" {
+            " [unverified]"
+        } else {
+            ""
+        };
+        block.push_str(&format!("- [{scope}]{project}{unverified} {}{marker}\n", row.text));
     }
     block
 }
@@ -834,10 +852,19 @@ fn memory_tool(app: &AppHandle, args: &Value, workspace: &str) -> tools::ToolOut
             let kind = args.get("kind").and_then(Value::as_str).unwrap_or("fact");
             let scope = args.get("scope").and_then(Value::as_str).unwrap_or("user");
             let title = args.get("title").and_then(Value::as_str);
+            // How the note is known. "verified" is only credible when a tool result backs it;
+            // everything else is an assumption and is recalled with that label.
+            let basis = match args.get("basis").and_then(Value::as_str) {
+                Some("verified") => "verified",
+                _ => "assumed",
+            };
             // Seeky's own note. Entries the user rewrote in the UI carry origin 'user'.
             match db.insert_memory_with_title(kind, scope, title, text, None, "seeky") {
                 Ok(id) => {
                     let _ = db.set_memory_workspace(id, workspace.trim());
+                    if let Err(error) = db.set_memory_basis(id, basis) {
+                        crate::log_line!("memory: could not record the basis of #{id}: {error}");
+                    }
                     // Thinking about what to keep is the behaviour trust is for; a flood of
                     // notes earns nothing extra.
                     award_trust(app, "memory", 1, 5, Some("wrote a memory"));
@@ -847,7 +874,12 @@ fn memory_tool(app: &AppHandle, args: &Value, workspace: &str) -> tools::ToolOut
                         ", project"
                     };
                     tools::ToolOutcome::ok(format!(
-                        "remembered as #{id} ({scope}/{kind}{place})"
+                        "remembered as #{id} ({scope}/{kind}{place}, {basis}){}",
+                        if basis == "assumed" {
+                            " — recalled with an [unverified] marker until something confirms it"
+                        } else {
+                            ""
+                        }
                     ))
                 }
                 Err(error) => tools::ToolOutcome::err(format!("memory: {error}")),
@@ -865,13 +897,21 @@ fn memory_tool(app: &AppHandle, args: &Value, workspace: &str) -> tools::ToolOut
             let kind = args.get("kind").and_then(Value::as_str);
             let importance = args.get("importance").and_then(Value::as_i64);
             let title = args.get("title").and_then(Value::as_str);
-            if text.is_none() && kind.is_none() && importance.is_none() && title.is_none() {
+            let basis = args.get("basis").and_then(Value::as_str);
+            if text.is_none() && kind.is_none() && importance.is_none() && title.is_none() && basis.is_none() {
                 return tools::ToolOutcome::err("memory: nothing to update");
             }
             // Seeky rewrote it itself, so the entry is its own again — the user marker is
             // only for changes the user made.
             match db.update_memory(id, title, text, kind, importance, "seeky") {
-                Ok(()) => tools::ToolOutcome::ok(format!("updated #{id}")),
+                Ok(()) => {
+                    if let Some(basis) = basis {
+                        if let Err(error) = db.set_memory_basis(id, basis) {
+                            return tools::ToolOutcome::err(format!("memory: {error}"));
+                        }
+                    }
+                    tools::ToolOutcome::ok(format!("updated #{id}"))
+                }
                 Err(error) => tools::ToolOutcome::err(format!("memory: {error}")),
             }
         }
@@ -1771,6 +1811,46 @@ mod tests {
         ));
     }
 
+    /// A note written from reasoning is recalled with a marker, so a guess cannot quietly
+    /// become a remembered fact. The user's own words are never flagged, and the marker is
+    /// looked up on the note line — the block's header also mentions it.
+    #[test]
+    fn an_assumed_note_is_marked_and_the_users_words_are_not() {
+        let row = |id: i64, text: &str, origin: &str, basis: &str| crate::db::MemoryRow {
+            id,
+            kind: "fact".to_string(),
+            scope: "user".to_string(),
+            title: None,
+            text: text.to_string(),
+            importance: 1,
+            created_at: 0,
+            origin: origin.to_string(),
+            edited_at: None,
+            retired_at: None,
+            workspace: String::new(),
+            basis: basis.to_string(),
+        };
+
+        let block = recall_block(&[
+            row(1, "Wohnt vermutlich in Köln", "seeky", "assumed"),
+            row(2, "Das Repo ist öffentlich", "seeky", "verified"),
+            row(3, "Mag kurze Antworten", "user", "assumed"),
+        ]);
+
+        assert!(
+            block.contains("- [user] [unverified] Wohnt vermutlich in Köln\n"),
+            "an assumed note carries the marker: {block}"
+        );
+        assert!(
+            block.contains("- [user] Das Repo ist öffentlich\n"),
+            "a verified note carries none: {block}"
+        );
+        assert!(
+            block.contains("- [user] Mag kurze Antworten (written by the user)\n"),
+            "the user's own words are never flagged, whatever the basis says: {block}"
+        );
+    }
+
     /// The recall has to say whose words these are — that marker is the whole point of the
     /// companion rows, and it is easy to lose in a prompt refactor.
     #[test]
@@ -1787,6 +1867,7 @@ mod tests {
             edited_at: if edited { Some(0) } else { None },
             retired_at: None,
             workspace: String::new(),
+            basis: "verified".to_string(),
         };
 
         assert!(recall_block(&[]).is_empty(), "no memory, no block");

@@ -93,6 +93,8 @@ export const es: Messages = {
     addPlaceholder: "¿Qué debe recordar? (Ctrl+Intro guarda)",
     titlePlaceholder: "Título — máximo 120 caracteres",
     open: "Abrir el recuerdo completo",
+    unverified: "sin verificar",
+    unverifiedHint: "Anotado por razonamiento, sin comprobar: trátalo como pista, no como hecho.",
     writtenByUser: "escrito por ti",
     add: "Añadir",
     edit: "Editar",

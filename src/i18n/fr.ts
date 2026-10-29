@@ -92,6 +92,8 @@ export const fr: Messages = {
     addPlaceholder: "Que doit-il retenir ? (Ctrl+Entrée enregistre)",
     titlePlaceholder: "Titre — 120 caractères maximum",
     open: "Ouvrir la note complète",
+    unverified: "non vérifié",
+    unverifiedHint: "Noté par raisonnement, sans vérification : à traiter comme une piste, pas comme un fait.",
     writtenByUser: "écrit par toi",
     add: "Ajouter",
     edit: "Modifier",

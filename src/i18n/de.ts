@@ -92,6 +92,8 @@ export const de = {
     addPlaceholder: "Was soll er sich merken? (Strg+Enter speichert)",
     titlePlaceholder: "Titel — höchstens 120 Zeichen",
     open: "Ganze Erinnerung öffnen",
+    unverified: "unbestätigt",
+    unverifiedHint: "Aus Überlegung notiert, nicht nachgeprüft — als Hinweis behandeln, nicht als Tatsache.",
     writtenByUser: "von dir geschrieben",
     add: "Hinzufügen",
     edit: "Bearbeiten",

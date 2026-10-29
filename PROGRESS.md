@@ -3420,3 +3420,64 @@ i18n-Check (490 Schlüssel). Screenshots der wiederhergestellten Ansicht:
 Version auf **0.5.1** gehoben, `cargo test --lib` 66 grün, `pnpm build` grün.
 Tag und Draft siehe Release-Abschnitt.
 
+## 86. Damit Behauptungen einen Beleg brauchen (2026-10-29, fünfundsechzigste Runde)
+
+Der Bruder in DS.IDE hat dreimal an einem Tag etwas berichtet, was nicht in einer
+Tool-Ausgabe stand — erfundene Zeilennummern, ein erfundener Datenbanklauf, ein
+„Eingetragen", das nicht eingetragen war. Auf Nachfrage die Ursachenanalyse: der
+Prompt fordert Haltung, aber keine Regel; die Architektur löscht den Beleg und
+behält die Behauptung. Vier Eingriffe, alle klein und testbar.
+
+### 1. Die Regel steht jetzt im Prompt
+`persona.ts` beginnt „How you work" mit einer Invariante: *„Nothing you report may
+come from nowhere"* — eine Tatsache über die Welt (Zeilennummer, Dateiinhalt,
+Kommandoausgabe, Datenbankzeile, Testergebnis, Seitentext) darf nur genannt werden,
+wenn ein Tool-Ergebnis **in diesem Turn** sie belegt. Dazu vier Unterpunkte, die
+genau die beobachteten Fehler benennen: ein Plan ist kein Ergebnis; „done/saved/
+entered/created" nur mit Beleg; Zahlen und Pfade werden zitiert oder nicht genannt;
+eine nachträgliche Korrektur kostet eine Zeile. Das ersetzt die weiche Bitte
+„report faithfully" durch eine prüfbare Bedingung.
+
+### 2. Die Werkzeugliste war falsch
+Persona und Fallback-Prompt sagten „You have full tool access: read, write, edit,
+bash, glob, grep, todowrite" — sieben Werkzeuge, während über zwanzig angeboten
+werden. Namentlich fehlten `settings`, `recall`, `preview`, `browser_*`,
+`screenshot`, `memory` und `task`. Jetzt nach Zweck gruppiert, mit drei Hinweisen:
+`settings` lesen statt raten, `preview` benutzen statt beschreiben, `recall`
+benutzen bevor „wie besprochen" fällt.
+
+### 3. Kompression unterscheidet geprüft und behauptet
+Der Zusammenfassungs-Prompt ließ „detail that no longer influences anything" weg —
+und damit die Tool-Ausgaben, also den Beleg, während die Behauptung als „state of
+the work" stehen blieb. Nach der ersten Kompression war ein erfundener Lauf nicht
+mehr als solcher erkennbar. Neu: was ein Tool-Ergebnis bestätigt hat, bleibt
+Tatsache; was nur behauptet war, wird als `unverified: …` als offene Frage
+mitgeführt. Kein Plan darf beim Zusammenfassen zum Ergebnis werden.
+
+### 4. Notizen tragen ihren Grund (DB)
+`memories.basis` (`verified` | `assumed`, Migration-Default `assumed`), gesetzt über
+`set_memory_basis`. Das `memory`-Werkzeug hat dafür einen optionalen Parameter
+`basis` (Default `assumed`) und sagt beim Anlegen zurück, wie die Notiz aufgenommen
+wurde. Der Recall-Block markiert `[unverified]` — aber nur bei Notizen des
+Begleiters; die Worte des Nutzers nie. Der Begleiter-Tab zeigt denselben Marker als
+gestrichelte Kapsel „unbestätigt" mit Erklärung. Sechs Sprachen. Bestehende Notizen
+gelten als `assumed`: sie wurden überlegt, nicht geprüft.
+
+### Geprüft
+`cargo test --lib` **68 passed / 13 ignored** (neu: `an_assumed_note_is_marked_and_the_users_words_are_not`,
+`a_memory_records_whether_it_was_verified`; die Migrationsprüfung deckt den
+`assumed`-Default ab). `pnpm build` grün mit i18n-Check (492 Schlüssel).
+
+**Wirkungsprüfung mit einem echten Turn** (Testumgebung, Workspace
+`/tmp/dside-workspace`): Frage nach der Zeilenzahl von `src/main.ts` und der Zahl
+der Erinnerungen. Antwort: erst `read` relativ zum Workspace — der **scheiterte**;
+sichtbar als `read fehlgeschlagen` in der Zeitleiste. Darauf `glob`, dann `read` auf
+den gefundenen Pfad, dann „43 Zeilen — beruht auf dem read-Aufruf der Datei
+/home/me/Projects/DS.IDE/src/main.ts", mit dem ausdrücklichen Hinweis, dass der
+relative Pfad nicht existierte. Die Memories-Frage mit `memory list` und Zitat
+„(no memories stored)". Genau das Verhalten, das die Regel verlangt: nachsehen,
+scheitern dürfen, Scheitern benennen, Beleg nennen.
+
+Ein eigener Test war zuerst grün aus dem falschen Grund — `[unverified]` steht auch
+in der Kopfzeile des Recall-Blocks, also matchte die Prüfung die Erklärung statt der
+Notizzeile. Ersetzt durch einen Test, der die Zeile selbst prüft.

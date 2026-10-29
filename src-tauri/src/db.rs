@@ -201,6 +201,7 @@ fn row_to_memory(row: &rusqlite::Row<'_>) -> rusqlite::Result<MemoryRow> {
         edited_at: row.get(8)?,
         retired_at: row.get(9)?,
         workspace: row.get(10)?,
+        basis: row.get(11)?,
     })
 }
 
@@ -449,6 +450,9 @@ pub struct MemoryRow {
     pub retired_at: Option<i64>,
     /// The workspace this note belongs to; empty means it applies everywhere.
     pub workspace: String,
+    /// `verified` when a tool result confirmed it, `assumed` when it was reasoned or inferred.
+    /// The recall labels the second kind so a guess cannot quietly become a remembered fact.
+    pub basis: String,
 }
 
 pub struct Db {
@@ -523,6 +527,9 @@ impl Db {
         add_column(conn, "memories", "title", "TEXT")?;
         // Empty means the note is global; a path scopes it to one workspace.
         add_column(conn, "memories", "workspace", "TEXT NOT NULL DEFAULT ''")?;
+        // Notes written before this existed were reasoned, not checked; calling them assumed is
+        // the honest default, and a note the user wrote is marked as theirs by `origin` anyway.
+        add_column(conn, "memories", "basis", "TEXT NOT NULL DEFAULT 'assumed'")?;
         // The ordered timeline of an assistant answer.
         add_column(conn, "messages", "parts", "TEXT")?;
         add_column(conn, "file_versions", "turn_id", "TEXT")?;
@@ -1465,9 +1472,25 @@ impl Db {
         .map_err(|error| error.to_string())
     }
 
+    /// Records whether a note is backed by a tool result or was inferred. Kept apart from
+    /// `update_memory` so writing a note and judging its evidence stay separate acts.
+    pub fn set_memory_basis(&self, id: i64, basis: &str) -> Result<(), String> {
+        let basis = match basis {
+            "verified" => "verified",
+            _ => "assumed",
+        };
+        let conn = self.lock()?;
+        conn.execute(
+            "UPDATE memories SET basis = ?1 WHERE id = ?2",
+            params![basis, id],
+        )
+        .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
     pub fn list_memories(&self, limit: usize) -> Result<Vec<MemoryRow>, String> {
         self.select_memories(
-            "SELECT id, kind, scope, title, text, importance, created_at, origin, edited_at, retired_at, workspace
+            "SELECT id, kind, scope, title, text, importance, created_at, origin, edited_at, retired_at, workspace, basis
              FROM memories WHERE retired_at IS NULL
              ORDER BY created_at DESC, id DESC LIMIT ?1",
             limit,
@@ -1477,7 +1500,7 @@ impl Db {
     /// Set aside, not erased: these are the entries the user took out of Seeky's memory.
     pub fn list_retired_memories(&self, limit: usize) -> Result<Vec<MemoryRow>, String> {
         self.select_memories(
-            "SELECT id, kind, scope, title, text, importance, created_at, origin, edited_at, retired_at, workspace
+            "SELECT id, kind, scope, title, text, importance, created_at, origin, edited_at, retired_at, workspace, basis
              FROM memories WHERE retired_at IS NOT NULL
              ORDER BY retired_at DESC, id DESC LIMIT ?1",
             limit,
@@ -1500,7 +1523,7 @@ impl Db {
         let conn = self.lock()?;
         let mut statement = conn
             .prepare(
-                "SELECT id, kind, scope, title, text, importance, created_at, origin, edited_at, retired_at, workspace
+                "SELECT id, kind, scope, title, text, importance, created_at, origin, edited_at, retired_at, workspace, basis
                  FROM memories
                  WHERE retired_at IS NULL AND (workspace = '' OR workspace = ?1)
                  ORDER BY importance DESC, COALESCE(last_used_at, 0) DESC, created_at DESC
@@ -2177,6 +2200,36 @@ pub fn schedule_toggle(db: tauri::State<'_, Db>, id: i64, enabled: bool) -> Resu
 mod tests {
     use super::*;
 
+    /// A note remembers how it is known. Default is `assumed` — a guess must not become a
+    /// remembered fact — and only an explicit `verified` changes that. A user-edited note is
+    /// theirs by `origin`, which the recall trusts regardless.
+    #[test]
+    fn a_memory_records_whether_it_was_verified() {
+        let directory = std::env::temp_dir().join(format!("ds-ide-basis-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let db = Db::open(&directory.join("basis.sqlite3")).unwrap();
+
+        let assumed = db
+            .insert_memory("fact", "user", "Wohnt vielleicht in Köln", None, "seeky")
+            .unwrap();
+        let verified = db
+            .insert_memory("fact", "user", "Wohnt in Köln (aus der Adresse gelesen)", None, "seeky")
+            .unwrap();
+        db.set_memory_basis(verified, "verified").unwrap();
+        // An unknown value falls back to the honest default instead of inventing a third state.
+        db.set_memory_basis(verified, "probably").unwrap();
+
+        let rows = db.list_memories(10).unwrap();
+        assert_eq!(rows.iter().find(|row| row.id == assumed).unwrap().basis, "assumed");
+        // `probably` was not a known value, so it stays assumed rather than being trusted.
+        assert_eq!(rows.iter().find(|row| row.id == verified).unwrap().basis, "assumed");
+
+        db.set_memory_basis(verified, "verified").unwrap();
+        let stored = db.memory_context(10, "").unwrap();
+        assert_eq!(stored.iter().find(|row| row.id == verified).unwrap().basis, "verified");
+    }
+
     /// Trust is earned in small, capped steps: repeats the same day earn nothing, and the
     /// reveal flag starts unset for a fresh database.
     #[test]
@@ -2663,6 +2716,10 @@ mod tests {
         assert!(rows[0].title.is_none(), "old rows have no title yet");
         assert!(rows[0].edited_at.is_none());
         assert!(rows[0].retired_at.is_none());
+        assert_eq!(
+            rows[0].basis, "assumed",
+            "a note written before the field existed was reasoned, not checked"
+        );
 
         // New rows carry a title; without one, the first line becomes the heading.
         let id = db

@@ -93,6 +93,8 @@ export const en: Messages = {
     addPlaceholder: "What should it remember? (Ctrl+Enter saves)",
     titlePlaceholder: "Title — at most 120 characters",
     open: "Open the full memory",
+    unverified: "unverified",
+    unverifiedHint: "Written from reasoning, not checked — treat it as a lead, not a fact.",
     writtenByUser: "written by you",
     add: "Add",
     edit: "Edit",

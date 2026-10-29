@@ -93,6 +93,8 @@ export const ru: Messages = {
     addPlaceholder: "Что запомнить? (Ctrl+Enter сохраняет)",
     titlePlaceholder: "Заголовок — не более 120 символов",
     open: "Открыть воспоминание полностью",
+    unverified: "не проверено",
+    unverifiedHint: "Записано из рассуждения, без проверки: считайте это догадкой, а не фактом.",
     writtenByUser: "написано тобой",
     add: "Добавить",
     edit: "Изменить",

@@ -192,7 +192,7 @@ pub fn definitions() -> Vec<Value> {
             "type": "function",
             "function": {
                 "name": "memory",
-                "description": "Long-term memory, kept across sessions. Use 'add' to remember a durable fact, preference, event or project detail about the user or about yourself; 'update' to correct a note you got wrong; 'list' to review what is stored; 'forget' to set an entry aside by id (it stays in the database but is no longer recalled); 'curate' to get a hygiene report (exact duplicates and long-unused entries) and then decide deliberately. Notes the user edited are marked as theirs.",
+                "description": "Long-term memory, kept across sessions. Use 'add' to remember a durable fact, preference, event or project detail about the user or about yourself; 'update' to correct a note you got wrong; 'list' to review what is stored; 'forget' to set an entry aside by id (it stays in the database but is no longer recalled); 'curate' to get a hygiene report (exact duplicates and long-unused entries) and then decide deliberately. Notes the user edited are marked as theirs. Every note records whether it was verified or assumed: 'assumed' notes are recalled with an [unverified] marker, so a guess cannot quietly become a remembered fact.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -201,6 +201,7 @@ pub fn definitions() -> Vec<Value> {
                         "scope": { "type": "string", "enum": ["user", "agent", "session"] },
                         "title": { "type": "string", "description": "A short heading for the memory panel, at most 120 characters: what this note is about at a glance." },
                         "text": { "type": "string", "description": "The memory, one sentence." },
+                        "basis": { "type": "string", "enum": ["verified", "assumed"], "description": "How you know it. 'verified' only when a tool result in this turn confirmed it (a file, a command's output, a database row, a page). Otherwise 'assumed' — which is the default and always allowed." },
                         "id": { "type": "number", "description": "Entry id, required for 'update' and 'forget'." }
                     },
                     "required": ["action"]

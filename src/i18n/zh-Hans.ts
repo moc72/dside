@@ -92,6 +92,8 @@ export const zhHans: Messages = {
     addPlaceholder: "要记住什么？（Ctrl+Enter 保存）",
     titlePlaceholder: "标题——最多 120 个字符",
     open: "打开完整记忆",
+    unverified: "未核实",
+    unverifiedHint: "根据推理记录，未经核实——请当作线索而非事实。",
     writtenByUser: "由你撰写",
     add: "添加",
     edit: "编辑",

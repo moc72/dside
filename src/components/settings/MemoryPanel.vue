@@ -27,6 +27,8 @@ interface MemoryRow {
   editedAt: number | null;
   retiredAt: number | null;
   workspace: string;
+  /** `verified` when a tool result backed the note, `assumed` when it was reasoned. */
+  basis: string;
 }
 
 interface MemoryReport {
@@ -308,6 +310,14 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
             <span class="chip kind">{{ row.kind }}</span>
             <span v-if="row.origin === 'user'" class="chip mine">
               {{ row.editedAt ? t("memory.changedByUser") : t("memory.writtenByUser") }}
+            </span>
+            <!-- The same judgement the model sees: a note it reasoned up is not a fact. -->
+            <span
+              v-else-if="row.basis === 'assumed'"
+              class="chip unverified"
+              :title="t('memory.unverifiedHint')"
+            >
+              {{ t("memory.unverified") }}
             </span>
           </span>
           <span class="memory-preview">{{ row.text }}</span>
@@ -602,6 +612,12 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
 .chip.project {
   border: 1px solid var(--accent);
   color: var(--accent);
+}
+
+.chip.unverified {
+  border-color: var(--border-strong);
+  color: var(--text-muted);
+  border-style: dashed;
 }
 
 .chip.mine {

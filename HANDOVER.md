@@ -123,6 +123,11 @@ connection test.
 
 ## Features worth knowing
 
+- **Evidence rule:** the persona states that no fact about the world (line numbers, file
+  contents, command output, database rows, test results) may be reported unless a tool result in
+  the same turn says it; a plan is not a result. Compression keeps that distinction — verified
+  stays a fact, claimed becomes `unverified: …`. Memories carry `basis` (`verified`/`assumed`),
+  and an assumed note is recalled with `[unverified]` and shown as "unbestätigt" in the panel.
 - **Trust and the name:** the companion picks its name early (`choose_name`), but the UI shows
   the placeholder until 100 points are earned: 2 for the first turn of a day, 1 per finished
   turn that ran a tool successfully (max 10/day), 1 per memory it writes (max 5/day), 3 when
