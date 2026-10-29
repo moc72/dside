@@ -3365,3 +3365,53 @@ mitgekommen. Der alte Pfad leitet auf den neuen weiter.
 
 Geprüft: `git push github main` („Everything up-to-date"), `git ls-remote` sieht
 `v0.5.0`, Release-Liste über die API bestätigt Draft und Assets, `pnpm build` grün.
+
+## 85. Schwarze Screenshots und ein unerreichbarer Dateibaum (2026-10-29, vierundsechzigste Runde)
+
+Zwei Fehler aus dem Test der installierten **0.5.0** unter Linux/Wayland.
+
+### Screenshots waren schwarz
+Der Bericht war präzise: zwei Aufnahmen à 7508 Bytes, byte-gleich groß, Log
+`captured with scrot`. Ursache: `scrot` ist ein X11-Werkzeug; auf Wayland sieht es
+nur den leeren XWayland-Root und schreibt daraus ein **gültiges, schwarzes JPEG mit
+Exit-Code 0**. Die Erfolgsprüfung (`status.success() && file && len > 0`) konnte
+„aufgenommen" nicht von „leere Fläche" unterscheiden und nahm es als Erfolg.
+
+Zwei Änderungen in `capture.rs`:
+- **Sitzungsbewusst:** Ist `WAYLAND_DISPLAY` gesetzt oder `XDG_SESSION_TYPE=wayland`,
+  kommen nur `grim`, `gnome-screenshot`, `spectacle` in Frage. `scrot` und `import`
+  sind dort entfernt, weil sie immer „erfolgreich" Schwarz liefern. Reine Funktion
+  `capture_candidates`, Test `wayland_never_offers_x11_only_tools`.
+- **Leere Bilder zählen nicht:** `is_a_flat_image` dekodiert die Datei und tastet
+  ein 12×12-Raster ab; unterscheiden sich alle Punkte um höchstens 3 Stufen, gilt
+  die Aufnahme als leer, wird verworfen und das nächste Werkzeug probiert. Im Log
+  steht dann `screenshot: grim produced an empty image, ignored`. Tests:
+  `a_uniform_capture_counts_as_flat` (schwarz und weiß), `a_capture_with_content_is_not_flat`.
+- Scheitert alles, kommt eine **ehrliche Meldung** statt eines schwarzen Bildes, mit
+  Hinweis auf Wayland/Portal und die beteiligten Werkzeuge.
+
+Live geprüft auf dieser Wayland-Sitzung: echtes Bild (3840×1080, 2249 KB, 2107
+Farben, kein schwarzer Anteil). Mit einem untergeschobenen `grim`, das ein schwarzes
+PNG schreibt und 0 zurückgibt: `grim produced an empty image, ignored` → danach
+`captured with spectacle` und ein echtes Bild. Mit zusätzlich scheiterndem
+`spectacle`: `screenshot: grim produced an empty black image (gnome-screenshot,
+spectacle did not run). On a Wayland session only Wayland-capable tools can see the
+screen; install grim or make sure the desktop portal allows capture.`
+
+### Datei-Explorer ließ sich nicht einblenden
+Der Umschalter für den Baum sitzt **innerhalb** des Blocks, der nur bei geöffneter
+Datei gerendert wird (`v-if="selectedPath && !error"`). Ist keine Datei offen und
+`treeVisible` gespeichert `false` — was der Auto-Hide nach jeder Dateiwahl setzt —
+gibt es weder Baum noch Knopf: die Fläche zeigt nur „Wähle eine Datei im Dateibaum."
+
+`treeShown = fileTreeVisible || !selectedPath`: Ohne offene Datei **ist** der Baum
+der Tab, also bleibt er sichtbar — ohne toten Umschalter. Grid-Spalte, `inert` und
+`aria-hidden` folgen jetzt `treeShown`. Live geprüft mit genau dem gespeicherten
+Zustand (`treeVisible: false`, Datei-Tab ohne Datei): Baum 220 px, 291 Einträge,
+nicht inert. Danach Datei gewählt → Baum klappt nach 2 s weg (Breite 1, inert),
+Umschalter in der Leiste holt ihn zurück (220 px, `aria-pressed="true"`).
+
+### Geprüft
+`cargo test --lib` **66 passed / 13 ignored** (drei neue), `pnpm build` grün mit
+i18n-Check (490 Schlüssel). Screenshots der wiederhergestellten Ansicht:
+`/tmp/dside-tree-restored.png`, `/tmp/dside-tree-visible.png`.

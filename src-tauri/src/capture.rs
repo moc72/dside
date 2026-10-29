@@ -233,15 +233,54 @@ fn capture_to(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Which capture tools are worth trying. On Wayland scrot and ImageMagick are left out on
+/// purpose: they read the X11 root window, which under Wayland is a black void that they
+/// capture "successfully". Offering them means a valid, black screenshot and no error.
+#[cfg(target_os = "linux")]
+fn capture_candidates(wayland: bool) -> Vec<(&'static str, &'static [&'static str])> {
+    const GRIM: (&str, &[&str]) = ("grim", &[]);
+    const GNOME: (&str, &[&str]) = ("gnome-screenshot", &["-f"]);
+    const SPECTACLE: (&str, &[&str]) = ("spectacle", &["-b", "-n", "-o"]);
+    if wayland {
+        vec![GRIM, GNOME, SPECTACLE]
+    } else {
+        vec![
+            GRIM,
+            GNOME,
+            SPECTACLE,
+            ("scrot", &[]),
+            ("import", &["-window", "root"]),
+        ]
+    }
+}
+
+/// Wayland is identified by either signal: a nested compositor may not set the session type,
+/// and a session can carry XDG_SESSION_TYPE while still only having a Wayland socket.
+#[cfg(target_os = "linux")]
+fn is_wayland_session(has_wayland_socket: bool, session_type: Option<&str>) -> bool {
+    has_wayland_socket
+        || session_type
+            .map(|value| value.eq_ignore_ascii_case("wayland"))
+            .unwrap_or(false)
+}
+
 #[cfg(target_os = "linux")]
 fn capture_to(path: &Path) -> Result<(), String> {
     use std::process::Stdio;
 
-    fn attempt(program: &str, args: &[&str], path: &Path) -> bool {
+    /// What a tool did, so the final error can name the real reason instead of "not found".
+    enum Attempt {
+        Captured,
+        Failed,
+        Flat,
+    }
+
+    fn attempt(program: &str, args: &[&str], path: &Path) -> Attempt {
         // A capture tool that cannot work here (grim on a compositor without the screencopy
         // protocol, for example) is expected: the next one is tried. Its stderr would land in
         // the app's terminal and claim a failure that did not happen — the screenshot was
         // taken by the tool after it. Only the first successful tool is worth a log line.
+        let _ = fs::remove_file(path);
         let Ok(status) = Command::new(program)
             .args(args)
             .arg(path)
@@ -250,29 +289,173 @@ fn capture_to(path: &Path) -> Result<(), String> {
             .stderr(Stdio::null())
             .status()
         else {
-            return false;
+            return Attempt::Failed;
         };
-        status.success()
+        let written = status.success()
             && path.is_file()
-            && fs::metadata(path).map(|meta| meta.len() > 0).unwrap_or(false)
+            && fs::metadata(path).map(|meta| meta.len() > 0).unwrap_or(false);
+        if !written {
+            return Attempt::Failed;
+        }
+        // Exit code 0 and a file are not proof of a picture. An X11 tool on a Wayland session
+        // sees only the empty XWayland root: it succeeds and writes a perfectly valid,
+        // perfectly black image. Accepting that means handing the model a black rectangle and
+        // calling it a screenshot.
+        if is_a_flat_image(path) {
+            return Attempt::Flat;
+        }
+        Attempt::Captured
     }
 
-    // Wayland first, then the common X11/GNOME/KDE tools. Every one writes to the given path.
-    for (program, args) in [
-        ("grim", &[][..]),
-        ("gnome-screenshot", &["-f"][..]),
-        ("spectacle", &["-b", "-n", "-o"][..]),
-        ("scrot", &[][..]),
-        ("import", &["-window", "root"][..]),
-    ] {
-        if attempt(program, args, path) {
-            crate::log_line!("screenshot: captured with {program}");
-            return Ok(());
+    let wayland = is_wayland_session(
+        std::env::var_os("WAYLAND_DISPLAY").is_some(),
+        std::env::var("XDG_SESSION_TYPE").ok().as_deref(),
+    );
+    let candidates = capture_candidates(wayland);
+
+    let mut flat: Vec<&str> = Vec::new();
+    let mut failed: Vec<&str> = Vec::new();
+    for (program, args) in &candidates {
+        match attempt(program, args, path) {
+            Attempt::Captured => {
+                crate::log_line!("screenshot: captured with {program}");
+                return Ok(());
+            }
+            Attempt::Flat => {
+                // Visible in the Logs tab: a tool claiming success while writing a blank
+                // picture is exactly the confusion this check exists to end.
+                crate::log_line!("screenshot: {program} produced an empty image, ignored");
+                flat.push(program);
+            }
+            Attempt::Failed => failed.push(program),
         }
     }
 
-    Err(
-        "screenshot: no capture tool found (grim, gnome-screenshot, spectacle, scrot or ImageMagick)"
-            .to_string(),
-    )
+    if !flat.is_empty() {
+        // Name the trap instead of returning an image that looks like a result.
+        return Err(format!(
+            "screenshot: {} produced an empty {} image{}. On a Wayland session only Wayland-capable \
+             tools can see the screen; install grim or make sure the desktop portal allows capture.",
+            flat.join(", "),
+            if wayland { "black" } else { "blank" },
+            if failed.is_empty() {
+                String::new()
+            } else {
+                format!(" ({} did not run)", failed.join(", "))
+            },
+        ));
+    }
+
+    Err(if wayland {
+        format!(
+            "screenshot: no Wayland capture tool worked ({}). Install grim, or allow screen \
+             capture for this app in the desktop portal.",
+            failed.join(", ")
+        )
+    } else {
+        format!(
+            "screenshot: no capture tool worked ({}). Install grim, gnome-screenshot, spectacle, \
+             scrot or ImageMagick.",
+            failed.join(", ")
+        )
+    })
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::*;
+
+    fn write_image(name: &str, paint: impl Fn(u32, u32) -> [u8; 3]) -> std::path::PathBuf {
+        let path = std::env::temp_dir().join(name);
+        let mut image = image::RgbImage::new(400, 300);
+        for (x, y, pixel) in image.enumerate_pixels_mut() {
+            *pixel = image::Rgb(paint(x, y));
+        }
+        image.save(&path).unwrap();
+        path
+    }
+
+    /// The bug this guards: scrot on a Wayland session exits 0 and writes a valid, uniformly
+    /// black picture. It must not be handed on as a screenshot.
+    #[test]
+    fn a_uniform_capture_counts_as_flat() {
+        let path = write_image("ds-ide-flat.png", |_, _| [0, 0, 0]);
+        assert!(is_a_flat_image(&path));
+        let _ = std::fs::remove_file(&path);
+
+        // A blank but not black surface is just as useless.
+        let path = write_image("ds-ide-white.png", |_, _| [250, 250, 250]);
+        assert!(is_a_flat_image(&path));
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// scrot and ImageMagick are X11-only. Offering them on Wayland is what produced the black
+    /// screenshots, so the Wayland list must not contain them.
+    #[test]
+    fn wayland_never_offers_x11_only_tools() {
+        let wayland = capture_candidates(true);
+        let names: Vec<&str> = wayland.iter().map(|(name, _)| *name).collect();
+        assert!(!names.contains(&"scrot"), "{names:?}");
+        assert!(!names.contains(&"import"), "{names:?}");
+        assert!(names.contains(&"grim"), "{names:?}");
+
+        // On X11 they are still worth a try.
+        let x11 = capture_candidates(false);
+        let names: Vec<&str> = x11.iter().map(|(name, _)| *name).collect();
+        assert!(names.contains(&"scrot"), "{names:?}");
+
+        assert!(is_wayland_session(true, None));
+        assert!(is_wayland_session(false, Some("wayland")));
+        assert!(!is_wayland_session(false, Some("x11")));
+    }
+
+    /// A real desktop has text and borders; a single differing patch is enough.
+    #[test]
+    fn a_capture_with_content_is_not_flat() {
+        let path = write_image("ds-ide-real.png", |x, y| {
+            if (200..260).contains(&x) && (100..140).contains(&y) {
+                [220, 220, 220]
+            } else {
+                [12, 12, 14]
+            }
+        });
+        assert!(!is_a_flat_image(&path));
+        let _ = std::fs::remove_file(&path);
+    }
+}
+
+/// True when the picture carries no information: every sampled pixel is (nearly) the same
+/// colour. A real desktop has text, borders and a taskbar, so a uniform grid means the capture
+/// tool photographed an empty surface. Sampling keeps this cheap on a 4K screen.
+#[cfg(target_os = "linux")]
+fn is_a_flat_image(path: &Path) -> bool {
+    let Ok(image) = image::open(path) else {
+        // Undecodable is not "flat"; the caller's size check already guards empty files.
+        return false;
+    };
+    let (width, height) = (image.width(), image.height());
+    if width < 32 || height < 32 {
+        return false;
+    }
+    let rgb = image.to_rgb8();
+    let mut first: Option<[u8; 3]> = None;
+    // A 12 × 12 grid across the screen: enough to catch a single window or a taskbar.
+    for row in 0..12u32 {
+        for column in 0..12u32 {
+            let x = (width - 1) * column / 11;
+            let y = (height - 1) * row / 11;
+            let pixel = rgb.get_pixel(x, y);
+            let value = [pixel[0], pixel[1], pixel[2]];
+            match first {
+                None => first = Some(value),
+                Some(reference) => {
+                    let differs = (0..3).any(|index| reference[index].abs_diff(value[index]) > 3);
+                    if differs {
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+    true
 }

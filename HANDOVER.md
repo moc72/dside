@@ -17,6 +17,10 @@ The working tree adds round 82 (2026-10-26), taken from the user's own fork: pag
 for long threads, sliding side panels and archive management. The fork's companion/project
 database model is deliberately not part of DS.IDE.
 
+Round 85 fixes two bugs from the 0.5.0 test on Linux/Wayland: capture no longer accepts an X11
+tool's black picture as success (Wayland sessions only try Wayland-capable tools, and a
+uniform image is rejected), and the file tree stays reachable when no file is open.
+
 Round 83 fixes a layout bug found in real use: the document itself could scroll (WebKit
 inflated its scroll height to the length of the conversation), so a follow/reveal scroll
 shifted the whole window upwards. `html` is pinned now, the tree reveal scrolls only its own

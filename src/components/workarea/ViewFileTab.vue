@@ -41,6 +41,13 @@ const loading = ref(false);
 const error = ref<string | null>(null);
 
 const selectedPath = computed(() => props.path ?? null);
+
+/**
+ * Whether the tree column is shown. With no file open the tree *is* the tab: hiding it would
+ * leave a placeholder pane and no way back, because the toggle lives in the bar that only
+ * exists once a file is selected.
+ */
+const treeShown = computed(() => fileTreeVisible.value || !selectedPath.value);
 const language = computed(() => (props.path ? languageFromPath(props.path) : "plaintext"));
 const editorTheme = computed(() => (resolvedTheme.value === "light" ? "vs" : "vs-dark"));
 
@@ -410,7 +417,7 @@ async function toggle(node: FileNode) {
 </script>
 
 <template>
-  <div class="viewfile" :class="{ 'no-tree': !fileTreeVisible }">
+  <div class="viewfile" :class="{ 'no-tree': !treeShown }">
     <div class="viewer">
       <template v-if="selectedPath && !error">
         <div class="viewer-bar">
@@ -545,6 +552,8 @@ async function toggle(node: FileNode) {
         </template>
       </template>
 
+      <!-- No file yet: the tree is the point of this tab, so it stays visible (see
+           `treeShown`) and there is no toggle to hide it. -->
       <div v-else class="placeholder">
         <Icon name="doc" :size="28" />
         <p>
@@ -555,8 +564,8 @@ async function toggle(node: FileNode) {
 
     <div
       class="tree-pane"
-      :inert="!fileTreeVisible || undefined"
-      :aria-hidden="fileTreeVisible ? undefined : 'true'"
+      :inert="!treeShown || undefined"
+      :aria-hidden="treeShown ? undefined : 'true'"
     >
       <div class="tree-head">
         <span>{{ t("viewFile.workspace") }}</span>
