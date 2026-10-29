@@ -20,7 +20,7 @@ work area shows a preview, not an editor.*
 - **Three permission stages**: **Plan mode** (read-only), **Ask before changes** (approve every write/edit/bash) and **Full access**. New installations start in Ask before changes; Full access goes through a consent dialog.
 - One answer is a **timeline**: thinking, text and tool calls in the order they happened.
   Tool rows open to show the command, its output, and the approval state.
-- **Long-term memory** the user can read, search, correct and retire (nothing is deleted), with a visible marker for what the user wrote or rewrote, and optional project scoping.
+- **Long-term memory** the user can read, search, correct and retire (nothing is deleted), with a visible marker for what the user wrote or rewrote, optional project scoping, and a marker on notes it wrote from reasoning rather than from something it checked.
 - **Context ring** showing how full the model's window is, and **compression**: older turns are folded into a summary the model writes itself (automatically at 75 %, or on click). The automatic trigger uses the provider's own prompt size for the last request plus the growth since; only a session without a measurement falls back to a character estimate.
 - **Image attachments** by paste or picker; they stay with the message and are sent along.
 - **Follow mode**: files the partner reads or edits open in the work area (preview or code editor), pages it fetches open in the app's browser. The eye in the tab bar turns it off; the cursor stays in the composer.
