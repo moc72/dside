@@ -53,6 +53,8 @@ Der Programmierpartner innerhalb der Anwendung heißt **Ziggy**. Diesen Namen ha
 - **Ausreißer:** Beginnt das Modell sich zu wiederholen, wird der Strom nach wenigen hundert wiederholten Zeichen abgebrochen und der Turn sagt es; alles davor bleibt erhalten.
 - **Lange Unterhaltungen** öffnen mit den neuesten 80 Nachrichten; ältere lassen sich seitenweise nachladen, ohne dass die gelesene Zeile springt.
 - **Archiv:** Archivierte Aufgaben durchsuchen, nach Projekt filtern, reaktivieren oder einzeln/alle löschen — jeweils mit Bestätigung.
+- **Prüfen:** Der Begleiter kann eine Behauptung an einen zweiten, nur lesenden Prüfer geben, der sie gegen die Dateien hält und mit `VERDICT: PASS` oder `VERDICT: FAIL` antwortet — ein Fehlschlag kommt als fehlgeschlagenes Werkzeug zurück.
+- **Erinnerungen:** Nach einer Übergabe (etwa einem Push, dessen CI beobachtet werden muss) kann er sich selbst eine einmalige Erinnerung stellen, die später einen neuen Turn startet.
 - **Vertrauen:** Der Begleiter wählt seinen Namen früh, doch du erfährst ihn erst nach 100 Punkten, die über Tage wachsen — Nutzungstage, erledigte Aufgaben, eigene Notizen, deine Korrekturen. Die Begleiterseite zeigt den Fortschritt; für einen einzelnen Klick gibt es nichts.
 - **Beim ersten Start** werden Modus, Arbeitsbereich (Workspace) und API-Schlüssel abgefragt; unter **Einstellungen → Diagnose** lassen sich Schlüsselbund, Provider, Datenbank und erkannte Editoren überprüfen.
 - **Tastenkürzel** sind unter „Einstellungen → Tastenkürzel“ aufgelistet, durchsuchbar und anpassbar.

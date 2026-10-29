@@ -53,6 +53,8 @@ El asistente de programación integrado en la aplicación se llama **Ziggy**. É
 - **Respuestas desbocadas:** si el modelo empieza a repetirse, el flujo se corta tras unos cientos de caracteres repetidos y el turno lo indica; todo lo anterior se conserva.
 - **Conversaciones largas** se abren con los 80 mensajes más recientes; los anteriores se cargan por páginas sin que salte la línea que estás leyendo.
 - **Archivo:** busca y filtra tareas archivadas por proyecto, reactívalas o elimínalas (una o todas) con confirmación.
+- **Verificar:** el asistente puede dar una afirmación a un segundo lector de solo lectura que la contrasta con los archivos y responde `VERDICT: PASS` o `VERDICT: FAIL`; un fallo llega como herramienta fallida.
+- **Recordatorios:** tras delegar algo (un push cuya CI hay que vigilar), puede ponerse un recordatorio único que inicia un turno más tarde.
 - **Confianza:** el asistente elige su nombre pronto, pero solo lo conoces tras 100 puntos ganados con los días: jornadas de uso, tareas terminadas, sus propias notas y tus correcciones. La página del asistente muestra el progreso; un solo clic no suma nada.
 - **Al iniciar por primera vez**, la aplicación solicita el modo, el espacio de trabajo y la clave API; en **Configuración → Diagnóstico** es posible verificar el llavero del sistema, el proveedor, la base de datos y los editores detectados.
 - **Los accesos directos del teclado** se pueden consultar, buscar y modificar en **Configuración → Accesos directos del teclado**.

@@ -47,6 +47,8 @@ work area shows a preview, not an editor.*
 - **Runaway answers:** if the model starts repeating itself, the stream is cut after a few hundred repeated characters and the turn says so; everything before the repetition is kept.
 - **Long threads** open with the newest 80 messages; older ones load a page at a time without moving the line you are reading.
 - **Archive:** search and filter archived tasks by project, restore them, or delete one or all — with a confirmation.
+- **Verify:** the partner can hand a claim to a second, read-only reader that checks it against the files and answers `VERDICT: PASS` or `VERDICT: FAIL` — a failed check reaches it as a failed tool, so a confident report cannot pass for one.
+- **Reminders:** after handing work off (a push whose CI has to be watched), it can set itself a one-shot reminder that starts a new turn later.
 - **Trust:** the companion chooses its name early, but you learn it only after 100 points earned over days — a day of use, finished tasks, its own notes, your corrections. The partner page shows the progress; nothing is awarded for a single click.
 - **First start** asks for mode, workspace and API key; **Settings → Diagnostics** checks the keyring, provider, database and detected editors.
 - **Keyboard shortcuts** are listed, searchable and editable under Settings → Keyboard shortcuts.
