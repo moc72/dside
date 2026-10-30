@@ -124,21 +124,9 @@ function restoreAnchor(): void {
 }
 
 /**
- * Scrolls to the newest line. Deliberately not `requestAnimationFrame`: in this webview (splash
- * included) rAF can go quiet, which is why the list stopped following until it was nudged.
- * `nextTick` runs after Vue has written the DOM, which is exactly the moment we need.
- */
-function queueFollow(): void {
-  void nextTick(() => {
-    const element = scrollEl.value;
-    if (element) element.scrollTop = element.scrollHeight;
-  });
-}
-
-/**
- * Scroll events we cause ourselves must not be read as "the reader left the bottom" — after a
- * correction near the end of a thread that would silently turn following off. The position we
- * left the list at is the only reliable sign, so it is compared on the next event.
+ * What we write to `scrollTop` ourselves. Scroll events caused that way are not the reader
+ * leaving the bottom — mistaking them for that turned following off mid-resize, and the last
+ * message then slipped below the edge for good.
  */
 let selfTop: number | null = null;
 
@@ -149,17 +137,37 @@ function scrollBy(delta: number): void {
   selfTop = element.scrollTop;
 }
 
+/** Glues the newest line to the bottom edge — the "sticky last post". */
+function pinToBottom(): void {
+  const element = scrollEl.value;
+  if (!element) return;
+  element.scrollTop = element.scrollHeight;
+  selfTop = element.scrollTop;
+}
+
+/**
+ * Scrolls to the newest line. Deliberately not `requestAnimationFrame`: in this webview (splash
+ * included) rAF can go quiet, which is why the list stopped following until it was nudged.
+ * `nextTick` runs after Vue has written the DOM, which is exactly the moment we need.
+ */
+function queueFollow(): void {
+  void nextTick(pinToBottom);
+}
+
 function onScroll(): void {
   const element = scrollEl.value;
   if (!element) return;
   const ours = selfTop !== null && Math.abs(element.scrollTop - selfTop) <= 1;
-  if (!ours) {
-    following.value = isAtBottom(element);
-    selfTop = null;
-    // A correction is measured against the remembered line; recording the result of an
-    // integer-rounded scroll would let a pixel slip in on every resize and add up.
-    rememberAnchor();
+  if (ours) {
+    // The layout may have grown after our write; while following, take the bottom again.
+    if (following.value && !isAtBottom(element)) pinToBottom();
+    return;
   }
+  following.value = isAtBottom(element);
+  selfTop = null;
+  // A correction is measured against the remembered line; recording the result of an
+  // integer-rounded scroll would let a pixel slip in on every resize and add up.
+  rememberAnchor();
 }
 
 const loadingOlder = ref(false);
@@ -194,7 +202,7 @@ function jumpToBottom(smooth: boolean): void {
     element.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
     return;
   }
-  element.scrollTop = element.scrollHeight;
+  pinToBottom();
 }
 
 watch(
@@ -213,27 +221,42 @@ watch(activeSessionId, () => {
   queueFollow();
 });
 
+/**
+ * A window resize changes two things at once: the column re-wraps (content grows) and the
+ * composer may take more rows (the scroll area shrinks). The list alone does not see the
+ * second, so both are observed — measured here, at 1000 px the last line sat 59 px below the
+ * edge and the jump button appeared.
+ */
 onMounted(() => {
   // Markdown, images and fonts change the height after the message was appended. As long as
   // the reader is at the bottom, follow that growth too. When they are not, hold their line:
   // a wider or narrower column re-wraps everything above it.
-  const target = (listEl.value?.$el as HTMLElement | undefined) ?? scrollEl.value;
-  if (target && typeof ResizeObserver !== "undefined") {
+  const list = (listEl.value?.$el as HTMLElement | undefined) ?? scrollEl.value;
+  if (typeof ResizeObserver !== "undefined") {
     observer = new ResizeObserver(() => {
       if (following.value) {
-        queueFollow();
+        // The layout is already current here, so this needs no deferral.
+        pinToBottom();
         return;
       }
       restoreAnchor();
     });
-    observer.observe(target);
+    if (list) observer.observe(list);
+    if (scrollEl.value) observer.observe(scrollEl.value);
   }
+  window.addEventListener("resize", onWindowResize);
   void initEngine().then(() => jumpToBottom(false));
 });
+
+/** The viewport can change without the list or the scroll area changing size. */
+function onWindowResize(): void {
+  if (following.value) pinToBottom();
+}
 
 onBeforeUnmount(() => {
   observer?.disconnect();
   observer = null;
+  window.removeEventListener("resize", onWindowResize);
 });
 </script>
 
@@ -368,6 +391,10 @@ onBeforeUnmount(() => {
   margin: 0 auto;
   padding: 0 6px;
   overflow-y: auto;
+  /* Our own anchoring (see the script) decides where the reader stays. The browser's
+     scroll anchoring picks a different element and moves scrollTop behind our back —
+     measured as a 20 px drift per resize. */
+  overflow-anchor: none;
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
   scrollbar-gutter: stable;

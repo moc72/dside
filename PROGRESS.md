@@ -3852,3 +3852,63 @@ Live in isolierten Daten (`/tmp/dside-t92`, eigener Prozess gegen den Dev-Server
 - „Ältere Nachrichten laden": dieselbe Nachricht (m266) bleibt bei −148,8 px, 80 → 160 Zeilen.
 
 Offen: nichts aus dieser Runde. Kein Push, kein Tag, kein Build.
+
+## 93. Der letzte Post bleibt beim Resize unten kleben (2026-10-30, zweiundsiebzigste Runde)
+
+Rückmeldung zum Fix aus §92: „unverändert. Wenn ich die Größe ändere springt der Text immer
+weiter nach oben im Verlauf, so dass man wieder zum letzten Post scrollen muss. Kann man den
+letzten post nicht sticky unten halten?" Die Nachfrage war berechtigt — §92 hatte nur den
+Lesefall repariert, den *Ende*-Fall nicht.
+
+### Reproduziert (mit echtem Fenster-Resize)
+Dafür fehlte die Berechtigung `core:window:allow-set-size`; sie wurde für den Test kurz
+ergänzt, das Fenster über die Tauri-API auf 1100/1000/950/1200 px gestellt — und danach wieder
+entfernt. Messung mit 160 Nachrichten, unten stehend:
+
+| Fenster | Abstand zum Ende | Jump-Knopf |
+| --- | --- | --- |
+| 1200 px | 0 | nein |
+| 1100 px | 0 | nein |
+| **1000 px** | **59 px** | **ja** |
+| 1200 px | 0 | nein |
+| **950 px** | **98 px** | **ja** |
+
+Der letzte Post rutschte also unter den Rand, der „Nach unten"-Knopf erschien — genau das
+Scrollen, das der Nutzer beschrieben hat.
+
+### Drei Ursachen
+1. **`following` kippte durch unser eigenes Scrollen.** `queueFollow` schrieb `scrollTop` ohne
+   sie als eigene Schreiboperation zu markieren. Traf das Scroll-Event nach einem weiteren
+   Reflow ein, lag der Abstand über der 48-px-Schwelle → `following` wurde stillschweigend
+   falsch. Danach verankerte `restoreAnchor` die Zeile, die beim Stehen am Ende oben sichtbar
+   war (etwa m292) — deshalb der Sprung über mehrere Nachrichten.
+2. **Nur der Inhalt wurde beobachtet.** Ein Fenster-Resize ändert auch die Höhe der
+   Scrollfläche (der Composer bricht um); `ResizeObserver` auf `.messages` sieht das nicht.
+3. **WebKitGTK hat eine eigene Scroll-Verankerung**, die gegen unsere arbeitet: gemessen 20 px
+   Drift pro Resize im Lesefall, obwohl unsere Korrektur stimmte.
+
+### Änderungen
+- `pinToBottom()` ist jetzt die einzige Stelle, die ans Ende schreibt, und markiert die
+  Schreiboperation (`selfTop`). Eigene Scroll-Events werden nicht mehr als Nutzer-Scroll
+  gedeutet; steht dabei `following` an und der Abstand ist gewachsen, wird erneut gepinnt.
+- `ResizeObserver` beobachtet **Inhalt und Scrollfläche**; im Callback wird bei `following`
+  direkt gepinnt (Layout ist dort aktuell), sonst der Anker gesetzt.
+- Zusätzlich ein `window.resize`-Listener als Netz für Viewport-Änderungen, die keins der
+  beiden Elemente ändern.
+- `.scroll` bekommt `overflow-anchor: none`: die eigene Verankerung ist die einzige.
+
+### Geprüft
+`pnpm build` grün (i18n 500 Schlüssel), `cargo test --lib` 74 / 14 ignoriert.
+
+Live mit echtem Fenster-Resize (isolierte Daten, `/tmp/dside-t92`):
+- **Unten stehend**, 6 Breiten in 120-ms-Folge (1150, 1000, 1300, 950, 1440, 820):
+  Abstand zum Ende **immer 0**, Jump-Knopf **nie** sichtbar. Vorher 59/98 px.
+- **Mitten im Verlauf**, 6 Breiten: dieselbe Zeile (m276) bleibt bei −69,2 ± 0,6 px
+  (vorher: Zeilensprung um mehrere Nachrichten, 20 px Drift pro Schritt).
+- Nutzer scrollt nach oben → Knopf erscheint; Panelbreite ziehen (30 → 42 %) → Zeile bleibt
+  (−87,4 → −86,6 px); Klick auf den Knopf → Ende, Knopf weg.
+- Neue Nachricht im Store bei stehendem Ende → bleibt am Ende (`atBottom` 0).
+- „Ältere Nachrichten laden": m251 bleibt bei −210,6 → −210,4 px, 80 → 160 Zeilen.
+- Berechtigung `allow-set-size` nach dem Test wieder entfernt (Repo-Diff sauber).
+
+Offen: nichts aus dieser Runde. Kein Push, kein Tag, kein Build.
