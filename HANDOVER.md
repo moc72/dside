@@ -150,7 +150,10 @@ connection test.
 - The moving pieces sit **on top of** the full silhouette in the same colour. That is what
   keeps a few degrees of rotation invisible inside the body; only what leaves the outline
   moves visibly. Their pivots are percentages of each path's `fill-box`.
-- `still` (prop) and `prefers-reduced-motion` stop all movement. Used in the sidebar (26 px),
+- `still` (prop) and `prefers-reduced-motion` stop all movement.
+- Composer drafts live in `src/lib/drafts.ts` (`localStorage`, keyed by session id, 40
+  newest, 20k chars each). Text only — attachments are never resumed behind the user's back.
+  The field restores on start, on a session switch and after a reload; sending clears it. Used in the sidebar (26 px),
   the first-run dialog (36 px) and the splash (110 px).
 - The About page is a hero line (mark, name, version, authors), a one-line "built with" strip,
   two cards (facts / packages) and the addresses as chips. If a section grows, keep the

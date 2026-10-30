@@ -3984,3 +3984,40 @@ Live in der isolierten Instanz (Port 9334, eigene Daten):
 
 Offen bis zur Freigabe des Nutzers: Commit ist lokal, **kein Push, kein Tag**. Danach wäre
 der Weg frei für Commit, Push, Tag und das Aufräumen der sechs Draft-Releases auf GitHub.
+
+## 95. Das Eingabefeld vergisst nichts mehr (2026-10-30, vierundsiebzigste Runde)
+
+Der Nutzer bemerkte, dass ein Text, den er noch im Eingabefeld stehen hatte, inzwischen
+erledigt war — und hoffte, DS.IDE verhalte sich genauso. Es tat es nicht: `Composer.vue`
+hielt den Text in einem `ref` ohne jede Persistenz. Ein Neustart, ein Absturz oder ein
+Wechsel der Aufgabe nahm mit, was gerade halb getippt war.
+
+### Änderungen
+- **`src/lib/drafts.ts`** hält Entwürfe pro Session in `localStorage`
+  (`ds-ide.composer-drafts.v1`), nicht global: ein Satz, der zu Aufgabe A begonnen wurde,
+  hat in Aufgabe B nichts zu suchen.
+- **Composer** lädt den Entwurf beim Start, schreibt ihn 300 ms nach dem letzten Tastendruck,
+  wechselt ihn beim Sessionwechsel (der alte Text wird *vor* dem Umschalten abgelegt) und
+  verwirft ihn beim Senden. Beim Unmount wird sofort geschrieben, damit ein Reload die
+  letzten 300 ms nicht frisst.
+- **Grenzen:** höchstens 40 Entwürfe (der älteste fällt raus), pro Entwurf 20 000 Zeichen;
+  reiner Leerraum legt keinen Entwurf an und löscht einen bestehenden.
+- **Nur Text.** Anhänge behalten ihren eigenen Lebenszyklus und werden nicht hinter dem
+  Rücken des Nutzers wieder eingesetzt.
+- Das Feld wächst beim Wiederherstellen eines mehrzeiligen Entwurfs sofort mit
+  (`autoGrow` beim Mount), sonst stand ein vierzeiliger Entwurf in einer einzeiligen Box.
+
+### Geprüft
+`pnpm build` grün (497 Schlüssel), `cargo test --lib` 74 / 14 ignoriert.
+
+Live in der isolierten Instanz (Port 9334):
+- Tippen → `{"s-resize":{"text":…,"at":…}}` in `localStorage`.
+- Wechsel auf eine andere Session: dort leeres Feld, der Entwurf von A bleibt erhalten;
+  zurück zu A steht er wieder da.
+- **Reload der App:** beide Entwürfe überleben, das Feld zeigt den der aktiven Session
+  („Entwurf A").
+- **Senden** (Enter): Eintrag weg, Feld leer — der gesendete Satz kommt nicht zurück.
+- Nur-Leerzeichen legt nichts an; 42 Sessions → 40; 25 000 Zeichen → 20 000.
+
+Offen: nichts aus dieser Runde. Kein Push, kein Tag — der Entwurf der About-Seite wartet
+weiter auf die Freigabe des Nutzers.

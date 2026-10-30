@@ -21,7 +21,48 @@ import {
   sendPrompt,
 } from "../../composables/useEngine";
 
+import { draftFor, forgetDraft, rememberDraft } from "../../lib/drafts";
+
 const text = ref("");
+
+/**
+ * The field keeps what was left in it — per session, across a restart. A sentence started
+ * under one task does not belong in the next one, so the draft follows the session id
+ * rather than the component. Only the field's text is kept: attachments keep their own
+ * lifecycle and must not be resumed behind the user's back.
+ */
+let draftTimer: number | undefined;
+
+function saveDraftNow(): void {
+  if (draftTimer !== undefined) {
+    window.clearTimeout(draftTimer);
+    draftTimer = undefined;
+  }
+  rememberDraft(activeSessionId.value, text.value);
+}
+
+function cancelDraftSave(): void {
+  if (draftTimer !== undefined) {
+    window.clearTimeout(draftTimer);
+    draftTimer = undefined;
+  }
+}
+
+// The composer is created once and outlives the session it belongs to.
+text.value = draftFor(activeSessionId.value);
+
+watch(text, () => {
+  cancelDraftSave();
+  draftTimer = window.setTimeout(saveDraftNow, 300);
+});
+
+watch(activeSessionId, (next, previous) => {
+  // File the text under the session being left *before* the field changes under it.
+  cancelDraftSave();
+  rememberDraft(previous ?? "", text.value);
+  text.value = draftFor(next ?? "");
+  void nextTick(() => autoGrow());
+});
 
 /**
  * The composer is where the next sentence starts. A chat window that opens with the
@@ -53,7 +94,11 @@ function focusComposerIfIdle(): void {
 }
 
 onMounted(() => {
-  void nextTick(() => box.value?.focus());
+  // A restored draft can be several lines long; the field grows once before the first key.
+  void nextTick(() => {
+    autoGrow();
+    box.value?.focus();
+  });
 
   // Register both listeners independently: awaiting one must not delay the other. The
   // window-focus listener is the normal path; the splash's `main-shown` is the reliable
@@ -78,6 +123,8 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  // A reload or a shutdown must not eat the last 300 ms of typing.
+  saveDraftNow();
   if (focusFallback !== undefined) window.clearTimeout(focusFallback);
   removeFocusListener?.();
   removeFocusListener = null;
@@ -247,6 +294,9 @@ function autoGrow(): void {
 function reset(): void {
   text.value = "";
   attachments.value = [];
+  // Sent means the draft is done; keeping it would restore a message that already went out.
+  cancelDraftSave();
+  forgetDraft(activeSessionId.value);
   void nextTick(() => {
     if (box.value) box.value.style.height = "auto";
   });
