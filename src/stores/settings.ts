@@ -31,6 +31,8 @@ export interface SettingsState {
   shortcuts: Record<string, string[]>;
   /** Let the partner read and fill forms in browser windows the user opened. */
   browserControl: boolean;
+  /** Closing the window keeps DS.IDE running in the tray, so reminders can still fire. */
+  keepInBackground: boolean;
   /** How hard the model should think, on the provider's own scale. Empty = provider default. */
   reasoningEffort: string;
   /** Set once the first-start dialog has been answered or dismissed. */
@@ -87,6 +89,7 @@ const PERSISTED_KEYS: (keyof SettingsState)[] = [
   "partnerPrompt",
   "shortcuts",
   "browserControl",
+  "keepInBackground",
   "reasoningEffort",
   "onboarded",
 ];
@@ -114,6 +117,7 @@ const defaults: SettingsState = {
   partnerPrompt: "",
   shortcuts: {},
   browserControl: false,
+  keepInBackground: true,
   reasoningEffort: "",
   onboarded: false,
 };

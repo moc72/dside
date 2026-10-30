@@ -471,6 +471,11 @@ watch(activeItem, (value) => {
             :description="t('settings.general.browserControlDesc')"
           />
           <ToggleRow
+            v-model="settings.keepInBackground"
+            :label="t('settings.general.keepInBackground')"
+            :description="t('settings.general.keepInBackgroundDesc')"
+          />
+          <ToggleRow
             v-model="settings.joinEarlyAccess"
             :label="t('settings.general.joinEarlyAccess')"
             :description="t('settings.general.joinEarlyAccessDesc')"

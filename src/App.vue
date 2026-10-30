@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -16,7 +16,7 @@ import { deepSeekMark } from "./components/deepseek-mark";
 import { firstRun } from "./stores/settings";
 import { partnerDisplayName, partnerReveal, refreshPartnerName } from "./stores/partner";
 import Icon from "./components/Icon.vue";
-import { t } from "./i18n";
+import { locale, t } from "./i18n";
 import {
   CENTER_MIN,
   railAuto,
@@ -97,11 +97,25 @@ async function finishSplash() {
   say("splash: handed over");
 }
 
+/**
+ * The tray menu belongs to the six catalogs, so the words are pushed from here: once at start,
+ * and again whenever the user switches language. The backend only holds the label strings.
+ */
+function pushTrayLabels(): void {
+  void invoke("tray_set_labels", {
+    open: t("tray.open"),
+    quit: t("tray.quit"),
+  }).catch(() => undefined);
+}
+
+watch(locale, pushTrayLabels);
+
 onMounted(() => {
   if (isSplash.value) {
     void finishSplash();
     return;
   }
+  pushTrayLabels();
   void invoke("log_message", { text: "main window: mounted" }).catch(() => undefined);
   // Crossing the trust threshold is a moment, and it happens mid-conversation: the engine
   // announces it once, the banner says it, the partner page shows the rest.

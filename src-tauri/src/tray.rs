@@ -1,0 +1,150 @@
+//! The tray icon: the app keeps its promises while no window is open.
+//!
+//! A reminder set with `schedule` can only fire while the process is alive, and a turn can only
+//! be started by something that is running. So closing the window hides it instead of ending the
+//! app — but only when the tray icon actually appeared. Without one the process would be
+//! invisible and unreachable, which is worse than quitting honestly.
+//!
+//! The menu labels are UI text and belong to the six catalogs, so the frontend pushes them
+//! (`tray_set_labels`) as soon as it has a locale. The words here are the ones the menu shows
+//! for the moment before that.
+
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
+
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{AppHandle, Manager};
+
+pub struct TrayState {
+    running: AtomicBool,
+    open_item: Mutex<Option<MenuItem<tauri::Wry>>>,
+    quit_item: Mutex<Option<MenuItem<tauri::Wry>>>,
+}
+
+impl Default for TrayState {
+    fn default() -> Self {
+        Self {
+            running: AtomicBool::new(false),
+            open_item: Mutex::new(None),
+            quit_item: Mutex::new(None),
+        }
+    }
+}
+
+impl TrayState {
+    /// Whether the icon is on screen. Closing the window may only keep the process alive when
+    /// there is something the user can click to get it back.
+    pub fn is_running(&self) -> bool {
+        self.running.load(Ordering::SeqCst)
+    }
+}
+
+/// Builds the tray icon and menu. Returns false when the desktop cannot show one — a session
+/// without a StatusNotifier host or without the appindicator library — and the caller keeps
+/// "closing quits" then.
+pub fn install(app: &AppHandle) -> bool {
+    let (menu, open, quit) = match tray_menu(app) {
+        Ok(parts) => parts,
+        Err(error) => {
+            crate::log_line!("tray: menu failed: {error}");
+            return false;
+        }
+    };
+
+    let mut builder = TrayIconBuilder::with_id("dside-tray")
+        .menu(&menu)
+        .tooltip("DS·IDE")
+        // A left click on the icon means "open" on Linux; macOS opens the menu by itself.
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "open" => crate::show_main_window(app),
+            "quit" => {
+                crate::log_line!("tray: quit from the menu");
+                app.exit(0);
+            }
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                crate::show_main_window(tray.app_handle());
+            }
+        });
+
+    // The window icon is already bundled; reusing it keeps the tray looking like the app.
+    if let Some(icon) = app.default_window_icon().cloned() {
+        builder = builder.icon(icon);
+    }
+
+    match builder.build(app) {
+        Ok(_) => {
+            let state = app.state::<TrayState>();
+            if let Ok(mut slot) = state.open_item.lock() {
+                *slot = Some(open);
+            }
+            if let Ok(mut slot) = state.quit_item.lock() {
+                *slot = Some(quit);
+            }
+            state.running.store(true, Ordering::SeqCst);
+            crate::log_line!("tray: icon installed");
+            true
+        }
+        Err(error) => {
+            crate::log_line!("tray: not available: {error}");
+            false
+        }
+    }
+}
+
+/// Rewrites the two menu entries. Called by the frontend once it knows the language, and again
+/// whenever the user changes it.
+#[tauri::command]
+pub fn tray_set_labels(
+    state: tauri::State<'_, TrayState>,
+    open: String,
+    quit: String,
+) -> Result<(), String> {
+    if !state.is_running() {
+        return Ok(());
+    }
+    if let Ok(slot) = state.open_item.lock() {
+        if let Some(item) = slot.as_ref() {
+            item.set_text(open).map_err(|error| error.to_string())?;
+        }
+    }
+    if let Ok(slot) = state.quit_item.lock() {
+        if let Some(item) = slot.as_ref() {
+            item.set_text(quit).map_err(|error| error.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+fn tray_menu(
+    app: &AppHandle,
+) -> tauri::Result<(Menu<tauri::Wry>, MenuItem<tauri::Wry>, MenuItem<tauri::Wry>)> {
+    // Fallback wording; the frontend replaces it with the user's language right after mount.
+    let open = MenuItem::with_id(app, "open", "Open window", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+    let separator = PredefinedMenuItem::separator(app)?;
+    let menu = Menu::with_items(app, &[&open, &separator, &quit])?;
+    Ok((menu, open, quit))
+}
+
+/// Whether closing the window should hide it. Two conditions, both required: the tray is there,
+/// and the user has not turned the behaviour off.
+pub fn hides_on_close(app: &AppHandle) -> bool {
+    if !app.state::<TrayState>().is_running() {
+        return false;
+    }
+    app.try_state::<crate::db::Db>()
+        .and_then(|db| db.all_settings().ok())
+        .and_then(|settings| settings.get("keepInBackground").cloned())
+        .map(|value| value.trim().trim_matches('"') != "false")
+        .unwrap_or(true)
+}

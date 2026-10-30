@@ -92,6 +92,7 @@ export const zhHans: Messages = {
     addPlaceholder: "要记住什么？（Ctrl+Enter 保存）",
     titlePlaceholder: "标题——最多 120 个字符",
     open: "打开完整记忆",
+    nightlyFound: "{day} 每日检查——重复 {duplicates} 条，从未使用 {stale} 条。用检查按钮查看。",
     unverified: "未核实",
     unverifiedHint: "根据推理记录，未经核实——请当作线索而非事实。",
     writtenByUser: "由你撰写",
@@ -436,8 +437,16 @@ export const zhHans: Messages = {
       browserControl: "浏览器控制",
       browserControlDesc:
         "伙伴可以在内置浏览器中打开并阅读网页、填写表单。请有意识地开启。预览自己的本地文件不需要此权限。",
+      keepInBackground: "在后台继续运行",
+      keepInBackgroundDesc:
+        "关闭窗口后 DS·IDE 会留在托盘并继续工作——只有这样才能触发它自己的提醒。托盘菜单中的“退出”会关闭应用。",
     },
   },
+  tray: {
+    open: "打开窗口",
+    quit: "退出",
+  },
+
   common: {
     cancel: "取消",
     save: "保存",

@@ -93,6 +93,7 @@ export const en: Messages = {
     addPlaceholder: "What should it remember? (Ctrl+Enter saves)",
     titlePlaceholder: "Title — at most 120 characters",
     open: "Open the full memory",
+    nightlyFound: "Daily check on {day} — duplicates: {duplicates}, never used: {stale}. Open with the check button.",
     unverified: "unverified",
     unverifiedHint: "Written from reasoning, not checked — treat it as a lead, not a fact.",
     writtenByUser: "written by you",
@@ -441,8 +442,16 @@ export const en: Messages = {
       browserControl: "Browser control",
       browserControlDesc:
         "The companion may open pages in the integrated browser, read them and fill in forms. Only enable deliberately. The local preview of its own files does not need this permission.",
+      keepInBackground: "Keep running in the background",
+      keepInBackgroundDesc:
+        "Closing the window leaves DS·IDE in the tray and keeps working — that is what lets its own reminders fire. Quit in the tray menu closes the app.",
     },
   },
+  tray: {
+    open: "Open window",
+    quit: "Quit",
+  },
+
   common: {
     cancel: "Cancel",
     save: "Save",

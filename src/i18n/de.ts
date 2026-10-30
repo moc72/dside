@@ -92,6 +92,7 @@ export const de = {
     addPlaceholder: "Was soll er sich merken? (Strg+Enter speichert)",
     titlePlaceholder: "Titel — höchstens 120 Zeichen",
     open: "Ganze Erinnerung öffnen",
+    nightlyFound: "Tägliche Prüfung am {day} — doppelt: {duplicates}, nie benutzt: {stale}. Mit dem Prüfsymbol ansehen.",
     unverified: "unbestätigt",
     unverifiedHint: "Aus Überlegung notiert, nicht nachgeprüft — als Hinweis behandeln, nicht als Tatsache.",
     writtenByUser: "von dir geschrieben",
@@ -442,8 +443,16 @@ export const de = {
       browserControl: "Browser-Steuerung",
       browserControlDesc:
         "Der Begleiter darf Seiten im integrierten Browser öffnen, lesen und Formulare ausfüllen. Nur bewusst einschalten. Die lokale Vorschau eigener Dateien braucht diese Freigabe nicht.",
+      keepInBackground: "Im Hintergrund weiterlaufen",
+      keepInBackgroundDesc:
+        "Beim Schließen des Fensters bleibt DS·IDE im Tray und arbeitet weiter — nur so können eigene Erinnerungen fällen. „Beenden“ im Tray-Menü schließt die App.",
     },
   },
+  tray: {
+    open: "Fenster öffnen",
+    quit: "Beenden",
+  },
+
   common: {
     cancel: "Abbrechen",
     save: "Speichern",

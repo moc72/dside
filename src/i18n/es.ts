@@ -93,6 +93,7 @@ export const es: Messages = {
     addPlaceholder: "¿Qué debe recordar? (Ctrl+Intro guarda)",
     titlePlaceholder: "Título — máximo 120 caracteres",
     open: "Abrir el recuerdo completo",
+    nightlyFound: "Revisión diaria del {day} — duplicadas: {duplicates}, nunca usadas: {stale}. Ábrelas con el botón de revisión.",
     unverified: "sin verificar",
     unverifiedHint: "Anotado por razonamiento, sin comprobar: trátalo como pista, no como hecho.",
     writtenByUser: "escrito por ti",
@@ -438,8 +439,16 @@ export const es: Messages = {
       browserControl: "Control del navegador",
       browserControlDesc:
         "El compañero puede abrir páginas en el navegador integrado, leerlas y rellenar formularios. Actívalo solo a propósito. La vista previa local de sus propios archivos no necesita este permiso.",
+      keepInBackground: "Seguir en segundo plano",
+      keepInBackgroundDesc:
+        "Al cerrar la ventana, DS·IDE permanece en la bandeja y sigue trabajando; así pueden dispararse sus recordatorios. «Salir» en el menú de la bandeja cierra la aplicación.",
     },
   },
+  tray: {
+    open: "Abrir ventana",
+    quit: "Salir",
+  },
+
   common: {
     cancel: "Cancelar",
     save: "Guardar",

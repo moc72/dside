@@ -3571,3 +3571,65 @@ Live in der Testumgebung:
 - `schedule` → DB-Zeile `one_shot=1, created_by=companion`, nach 2 Minuten
   `scheduler: running 1 (reminder): companion`, danach `enabled=0`, `last_run_at`
   gesetzt, und der Turn lief als User-Nachricht 16 mit Antwort 17.
+
+## 88. Das Fenster darf zugehen (2026-10-30, siebenundsechzigste Runde)
+
+Der Gedanke des Nutzers: Seine IDE auf Windows läuft dauerhaft im Hintergrund und sitzt
+im Systembereich; unter Linux fehlt das. Genau dort klaffte eine Lücke, die ich in
+Runde 87 selbst gebaut hatte — meine Erinnerungen sagen „die App muss laufen", und
+ohne Tray heißt Schließen bisher Beenden.
+
+### Tray-Symbol mit ehrlichem Rückfall
+`src-tauri/src/tray.rs`: Menü mit „Fenster öffnen" und „Beenden", Linksklick öffnet das
+Fenster. Gebaut wird es in `setup`; gelingt es nicht (kein StatusNotifier-Host, keine
+appindicator-Bibliothek), bleibt alles beim Alten: **Schließen beendet**, denn ein
+unsichtbarer Prozess ohne Weg zurück wäre schlimmer. `TrayState::is_running` ist die
+Bedingung, nicht die Absicht.
+
+Schließen des Hauptfensters hängt an `CloseRequested`: Wenn das Tray da ist **und**
+`keepInBackground` nicht `false` ist, wird das Schließen abgefangen und das Fenster
+versteckt. „Beenden" im Menü ruft `app.exit(0)`. Neuer Schalter in den Einstellungen
+(sechs Sprachen).
+
+Die Menütexte sind UI-Text und liegen deshalb in den sechs Katalogen; das Frontend
+schickt sie mit `tray_set_labels` beim Start und bei jedem Sprachwechsel. Der
+Rust-Fallback („Open window"/„Quit") steht nur für die Millisekunden davor.
+
+`libappindicator-sys` lädt die Bibliothek zur Laufzeit (`libloading`), es gibt also
+keine neue Link-Abhängigkeit; die CI installiert `libayatana-appindicator3-dev` längst.
+
+### Tägliche Gedächtnis-Prüfung, ohne Modell
+`src-tauri/src/memory_check.rs`: einmal pro Tag (im 30-Sekunden-Loop des Schedulers,
+also nur solange die App läuft) zählt ein deterministischer Lauf Doppelte und nie
+benutzte Notizen, schreibt das Ergebnis nach `settings.memoryCheck` und meldet es als
+`memory://checked`. Er **ändert nichts** — kein LLM-Aufruf, keine Umschreibung. Das
+Erinnerungen-Panel zeigt eine Zeile („Tägliche Prüfung am … — doppelt: 1, nie
+benutzt: 0"), der bestehende Prüfknopf öffnet die Liste, das Setzen-aside bleibt eine
+menschliche Entscheidung. Das ist die Übersetzung des Daemon-Curators in etwas, das zu
+einer Desktop-App mit einem Nutzer passt: gleiches Ergebnis (Gedächtnis bleibt sauber),
+anderer Weg (zählen statt generieren).
+
+### Ein Werkzeug für den Test, kein Produktfeature
+`xdotool windowclose` zerstört das X11-Fenster hart und umgeht damit jeden Handler —
+die App starb, ohne dass `CloseRequested` lief („GdkWindow unexpectedly destroyed").
+Für den echten Fensterknopf schickt der Fenstermanager `WM_DELETE_WINDOW`, was Tauri
+auf `CloseRequested` abbildet. Um das prüfen zu können, hat die **Dev-Brücke** jetzt
+`POST /close`, das Tauris eigenes `window.close()` aufruft — debug-only wie der Rest
+der Brücke.
+
+### Geprüft
+`cargo test --lib` **70 passed / 13 ignored**, `pnpm build` grün (497 Schlüssel).
+Live in dieser Sitzung:
+- Tray installiert (`tray: icon installed`), Icon im Systembereich sichtbar
+  (Screenshot `/tmp/tray-check.png`, Ausschnitt `tray-zoom.png`).
+- Einmalige Erinnerung in einer Minute gesetzt, dann `POST /close`:
+  `window: hidden to the tray`, Prozess lebt, Brücke antwortet, Fenster unsichtbar.
+- 80 Sekunden später, **ohne Fenster**: `scheduler: running 3 (reminder): companion`,
+  `enabled=0`, `last_run_at` gesetzt, und ein echter Turn lief (Nachricht 27 „Hintergrund-Test." → Antwort 28 „Hintergrund-Test: Erinnerung #3 ist angekommen.").
+- Tägliche Prüfung: zwei gleiche Notizen angelegt, Neustart → `memoryCheck =
+  {"day":"2026-10-30","duplicates":1,"stale":0,"total":2}`, Panelzeile im Screenshot
+  `/tmp/dside-nightly-hint.png`.
+
+Nebenbei gelernt: In dieser Umgebung erbt ImageMagick `ARGV0` vom AppImage-Elternteil,
+deshalb scheiterte `magick <op>` mit dem Namen der AppImage-Datei. `/usr/bin/convert`
+und `env -u ARGV0` funktionieren.

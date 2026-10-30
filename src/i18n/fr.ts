@@ -92,6 +92,7 @@ export const fr: Messages = {
     addPlaceholder: "Que doit-il retenir ? (Ctrl+Entrée enregistre)",
     titlePlaceholder: "Titre — 120 caractères maximum",
     open: "Ouvrir la note complète",
+    nightlyFound: "Contrôle du {day} — doublons : {duplicates}, jamais utilisées : {stale}. Ouvrez-les avec le bouton de contrôle.",
     unverified: "non vérifié",
     unverifiedHint: "Noté par raisonnement, sans vérification : à traiter comme une piste, pas comme un fait.",
     writtenByUser: "écrit par toi",
@@ -440,8 +441,16 @@ export const fr: Messages = {
       browserControl: "Contrôle du navigateur",
       browserControlDesc:
         "Le compagnon peut ouvrir des pages dans le navigateur intégré, les lire et remplir des formulaires. À activer en connaissance de cause. L'aperçu local de ses propres fichiers ne nécessite pas cette autorisation.",
+      keepInBackground: "Continuer en arrière-plan",
+      keepInBackgroundDesc:
+        "Fermer la fenêtre laisse DS·IDE dans la zone de notification et il continue de travailler — c'est ce qui permet à ses rappels de se déclencher. « Quitter » dans ce menu ferme l'application.",
     },
   },
+  tray: {
+    open: "Ouvrir la fenêtre",
+    quit: "Quitter",
+  },
+
   common: {
     cancel: "Annuler",
     save: "Enregistrer",

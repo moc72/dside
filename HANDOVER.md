@@ -129,6 +129,16 @@ connection test.
   `VERDICT: FAIL`; a FAIL comes back as a **failed tool**, and a report without exactly one
   verdict counts as not verified. It is its own tool rather than a role of `task`, because
   `task` is off in everyday mode while a reader belongs in both.
+- **Tray icon:** the app installs one when the desktop can show it (`src-tauri/src/tray.rs`).
+  With it, closing the main window hides it instead of quitting, so the scheduler and reminders
+  keep working; the menu has "Open window" and "Quit" (labels pushed from the frontend in the
+  user's language), a left click opens the window, and Settings → General has
+  `keepInBackground`. Without a tray the old behaviour stays: closing quits, because an
+  invisible process with no way back is worse.
+- **Daily memory check:** `src-tauri/src/memory_check.rs` runs once a day inside the scheduler
+  loop, counts duplicates and never-used notes, stores the result in `settings.memoryCheck` and
+  emits `memory://checked`. It changes nothing and costs no model call; the memory panel shows
+  the last result, and setting entries aside stays a human decision.
 - **Self-reminders:** `schedule` (add/list/cancel) sets one-shot or repeating reminders on the
   session; `schedules.one_shot` and `created_by` mark them, a fired one-shot disables itself
   before the turn and keeps `last_run_at`, and at most three active per session. Scheduled runs

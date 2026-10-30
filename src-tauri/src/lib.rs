@@ -11,10 +11,12 @@ mod db;
 mod engine;
 mod git_panel;
 mod logs;
+mod memory_check;
 mod preview;
 mod pty;
 mod secret;
 mod skills;
+mod tray;
 mod test_bridge;
 
 // ---------------------------------------------------------------------------
@@ -1153,15 +1155,35 @@ pub fn run() {
                 .with_denylist(&["splash"])
                 .build(),
         )
+        // Closing the main window hides it while the tray is there, so the scheduler and
+        // reminders keep working; "Quit" in the tray menu is the way out.
+        .on_window_event(|window, event| {
+            if window.label() != "main" {
+                return;
+            }
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if tray::hides_on_close(&window.app_handle()) {
+                    api.prevent_close();
+                    let _ = window.hide();
+                    crate::log_line!("window: hidden to the tray");
+                }
+            }
+        })
         .manage(engine::EngineState::default())
         .manage(pty::PtyState::default())
         .manage(preview::PreviewState::default())
         .manage(test_bridge::TestBridgeState::default())
+        .manage(tray::TrayState::default())
         .setup(|app| {
             let directory = app.path().app_data_dir()?;
             let database = db::Db::open(&directory.join("ds-ide.sqlite3"))?;
             app.manage(database);
             app.manage(secret::SecretStore::new(directory.join("secrets.json")));
+
+            // Tray icon: with one, closing the window hides it and the app keeps running —
+            // that is what lets a reminder set by the partner fire while nothing is open.
+            // Without one the process must not survive a close, so `hides_on_close` stays false.
+            tray::install(app.handle());
 
             // Interval scheduler: check for due runs every 30 seconds. It only lives as
             // long as the app does — there is no OS daemon.
@@ -1170,6 +1192,9 @@ pub fn run() {
                 loop {
                     tokio::time::sleep(std::time::Duration::from_secs(30)).await;
                     engine::run_due_schedules(&handle).await;
+                    // Once a day, and only while the app runs: a deterministic memory pass
+                    // that counts rot and changes nothing.
+                    let _ = memory_check::run(&handle, false);
                 }
             });
 
@@ -1266,6 +1291,8 @@ pub fn run() {
             attachment_save,
             db::memory_report,
             db::memory_prune,
+            memory_check::memory_check_status,
+            memory_check::memory_check_now,
             db::search,
             db::schedules_list,
             db::schedule_create,
@@ -1294,6 +1321,7 @@ pub fn run() {
             capture::capture_screen,
             capture::capture_window,
             logs::log_tail,
+            tray::tray_set_labels,
             preview::preview_start,
             test_bridge::test_bridge_report,
         ])

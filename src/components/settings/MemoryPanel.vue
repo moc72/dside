@@ -41,6 +41,19 @@ const rows = ref<MemoryRow[]>([]);
 const retired = ref<MemoryRow[]>([]);
 const query = ref("");
 const report = ref<MemoryReport | null>(null);
+
+/**
+ * What the daily pass found last time. It runs in the background while the app is open, costs
+ * nothing and changes nothing — this is only what it counted, so rot is noticed without a model
+ * call and without touching a single note.
+ */
+interface MemoryCheck {
+  day: string;
+  total: number;
+  duplicates: number;
+  stale: number;
+}
+const lastCheck = ref<MemoryCheck | null>(null);
 const loading = ref(false);
 const error = ref<string | null>(null);
 
@@ -211,8 +224,17 @@ function onKey(event: KeyboardEvent): void {
   if (event.key === "Escape" && selectedId.value !== null) closeEntry();
 }
 
+async function loadLastCheck(): Promise<void> {
+  try {
+    lastCheck.value = await invoke<MemoryCheck | null>("memory_check_status");
+  } catch {
+    lastCheck.value = null;
+  }
+}
+
 onMounted(() => {
   void load();
+  void loadLastCheck();
   window.addEventListener("keydown", onKey);
 });
 
@@ -242,6 +264,17 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
         :aria-label="t('memory.search')"
       />
     </label>
+
+    <!-- The nightly pass found something: name it, and let the check button show the list. -->
+    <p v-if="lastCheck && (lastCheck.duplicates || lastCheck.stale)" class="hint nightly">
+      {{
+        t("memory.nightlyFound", {
+          day: lastCheck.day,
+          duplicates: lastCheck.duplicates,
+          stale: lastCheck.stale,
+        })
+      }}
+    </p>
 
     <div v-if="report" class="report">
       <div v-if="report.duplicates.length || report.stale.length">
@@ -612,6 +645,10 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
 .chip.project {
   border: 1px solid var(--accent);
   color: var(--accent);
+}
+
+.nightly {
+  margin: 0 0 10px;
 }
 
 .chip.unverified {

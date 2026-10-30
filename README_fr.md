@@ -53,6 +53,8 @@ Le partenaire de développement intégré à l'application se nomme **Ziggy**. C
 - **Réponses qui s'emballent :** si le modèle se met à se répéter, le flux est coupé après quelques centaines de caractères répétés et le tour l'indique ; tout ce qui précède est conservé.
 - **Les longues conversations** s'ouvrent avec les 80 derniers messages ; les précédents se chargent par pages sans faire sauter la ligne en cours de lecture.
 - **Archives :** rechercher et filtrer les tâches archivées par projet, les réactiver ou les supprimer (une ou toutes) avec confirmation.
+- **Zone de notification :** fermer la fenêtre laisse DS·IDE dans la zone de notification pour que les rappels et les tâches planifiées continuent ; le menu la rouvre ou quitte. Réglages → Général désactive ce comportement.
+- **Contrôle quotidien de la mémoire :** une fois par jour, un passage déterministe compte les notes en double et jamais utilisées et l'indique dans le panneau — sans appel au modèle, sans rien modifier.
 - **Vérifier :** l'assistant peut confier une affirmation à un second lecteur en lecture seule qui la confronte aux fichiers et répond `VERDICT: PASS` ou `VERDICT: FAIL` ; un échec revient comme un outil en erreur.
 - **Rappels :** après avoir délégué une action (un push dont la CI doit être surveillée), il peut se poser un rappel unique qui démarre un tour plus tard.
 - **Confiance :** le compagnon choisit son nom tôt, mais vous ne l'apprenez qu'après 100 points gagnés au fil des jours — journées d'utilisation, tâches terminées, ses propres notes, vos corrections. La page du compagnon montre la progression ; un simple clic ne rapporte rien.

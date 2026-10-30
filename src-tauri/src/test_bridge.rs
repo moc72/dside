@@ -105,6 +105,20 @@ async fn handle(app: AppHandle, mut stream: TcpStream) {
             };
             (200, "application/json", value.to_string())
         }
+        // Closing the way the titlebar button does: Tauri's own close(), so the registered
+        // CloseRequested handler runs. xdotool destroys the X11 window instead, which bypasses
+        // every handler and kills the process — fine for a real crash, useless as a test.
+        ("POST", "/close") => match app.get_webview_window("main") {
+            Some(window) => match window.close() {
+                Ok(()) => (200, "application/json", "{\"ok\":true}".to_string()),
+                Err(error) => (
+                    500,
+                    "text/plain; charset=utf-8",
+                    format!("close failed: {error}"),
+                ),
+            },
+            None => (503, "text/plain; charset=utf-8", "no main window".to_string()),
+        },
         ("POST", "/eval") => match app.get_webview_window("main") {
             Some(window) => match window.eval(wrap(&request.body)) {
                 Ok(()) => (200, "application/json", "{\"ok\":true}".to_string()),

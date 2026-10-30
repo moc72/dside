@@ -150,6 +150,11 @@ PRAGMA user_version = 1;
 /// marathon: a day of use, ten finished turns or a handful of memories are worth far less.
 pub const TRUST_THRESHOLD: i64 = 100;
 
+/// The local calendar day, for anything that runs at most once a day.
+pub fn local_day() -> String {
+    today()
+}
+
 /// Local calendar day, for the per-day caps. A year of UTC offsets is not worth a timezone
 /// database; the day boundary matters only for "not twice in one day".
 fn today() -> String {
