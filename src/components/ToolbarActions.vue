@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import Icon from "./Icon.vue";
 import { t } from "../i18n";
 import { settings } from "../stores/settings";
-import { openTab, toggleWorkArea } from "../stores/workArea";
+import { openTab, tabs, toggleWorkArea } from "../stores/workArea";
 import { toggleWeb } from "../stores/ui";
 import {
   activeEditor,
@@ -23,6 +23,32 @@ useEditors();
 
 const menuOpen = ref(false);
 const openError = ref<string | null>(null);
+
+/**
+ * The panels that are not open yet, behind one button instead of three loose icons. In the tab
+ * bar they slid out of view as soon as a few tabs were open — this row never moves.
+ */
+const toolMenuOpen = ref(false);
+
+const closedTools = computed(() =>
+  [
+    { kind: "git", label: "workArea.tabGit", icon: "git" },
+    { kind: "logs", label: "workArea.tabLogs", icon: "activity" },
+    { kind: "changes", label: "workArea.tabChanges", icon: "diff" },
+  ].filter((tool) => !tabs.value.some((tab) => tab.kind === tool.kind)),
+);
+
+function openTool(kind: string): void {
+  toolMenuOpen.value = false;
+  openTab(kind as never);
+}
+
+function onToolMenuKey(event: KeyboardEvent): void {
+  if (event.key === "Escape") toolMenuOpen.value = false;
+}
+
+onMounted(() => window.addEventListener("keydown", onToolMenuKey));
+onBeforeUnmount(() => window.removeEventListener("keydown", onToolMenuKey));
 let errorTimer: number | undefined;
 
 function clearError(): void {
@@ -158,10 +184,10 @@ async function openDownload() {
     </div>
 
     <button class="icon-btn" type="button" :title="t('toolbar.browser')" @click="toggleWeb">
-      <Icon name="globe" />
+      <Icon name="globe" :size="18" />
     </button>
     <button class="icon-btn" type="button" :title="t('toolbar.viewFile')" @click="openTab('file')">
-      <Icon name="folder" />
+      <Icon name="folder" :size="18" />
     </button>
     <button
       class="icon-btn"
@@ -169,15 +195,55 @@ async function openDownload() {
       :title="t('toolbar.terminal')"
       @click="openTab('terminal')"
     >
-      <Icon name="terminal" />
+      <Icon name="terminal" :size="18" />
     </button>
+
+    <div v-if="closedTools.length" class="tool-menu">
+      <button
+        class="icon-btn"
+        type="button"
+        :title="t('workArea.openPanel')"
+        :aria-label="t('workArea.openPanel')"
+        :aria-expanded="toolMenuOpen"
+        @click="toolMenuOpen = !toolMenuOpen"
+      >
+        <Icon name="grid" :size="18" />
+      </button>
+
+      <div v-if="toolMenuOpen" class="backdrop" @click="toolMenuOpen = false"></div>
+      <div v-if="toolMenuOpen" class="tool-list">
+        <button
+          v-for="tool in closedTools"
+          :key="tool.kind"
+          class="tool-item"
+          type="button"
+          :title="t(tool.label as never)"
+          :aria-label="t(tool.label as never)"
+          @click="openTool(tool.kind)"
+        >
+          <Icon :name="tool.icon" :size="18" />
+        </button>
+      </div>
+    </div>
+
+    <button
+      class="icon-btn"
+      :class="{ on: settings.followCompanion }"
+      type="button"
+      :title="settings.followCompanion ? t('workArea.followOn') : t('workArea.followOff')"
+      :aria-pressed="settings.followCompanion"
+      @click="settings.followCompanion = !settings.followCompanion"
+    >
+      <Icon :name="settings.followCompanion ? 'robot' : 'robot-off'" :size="18" />
+    </button>
+
     <button
       class="icon-btn"
       type="button"
       :title="t('toolbar.toggleWorkArea')"
       @click="toggleWorkArea"
     >
-      <Icon name="panel" />
+      <Icon name="panel" :size="18" />
     </button>
   </div>
 </template>
@@ -273,6 +339,47 @@ async function openDownload() {
 }
 
 .icon-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-strong);
+}
+
+.icon-btn.on {
+  color: var(--accent);
+}
+
+.tool-menu {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.tool-list {
+  position: absolute;
+  top: 34px;
+  right: 0;
+  z-index: 31;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
+}
+
+.tool-item {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.tool-item:hover {
   background: var(--bg-hover);
   color: var(--text-strong);
 }

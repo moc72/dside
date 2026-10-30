@@ -49,7 +49,9 @@ const hasStaged = computed(() => staged.value.length > 0);
 
 const errorText = computed(() => {
   if (!error.value) return "";
-  return error.value.toLowerCase().includes("not a git repository")
+  // The backend answers with a marker, not a sentence: no repository for this project, no
+  // matter whether there is none at all or only a parent's. One calm line in the user's language.
+  return error.value.toLowerCase().includes("no_git_repository")
     ? t("git.noRepo")
     : error.value;
 });

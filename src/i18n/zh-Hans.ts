@@ -504,7 +504,7 @@ export const zhHans: Messages = {
     noSelection: "选择一个文件查看差异。",
     stage: "暂存",
     unstage: "取消暂存",
-    noRepo: "此工作区中没有 Git 仓库。",
+    noRepo: "尚未创建 Git 仓库。",
     loading: "正在加载 Git 状态…",
     loadingDiff: "正在加载差异…",
   },

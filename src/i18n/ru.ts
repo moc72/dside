@@ -505,7 +505,7 @@ export const ru: Messages = {
     noSelection: "Выберите файл, чтобы увидеть diff.",
     stage: "Индексировать",
     unstage: "Убрать из индекса",
-    noRepo: "В этой рабочей папке нет репозитория Git.",
+    noRepo: "Репозиторий Git ещё не создан.",
     loading: "Загрузка состояния Git…",
     loadingDiff: "Загрузка diff…",
   },

@@ -506,7 +506,7 @@ export const es: Messages = {
     noSelection: "Elige un archivo para ver el diff.",
     stage: "Preparar",
     unstage: "Quitar preparación",
-    noRepo: "No hay un repositorio Git en este espacio de trabajo.",
+    noRepo: "Todavía no hay un repositorio Git.",
     loading: "Cargando el estado de Git…",
     loadingDiff: "Cargando el diff…",
   },

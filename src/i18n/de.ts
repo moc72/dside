@@ -510,7 +510,7 @@ export const de = {
     noSelection: "Wähle eine Datei für den Diff.",
     stage: "Stagen",
     unstage: "Unstagen",
-    noRepo: "Kein Git-Repository in diesem Arbeitsverzeichnis.",
+    noRepo: "Kein Git-Repository angelegt.",
     loading: "Git-Status wird geladen …",
     loadingDiff: "Diff wird geladen …",
   },

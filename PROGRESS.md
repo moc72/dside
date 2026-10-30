@@ -3748,3 +3748,57 @@ Live in der Testumgebung, Workspace absichtlich in einem Eltern-Repo:
   `/tmp/robot-zoom.png`, `/tmp/robot-off-zoom2.png`).
 
 Kein Commit, kein Push, kein Tag — der Nutzer baut weiter.
+
+## 91. Werkzeugleiste aufgeräumt, Git-Meldung beruhigt (2026-10-30, siebzigste Runde)
+
+Drei Punkte vom Nutzer, alle drei aus dem laufenden Fenster heraus begründet:
+
+1. **Das Dropdown rutschte aus der Tab-Leiste.** Bei breitem rechten Panel und einigen offenen
+   Tabs war der Werkzeug-Knopf am Rand abgeschnitten. Tab-Leiste ist nicht der richtige Ort:
+   sie wächst mit ihren Tabs, die obere Leiste nicht.
+2. **Terminal doppelt, Beschriftungen störend.** Terminal stand als Tab und als Angebot; die
+   Menüeinträge trugen Text, während der Rest der Leiste nur Icons mit Hover-Label zeigt.
+3. **Git-Meldung zu ausführlich.** „… Der Ordner liegt im Repository … dessen Änderungen
+   gehören nicht zu diesem Projekt …" ist für den Nutzer eine einzige Tatsache.
+
+### Änderungen
+- **Dropdown und Roboter umgezogen**: aus der Tab-Leiste in die Titel-Toolbar, zwischen
+  Terminal-Icon und Arbeitsbereich-Schalter. Damit verschwindet auch der letzte Grund, warum
+  sich in der Tab-Leiste etwas wegscrollen konnte — dort stehen nur noch Tabs.
+- **Dropdown-Einträge ohne Text**: Git, Logs, Änderungen als quadratische Icon-Knöpfe, die
+  Bezeichnung erscheint per Hover (`title` + `aria-label`), genau wie bei den übrigen Icons.
+  Terminal steht nicht im Dropdown — es hat sein eigenes Icon in derselben Leiste.
+- **Icons größer** (16 → 18): Browser, Datei, Terminal, Dropdown, Roboter, rechter Panel-Schalter
+  und der linke (`panel-left`). Die Knöpfe bleiben 28 × 28, die Leiste wird durch die Icons
+  nicht breiter.
+- **Git-Meldung**: Backend antwortet bei „kein eigenes Repository" nur noch mit dem Marker
+  `no_git_repository` (kein Repository vorhanden **oder** nur ein Eltern-Repo), das Panel zeigt
+  „Kein Git-Repository angelegt." in allen sechs Sprachen.
+
+### Beim Live-Test gefunden (eigener Fehler)
+Die erste Fassung prüfte `error.contains("not a git repository")` — auf diesem Rechner meldet
+git **deutsch** („Schwerwiegend: Kein Git-Repository (oder irgendein Elternverzeichnis …)"),
+die Prüfung griff nicht und das Panel zeigte die rohe git-Ausgabe. Jetzt entscheidet der
+**Exit-Status** von `git rev-parse --show-toplevel`, nie der Text. Dafür wurde `run_git` in
+`run_git_output` (liefert `Output`, auch bei Exit ≠ 0) und `run_git` (Fehler bei Exit ≠ 0)
+getrennt. Nebenbei: die Timeout-Meldung in `run_git` hatte wieder eingesogene Einrückung
+(Lehre aus §89) — korrigiert; der nur im Test benutzte `std::process::Command`-Import wanderte
+in das Testmodul, damit der Build ohne Warnung bleibt.
+
+### Geprüft
+`cargo test --lib` **74 passed / 14 ignored** (neu: `the_repository_root_must_be_the_workspace_itself`;
+der alte Text-Test entfiel mit der Meldung). `pnpm build` grün, i18n-Check über sechs Kataloge.
+
+Live (isolierte Daten unter `/tmp/dside-t91`, Workspace `/tmp/dside-t91/ws` bzw. Kindordner
+eines echten Eltern-Repos):
+- Toolbar trägt sechs Icon-Knöpfe in der Reihenfolge Browser, Datei, Terminal, Panel-Menü,
+  Roboter, Arbeitsbereich — alle `width="18"`, linker Schalter ebenfalls 18.
+- Menü öffnet unter dem Grid-Knopf, drei Einträge 28 × 28, **ohne Text**, Titel „Git", „Logs",
+  „Änderungen"; nach dem Öffnen von Git verschwindet der Eintrag, Escape schließt das Menü.
+- Tab-Leiste zeigt nur noch „Git ×"; kein Werkzeug-Knopf mehr, der herausfallen kann.
+- Ordner ohne Repository: Backend `no_git_repository`, Panel „Kein Git-Repository angelegt."
+- Kindordner im Eltern-Repo: **4 ms**, derselbe Satz, Neustart mit aktivem Git-Tab zeichnet
+  normal (kein schwarzes Fenster).
+- Screenshots `/tmp/dside-t91/spec.png` (ganzer Schirm), `app.png`, `toolbar-zoom.png`.
+
+Offen: nichts aus dieser Runde. Kein Push, kein Tag, kein Build — der Nutzer meldet weiter.

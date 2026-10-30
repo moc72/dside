@@ -509,7 +509,7 @@ export const en: Messages = {
     noSelection: "Select a file to see its diff.",
     stage: "Stage",
     unstage: "Unstage",
-    noRepo: "No Git repository in this workspace.",
+    noRepo: "No Git repository yet.",
     loading: "Loading Git status …",
     loadingDiff: "Loading diff …",
   },

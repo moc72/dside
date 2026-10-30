@@ -1,6 +1,5 @@
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
 use serde::Serialize;
 
@@ -34,8 +33,12 @@ pub struct GitStatus {
 const GIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(25);
 
 /// Runs git asynchronously, off the worker that answers the webview. `kill_on_drop` plus the
-/// timeout means a hung command is terminated rather than left behind.
-async fn run_git(workspace: &str, args: &[&str]) -> Result<Vec<u8>, String> {
+/// timeout means a hung command is terminated rather than left behind. Returns the raw output,
+/// including a non-zero exit, so callers can treat a plain "no" differently from a failure.
+async fn run_git_output(
+    workspace: &str,
+    args: &[&str],
+) -> Result<std::process::Output, String> {
     if !Path::new(workspace).is_dir() {
         return Err(format!("Arbeitsverzeichnis nicht gefunden: {workspace}"));
     }
@@ -58,16 +61,19 @@ async fn run_git(workspace: &str, args: &[&str]) -> Result<Vec<u8>, String> {
         command.creation_flags(0x0800_0000);
     }
 
-    let output = match tokio::time::timeout(GIT_TIMEOUT, command.output()).await {
-        Ok(Ok(output)) => output,
-        Ok(Err(error)) => return Err(format!("git konnte nicht gestartet werden: {error}")),
-        Err(_) => {
-            return Err(format!(
-                "git hat nach {} s nicht geantwortet — abgebrochen. Ein großes Repository, ein                  Netzwerkpfad oder eine Sperre kann die Ursache sein.",
-                GIT_TIMEOUT.as_secs()
-            ))
-        }
-    };
+    match tokio::time::timeout(GIT_TIMEOUT, command.output()).await {
+        Ok(Ok(output)) => Ok(output),
+        Ok(Err(error)) => Err(format!("git konnte nicht gestartet werden: {error}")),
+        Err(_) => Err(format!(
+            "git hat nach {} s nicht geantwortet — abgebrochen. Ein großes Repository, ein \
+             Netzwerkpfad oder eine Sperre kann die Ursache sein.",
+            GIT_TIMEOUT.as_secs()
+        )),
+    }
+}
+
+async fn run_git(workspace: &str, args: &[&str]) -> Result<Vec<u8>, String> {
+    let output = run_git_output(workspace, args).await?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -143,13 +149,24 @@ fn parse_status(bytes: &[u8]) -> Vec<GitEntry> {
 /// them costs minutes on a real disk. The count is still reported so nothing is hidden.
 const MAX_ENTRIES: usize = 2000;
 
+/// The one answer the panel gives when this project has no repository of its own — whether git
+/// found none at all or only a parent's. Which parent it was belongs in a bug report, not in a
+/// panel; the front end turns this marker into a translated sentence.
+const NO_REPOSITORY: &str = "no_git_repository";
+
 /// Where git thinks the repository is, following parents. This is the check that keeps the
 /// panel honest: a project directory without its own `.git` is often inside a larger repository
 /// (a folder of projects, a dotfiles repo). `git status` there reports that whole repository —
 /// on this machine one click produced 120 366 untracked entries and froze the window.
 async fn repository_root(workspace: &str) -> Result<String, String> {
-    let bytes = run_git(workspace, &["--no-pager", "rev-parse", "--show-toplevel"]).await?;
-    Ok(String::from_utf8_lossy(&bytes).trim().to_string())
+    let output =
+        run_git_output(workspace, &["--no-pager", "rev-parse", "--show-toplevel"]).await?;
+    // git writes this in the user's language, so the message is not the signal — the exit
+    // status is. A rev-parse that names no top level has none for this folder.
+    if !output.status.success() {
+        return Err(NO_REPOSITORY.to_string());
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
 /// Cuts the list to what a panel can show and keeps the real count. Returned separately from
@@ -178,10 +195,7 @@ fn same_directory(a: &str, b: &str) -> bool {
 pub async fn git_panel_status(workspace: String) -> Result<GitStatus, String> {
     let root = repository_root(&workspace).await?;
     if !same_directory(&root, &workspace) {
-        return Err(format!(
-            "Kein eigenes Repository in {workspace}. Der Ordner liegt im Repository {root} — dessen \
-             Änderungen gehören nicht zu diesem Projekt, deshalb listet das Panel sie nicht auf."
-        ));
+        return Err(NO_REPOSITORY.to_string());
     }
 
     // `--untracked-files=normal` collapses an untracked directory to one row. `all` would
@@ -354,6 +368,7 @@ pub async fn git_panel_pull(workspace: String) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::process::Command;
 
     #[test]
     fn parses_staged_unstaged_untracked_renamed_and_conflicted() {
@@ -415,16 +430,17 @@ mod tests {
         assert!(kept.is_empty() && total == 0 && !truncated);
     }
 
-    /// A project folder inside a bigger repository is the freeze case; the message must name
-    /// both sides so the user can tell which repository git found.
+    /// The guard that keeps the panel from listing a parent's tree: only the folder git names as
+    /// the top level counts as this project's repository. Trailing separators are the same folder.
     #[test]
-    fn the_foreign_repository_message_names_both_paths() {
-        let text = format!(
-            "Kein eigenes Repository in {}. Der Ordner liegt im Repository {} — dessen \
-             Änderungen gehören nicht zu diesem Projekt, deshalb listet das Panel sie nicht auf.",
-            "/p/myproject", "/p"
-        );
-        assert!(text.contains("/p/myproject") && text.contains("Repository /p"));
+    fn the_repository_root_must_be_the_workspace_itself() {
+        let base = std::env::temp_dir();
+        let text = base.to_string_lossy().to_string();
+        assert!(same_directory(&text, &format!("{text}/")));
+        assert!(!same_directory(
+            &text,
+            &base.join("project").to_string_lossy()
+        ));
     }
 
     /// The bug that froze the app: a project without its own `.git` inside a larger repository
@@ -452,7 +468,7 @@ mod tests {
             ),
             Err(error) => error,
         };
-        assert!(error.contains("Kein eigenes Repository"), "{error}");
+        assert_eq!(error, NO_REPOSITORY);
 
         // Once the project has its own repository, the panel works on it.
         let status = Command::new("git")

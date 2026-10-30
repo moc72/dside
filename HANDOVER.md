@@ -125,14 +125,19 @@ connection test.
 
 - `git_panel_status` refuses a folder whose repository root is somewhere else (a project
   without its own `.git` inside a folder of projects). That case produced 120 366 untracked
-  entries and froze the window; the panel names both paths instead.
+  entries and froze the window. The refusal and a folder without any repository both answer
+  `no_git_repository`, which the panel shows as one calm line ("Kein Git-Repository
+  angelegt.") — the parent path belongs in a bug report, not in the panel. The signal is the
+  exit status of `rev-parse`, never its text: git localizes its messages.
 - Untracked entries are collapsed (`--untracked-files=normal`) and the list is capped at
   `MAX_ENTRIES` (2000) with `total`/`truncated` reported, so a huge repository cannot flood the
   DOM.
 - Every git call goes through `run_git`, which is async with a 25 s timeout and `kill_on_drop`.
   Untracked diffs larger than 2 MB are refused by size instead of read whole.
-- The work-area tab bar keeps its tabs and one "open another panel" dropdown (terminal, git,
-  logs, changes); following the companion is the robot icon (`robot` / `robot-off`).
+- The work-area tab bar holds only tabs. "Open another panel" (git, logs, changes; terminal
+  keeps its own icon) and the robot that follows the companion sit in the title-bar toolbar,
+  between the terminal icon and the work-area toggle — that row never scrolls out of view.
+  The menu entries are icon-only with the label on hover, like the rest of the bar.
 
 ## Features worth knowing
 

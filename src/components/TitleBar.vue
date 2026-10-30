@@ -25,7 +25,7 @@ async function pick(id: string): Promise<void> {
   <header class="titlebar">
     <div class="side left">
       <button class="ghost" type="button" :title="t('nav.collapseSidebar')" @click="toggleRail">
-        <Icon name="panel-left" />
+        <Icon name="panel-left" :size="18" />
       </button>
     </div>
 

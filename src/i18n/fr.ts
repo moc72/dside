@@ -508,7 +508,7 @@ export const fr: Messages = {
     noSelection: "Sélectionnez un fichier pour voir le diff.",
     stage: "Indexer",
     unstage: "Désindexer",
-    noRepo: "Aucun dépôt Git dans cet espace de travail.",
+    noRepo: "Aucun dépôt Git n'a encore été créé.",
     loading: "Chargement de l'état Git…",
     loadingDiff: "Chargement du diff…",
   },
