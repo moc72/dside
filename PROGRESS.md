@@ -4080,3 +4080,17 @@ Gemessen: `inline: "195px"`, `rendered: 195`, CSS allein: 42.
 Der Workflow hatte den Tag `v0.5.6` bereits gebaut (Draft, 7 Assets) — dieser Stand enthält
 den Fehler. Da nichts veröffentlicht war, wurde der Draft samt Tag gelöscht und derselbe Tag
 auf den Fix-Commit gesetzt; der Lauf startet neu. Kein Release ging mit dem Fehler hinaus.
+
+### Ergebnis von §96/§97
+- `main` steht auf GitHub und am internen Origin (Commits bis `02a059e`, `Cargo.lock` nachgezogen).
+- Tag **v0.5.6** auf `e90ac99` (den Composer-Fix), Workflow `41131135139`: verify, build auf
+  Ubuntu 22.04, macOS und Windows alle grün, `attach` grün — **7 Assets** (deb, rpm, AppImage,
+  dmg, NSIS-Setup, je ein tar.gz/zip).
+- Release **v0.5.6 ist veröffentlicht**, nicht Draft, und als **Latest** markiert;
+  Notizen aus `/tmp/dside-release-notes-0.5.6.md` (3 412 Zeichen) sind drin.
+- Die sechs Draft-Releases v0.5.0–v0.5.5 sind **gelöscht** (42 Assets). Die **Tags bleiben** —
+  so wie dieses Repo es schon mit v0.4.12 gemacht hat: der Tag ist der historische Zeiger,
+  das Draft-Release war der Müll. Reibungslos rückgängig zu machen, falls der Nutzer es anders
+  will.
+
+Damit ist die 0.5-Linie draußen: letzter veröffentlichter Stand vorher v0.4.13.
