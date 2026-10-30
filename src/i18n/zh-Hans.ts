@@ -146,6 +146,7 @@ export const zhHans: Messages = {
     tabSchedules: "计划",
     tabTerminal: "终端",
     tabGit: "Git",
+    openPanel: "打开其他面板",
     tabLogs: "日志",
     tabChanges: "更改",
 
@@ -488,6 +489,8 @@ export const zhHans: Messages = {
     pullHint: "从远程获取更改（仅快进）。",
     pullDone: "拉取完成。",
     refresh: "刷新",
+    truncated: "仅显示 {shown}/{total} 条——仓库对此外面板来说过大。",
+    noRepository: "此文件夹没有自己的仓库。",
     stageAll: "全部暂存",
     staged: "已暂存",
     unstaged: "未暂存",

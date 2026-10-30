@@ -146,6 +146,7 @@ export const fr: Messages = {
     tabSchedules: "Planifié",
     tabTerminal: "Terminal",
     tabGit: "Git",
+    openPanel: "Ouvrir un autre panneau",
     tabLogs: "Logs",
     tabChanges: "Modifications",
 
@@ -492,6 +493,8 @@ export const fr: Messages = {
     pullHint: "Récupérer depuis le dépôt distant (avance rapide uniquement).",
     pullDone: "Pull terminé.",
     refresh: "Actualiser",
+    truncated: "{shown} entrées sur {total} affichées — le dépôt est trop volumineux pour ce panneau.",
+    noRepository: "Ce dossier n'a pas de dépôt propre.",
     stageAll: "Tout indexer",
     staged: "Indexé",
     unstaged: "Non indexé",

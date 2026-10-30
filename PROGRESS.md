@@ -3694,3 +3694,57 @@ Lehre für mich: mehrzeilige Rust-Strings nicht durch ein Python-Skript schreibe
 `cargo test --lib` **72 passed / 13 ignored** (zwei neue), `pnpm build` grün
 (497 Schlüssel). Zwei echte Verifier-Läufe mit Kommando, beide FAIL, beide aus
 nachvollziehbaren Gründen; die Dialoganzeige im laufenden Fenster kontrolliert.
+
+## 90. Der Git-Knopf fror die App ein (2026-10-30, neunundsechzigste Runde)
+
+Gemeldet: Klick auf Git bei einem Projekt ohne eigenes Repository → Freeze, nach
+9 Minuten erscheint eine Liste „nicht für dieses Projekt, sondern alle", Lüfter
+dreht, nach 20 Minuten noch eingefroren; danach blieb das Fenster nach dem Neustart
+schwarz.
+
+### Ursache, gemessen statt vermutet
+`/home/me/Projects` **ist selbst ein Git-Repository**. Ein Projekt darunter hat kein
+eigenes `.git`, also läuft `git rev-parse --show-toplevel` nach oben und `git status`
+meldet den **ganzen** Baum. Mit `--untracked-files=all` sind das auf dieser Maschine
+**120 366 Einträge**. Gemessen im Fork-Verzeichnis: 120 366 mit `all`, **26** mit
+`normal` — der Unterschied zwischen „alle Dateien jedes Nachbarprojekts" und „ein
+Eintrag pro Ordner".
+
+Drei Verstärker kamen dazu: `run_git` lief **synchron** in der Tauri-Command und hatte
+**keinen Timeout**; die Liste ging **ungekürzt** ins Webview (120 000 Zeilen im DOM
+legen den Renderer lahm); und weil der Git-Tab beim Start wiederhergestellt wird, lief
+derselbe Aufruf beim Mounten erneut — daher das **schwarze Fenster** nach dem Neustart.
+
+### Änderungen
+- **Fremdes Repository wird abgelehnt.** `repository_root` fragt `--show-toplevel`; ist
+  das nicht der Workspace, kommt eine Meldung mit beiden Pfaden und das Panel listet
+  nichts. „Änderungen des Nachbarprojekts" sind kein Status dieses Projekts.
+- **`--untracked-files=normal`** statt `all`: ein unbekannter Ordner ist eine Zeile.
+- **Deckel bei 2000 Einträgen** (`MAX_ENTRIES`), `GitStatus` trägt `total` und
+  `truncated`; das Panel sagt „Nur X von Y Einträgen werden gezeigt" (sechs Sprachen).
+- **`run_git` ist async und hat einen Timeout von 25 s.** Alle Git-Commands sind
+  `async`; ein hängendes Repo (Netzwerkpfad, Sperre, riesiger Pack) endet in einer
+  Meldung statt in einem drehenden Lüfter. `kill_on_drop` beendet den Prozess.
+- **Diff-Größenlimit** für untracked Dateien (2 MB): vorher wurde eine mehrere GB große
+  Datei ganz gelesen und erst danach gekürzt.
+- Oberfläche: die vier kleinen Icons (Terminal, Git, Logs, Änderungen) sind jetzt **ein
+  Dropdown** direkt vor dem Panel-Schalter; das Augen-Symbol für „dem Begleiter folgen"
+  ist ein **Roboter** (`robot` / `robot-off` mit leerem Gesicht statt durchgestrichener
+  Augen), weil ein Auge nach „ansehen" klingt und nicht nach „folgen".
+
+### Geprüft
+`cargo test --lib` **73 passed / 14 ignored** (neu: `a_huge_list_is_cut_and_counted`;
+der bisher ignorierte Live-Test `a_foreign_repository_is_refused` deckt den Fall
+Eltern-Repo → Kindordner ab, und `live_git_panel_round_trip` läuft mit den async
+Commands weiter). `pnpm build` grün, i18n 500 Schlüssel.
+
+Live in der Testumgebung, Workspace absichtlich in einem Eltern-Repo:
+- `git_panel_status` für den Kindordner: **4 ms**, Fehlertext „Kein eigenes Repository
+  in … Der Ordner liegt im Repository …". Vorher wären es Minuten.
+- Git-Tab über das neue Dropdown geöffnet: Meldung im Panel, App bedienbar.
+- Neustart mit aktivem Git-Tab auf dem Fremd-Repo: Fenster zeichnet normal, Panel zeigt
+  die Meldung — **kein schwarzes Fenster** mehr.
+- Roboter-Icon in beiden Zuständen (Screenshots `/tmp/dside-dropdown.png`,
+  `/tmp/robot-zoom.png`, `/tmp/robot-off-zoom2.png`).
+
+Kein Commit, kein Push, kein Tag — der Nutzer baut weiter.

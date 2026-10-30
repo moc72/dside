@@ -17,6 +17,10 @@ interface GitStatus {
   branch: string;
   head: string;
   entries: GitEntry[];
+  /** How many entries git reported before the cap. */
+  total: number;
+  /** True when the list was cut — a repository this large is not a panel. */
+  truncated: boolean;
 }
 
 interface DiffLine {
@@ -302,6 +306,9 @@ onMounted(() => {
       </p>
       <p v-if="notice" class="git-message notice">{{ notice }}</p>
 
+      <p v-if="status.truncated" class="git-empty warn">
+        {{ t("git.truncated", { shown: status.entries.length, total: status.total }) }}
+      </p>
       <p v-if="status.entries.length === 0" class="git-empty">{{ t("git.clean") }}</p>
 
       <div v-else class="git-body">

@@ -147,6 +147,7 @@ export const ru: Messages = {
     tabSchedules: "Запланировано",
     tabTerminal: "Терминал",
     tabGit: "Git",
+    openPanel: "Открыть другую панель",
     tabLogs: "Логи",
     tabChanges: "Изменения",
 
@@ -489,6 +490,8 @@ export const ru: Messages = {
     pullHint: "Получить изменения с удалённого репозитория (только fast-forward).",
     pullDone: "Pull выполнен.",
     refresh: "Обновить",
+    truncated: "Показано {shown} из {total} записей — репозиторий слишком велик для этой панели.",
+    noRepository: "В этой папке нет собственного репозитория.",
     stageAll: "Проиндексировать всё",
     staged: "Проиндексировано",
     unstaged: "Не проиндексировано",

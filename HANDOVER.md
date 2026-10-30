@@ -121,6 +121,19 @@ connection test.
 - Project rules: `AGENTS.md` or `.dside/rules.md` in the workspace; loaded into the system
   prompt for the partner and its sub-agents.
 
+## Git panel and long lists
+
+- `git_panel_status` refuses a folder whose repository root is somewhere else (a project
+  without its own `.git` inside a folder of projects). That case produced 120 366 untracked
+  entries and froze the window; the panel names both paths instead.
+- Untracked entries are collapsed (`--untracked-files=normal`) and the list is capped at
+  `MAX_ENTRIES` (2000) with `total`/`truncated` reported, so a huge repository cannot flood the
+  DOM.
+- Every git call goes through `run_git`, which is async with a 25 s timeout and `kill_on_drop`.
+  Untracked diffs larger than 2 MB are refused by size instead of read whole.
+- The work-area tab bar keeps its tabs and one "open another panel" dropdown (terminal, git,
+  logs, changes); following the companion is the robot icon (`robot` / `robot-off`).
+
 ## Features worth knowing
 
 - **Verifier with a command:** `verify` takes an optional `command`. The caller names it, the

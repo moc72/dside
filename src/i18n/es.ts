@@ -147,6 +147,7 @@ export const es: Messages = {
     tabSchedules: "Programado",
     tabTerminal: "Terminal",
     tabGit: "Git",
+    openPanel: "Abrir otro panel",
     tabLogs: "Logs",
     tabChanges: "Cambios",
 
@@ -490,6 +491,8 @@ export const es: Messages = {
     pullHint: "Traer cambios del remoto (solo fast-forward).",
     pullDone: "Pull completado.",
     refresh: "Actualizar",
+    truncated: "Se muestran {shown} de {total} entradas: el repositorio es demasiado grande para este panel.",
+    noRepository: "Esta carpeta no tiene su propio repositorio.",
     stageAll: "Preparar todo",
     staged: "Preparado",
     unstaged: "Sin preparar",

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, watch } from "vue";
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import Icon from "../Icon.vue";
 import { t } from "../../i18n";
 import type { WorkAreaTabKind } from "../../types";
@@ -38,9 +38,34 @@ const labels: Record<
 };
 
 const hasTerminal = computed(() => tabs.value.some((tab) => tab.kind === "terminal"));
-const hasGit = computed(() => tabs.value.some((tab) => tab.kind === "git"));
-const hasLogs = computed(() => tabs.value.some((tab) => tab.kind === "logs"));
-const hasChanges = computed(() => tabs.value.some((tab) => tab.kind === "changes"));
+
+/**
+ * The panels that are not open yet, offered behind one button instead of four loose icons.
+ * Their icons are recognisable, but four of them sat between the tabs and the panel toggle
+ * and read as tabs of their own. One button with a list keeps the bar calm and still reachable.
+ */
+const toolMenuOpen = ref(false);
+
+const closedTools = computed(() =>
+  [
+    { kind: "terminal", label: "workArea.tabTerminal", icon: "terminal" },
+    { kind: "git", label: "workArea.tabGit", icon: "git" },
+    { kind: "logs", label: "workArea.tabLogs", icon: "activity" },
+    { kind: "changes", label: "workArea.tabChanges", icon: "diff" },
+  ].filter((tool) => !tabs.value.some((tab) => tab.kind === tool.kind)),
+);
+
+function openTool(kind: string): void {
+  toolMenuOpen.value = false;
+  openTab(kind as never);
+}
+
+function onToolMenuKey(event: KeyboardEvent): void {
+  if (event.key === "Escape") toolMenuOpen.value = false;
+}
+
+onMounted(() => window.addEventListener("keydown", onToolMenuKey));
+onBeforeUnmount(() => window.removeEventListener("keydown", onToolMenuKey));
 
 /** Everyday mode keeps the plan, skill and schedule panels out of the way. */
 const shownTabs = computed(() =>
@@ -85,44 +110,35 @@ watch(
         </span>
       </button>
 
-      <button
-        v-if="!hasTerminal"
-        class="open-tool"
-        type="button"
-        :title="t('workArea.tabTerminal')"
-        @click="openTab('terminal')"
-      >
-        <Icon name="terminal" :size="13" />
-      </button>
-      <button
-        v-if="!hasGit"
-        class="open-tool"
-        type="button"
-        :title="t('workArea.tabGit')"
-        @click="openTab('git')"
-      >
-        <Icon name="git" :size="13" />
-      </button>
-      <button
-        v-if="!hasLogs"
-        class="open-tool"
-        type="button"
-        :title="t('workArea.tabLogs')"
-        @click="openTab('logs')"
-      >
-        <Icon name="activity" :size="13" />
-      </button>
-      <button
-        v-if="!hasChanges"
-        class="open-tool"
-        type="button"
-        :title="t('workArea.tabChanges')"
-        @click="openTab('changes')"
-      >
-        <Icon name="diff" :size="13" />
-      </button>
-
       <span class="spacer"></span>
+
+      <!-- One button for "open another panel", directly before the panel toggle. -->
+      <div v-if="closedTools.length" class="tool-menu">
+        <button
+          class="open-tool"
+          type="button"
+          :title="t('workArea.openPanel')"
+          :aria-label="t('workArea.openPanel')"
+          :aria-expanded="toolMenuOpen"
+          @click="toolMenuOpen = !toolMenuOpen"
+        >
+          <Icon name="grid" :size="13" />
+        </button>
+
+        <div v-if="toolMenuOpen" class="backdrop" @click="toolMenuOpen = false"></div>
+        <div v-if="toolMenuOpen" class="tool-list">
+          <button
+            v-for="tool in closedTools"
+            :key="tool.kind"
+            class="tool-item"
+            type="button"
+            @click="openTool(tool.kind)"
+          >
+            <Icon :name="tool.icon" :size="13" />
+            <span>{{ t(tool.label as never) }}</span>
+          </button>
+        </div>
+      </div>
 
       <button
         class="follow"
@@ -132,7 +148,7 @@ watch(
         :aria-pressed="settings.followCompanion"
         @click="settings.followCompanion = !settings.followCompanion"
       >
-        <Icon :name="settings.followCompanion ? 'eye' : 'eye-off'" :size="13" />
+        <Icon :name="settings.followCompanion ? 'robot' : 'robot-off'" :size="14" />
       </button>
     </div>
 
@@ -252,6 +268,50 @@ watch(
 
 .follow.on {
   color: var(--accent);
+}
+
+.tool-menu {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.tool-menu .backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+}
+
+.tool-list {
+  position: absolute;
+  top: 28px;
+  right: 0;
+  z-index: 21;
+  min-width: 150px;
+  padding: 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  box-shadow: 0 14px 40px rgb(0 0 0 / 45%);
+}
+
+.tool-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 9px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+}
+
+.tool-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-strong);
 }
 
 .open-tool {

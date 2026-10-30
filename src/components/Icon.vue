@@ -84,6 +84,28 @@ const shapes: Record<string, string[]> = {
   shield: ["M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"],
   expand: ["M9 4H4v5", "M15 20h5v-5", "M4 4l6 6", "M20 20l-6-6"],
   "sidebar-toggle": ["M4 5h16v14H4z", "M9 5v14", "M13 10l3 2-3 2"],
+  /* A robot for "watch what the companion does": a round head, an antenna, two dot eyes and a
+     short mouth. Dots instead of slots, because at 13 px a slot reads as a stripe. */
+  robot: [
+    "M12 4.2v2.6",
+    "M12 2.6a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4",
+    "M8 6.8h8a3 3 0 0 1 3 3v6.4a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V9.8a3 3 0 0 1 3-3z",
+    "M5 11.2v3.6",
+    "M19 11.2v3.6",
+    "M9.4 11.6h.01",
+    "M14.6 11.6h.01",
+    "M9.8 15.4h4.4",
+  ],
+  /* Following is off: the same robot with a blank face and a slash. Dropping the eyes rather
+     than drawing the slash across them keeps it readable at 14 px. */
+  "robot-off": [
+    "M12 4.2v2.6",
+    "M12 2.6a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4",
+    "M8 6.8h8a3 3 0 0 1 3 3v6.4a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V9.8a3 3 0 0 1 3-3z",
+    "M5 11.2v3.6",
+    "M19 11.2v3.6",
+    "M3.4 3.4l17.2 17.2",
+  ],
   eye: ["M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z", "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"],
   "eye-off": [
     "M3 3l18 18",

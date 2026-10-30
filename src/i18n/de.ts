@@ -146,6 +146,7 @@ export const de = {
     tabSchedules: "Geplant",
     tabTerminal: "Terminal",
     tabGit: "Git",
+    openPanel: "Weiteres Panel öffnen",
     tabLogs: "Logs",
     tabChanges: "Änderungen",
 
@@ -494,6 +495,8 @@ export const de = {
     pullHint: "Änderungen vom Remote holen (nur Fast-Forward).",
     pullDone: "Pull abgeschlossen.",
     refresh: "Aktualisieren",
+    truncated: "Nur {shown} von {total} Einträgen werden gezeigt — das Repository ist zu groß für dieses Panel.",
+    noRepository: "Kein eigenes Repository in diesem Ordner.",
     stageAll: "Alles stagen",
     staged: "Gestaged",
     unstaged: "Nicht gestaged",

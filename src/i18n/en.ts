@@ -147,6 +147,7 @@ export const en: Messages = {
     tabSchedules: "Scheduled",
     tabTerminal: "Terminal",
     tabGit: "Git",
+    openPanel: "Open another panel",
     tabLogs: "Logs",
     tabChanges: "Changes",
 
@@ -493,6 +494,8 @@ export const en: Messages = {
     pullHint: "Fetch from the remote (fast-forward only).",
     pullDone: "Pull complete.",
     refresh: "Refresh",
+    truncated: "Showing {shown} of {total} entries — the repository is too large for this panel.",
+    noRepository: "This folder has no repository of its own.",
     stageAll: "Stage all",
     staged: "Staged",
     unstaged: "Unstaged",
