@@ -4021,3 +4021,28 @@ Live in der isolierten Instanz (Port 9334):
 
 Offen: nichts aus dieser Runde. Kein Push, kein Tag — der Entwurf der About-Seite wartet
 weiter auf die Freigabe des Nutzers.
+
+## 96. Release 0.5.6 (2026-10-30, fünfundsiebzigste Runde)
+
+Der Nutzer gibt frei: aufräumen, committen, pushen, taggen — und zwar als **veröffentlichtes
+Release**, nicht als Draft.
+
+### Stand vorher
+Sechs Draft-Releases lagen auf GitHub (v0.5.0 bis v0.5.5, je sieben Assets), letzter
+veröffentlichter Stand war **v0.4.13**. Die Commits der 0.5-Linie waren nie draußen — 33
+Commits seit v0.4.13.
+
+### Was diese Runde tut
+- Version **0.5.6** in allen drei Manifesten (`scripts/set-version.mjs`), passend zum Tag, den
+  der Workflow prüft.
+- Release-Notizen, die die ganze 0.5-Linie zusammenfassen (Vertrauen/Verifier, Fenster und
+  Git-Freeze, Werkzeugleiste, Leseposition, Entwürfe, Wal, About) — für jemanden, der von
+  0.4.13 kommt.
+- `main` nach GitHub, Tag `v0.5.6` → der Workflow prüft und baut auf drei Plattformen. Er legt
+  selbst einen **Draft** an; veröffentlicht wird er erst, wenn der Lauf fertig ist — sonst
+  könnte der `attach`-Job (der mit `draft: true` hochlädt) das Release wieder zurückstellen.
+- Danach: Draft als Release setzen (Latest), die sechs alten Drafts und ihre Tags löschen.
+
+### Geprüft
+`pnpm build` grün, `cargo test --lib` 74 / 14 ignoriert. Manifeste und Tag stimmen überein
+(`node scripts/set-version.mjs` ohne Argument: 0.5.6 in allen drei).
