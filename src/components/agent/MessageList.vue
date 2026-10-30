@@ -164,7 +164,13 @@ onBeforeUnmount(() => {
       <div class="resume-body">{{ resume.summary }}</div>
     </details>
 
-    <div v-for="message in messages" :key="message.id" class="row" :class="message.role">
+    <div
+      v-for="message in messages"
+      :key="message.id"
+      class="row"
+      :class="message.role"
+      :data-message-id="message.id"
+    >
       <!-- <img v-if="message.role === 'assistant'" class="avatar" src="/whale.png" alt="" />
       <span v-else class="avatar spacer"></span> -->
       <div class="bubble">

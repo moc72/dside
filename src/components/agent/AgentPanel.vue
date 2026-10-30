@@ -69,6 +69,61 @@ function isAtBottom(element: HTMLElement): boolean {
 }
 
 /**
+ * The line the reader is on, kept across width changes. Dragging a divider or the window edge
+ * re-wraps every paragraph, so the same `scrollTop` shows different text: measured here, the
+ * content under the cursor slid by a message while `scrollTop` did not move at all. The webview
+ * does not compensate, so the panel remembers the top row and its distance from the edge.
+ */
+let anchorId: string | null = null;
+let anchorOffset = 0;
+
+/**
+ * The first row whose bottom is still below the top edge. Binary search: a long conversation
+ * has thousands of rows, and this runs on every scroll instead of only on a resize.
+ */
+function topRow(element: HTMLElement): HTMLElement | null {
+  const rows = element.querySelectorAll<HTMLElement>("[data-message-id]");
+  if (rows.length === 0) return null;
+  const top = element.getBoundingClientRect().top;
+  let low = 0;
+  let high = rows.length - 1;
+  let found: HTMLElement | null = null;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    const row = rows[mid];
+    if (row.getBoundingClientRect().bottom > top) {
+      found = row;
+      high = mid - 1;
+    } else {
+      low = mid + 1;
+    }
+  }
+  return found;
+}
+
+function rememberAnchor(): void {
+  const element = scrollEl.value;
+  if (!element) return;
+  const row = topRow(element);
+  if (!row) return;
+  anchorId = row.dataset.messageId ?? null;
+  anchorOffset = row.getBoundingClientRect().top - element.getBoundingClientRect().top;
+}
+
+/** Puts the remembered row back where it was. Runs after a resize, never during a scroll. */
+function restoreAnchor(): void {
+  const element = scrollEl.value;
+  if (!element || !anchorId) return;
+  const row = element.querySelector<HTMLElement>(`[data-message-id="${anchorId}"]`);
+  if (!row) return;
+  const offset = row.getBoundingClientRect().top - element.getBoundingClientRect().top;
+  const delta = offset - anchorOffset;
+  if (Math.abs(delta) < 1) return;
+  // Moving the content up by `delta` is the same as scrolling down by it.
+  scrollBy(delta);
+}
+
+/**
  * Scrolls to the newest line. Deliberately not `requestAnimationFrame`: in this webview (splash
  * included) rAF can go quiet, which is why the list stopped following until it was nudged.
  * `nextTick` runs after Vue has written the DOM, which is exactly the moment we need.
@@ -80,10 +135,31 @@ function queueFollow(): void {
   });
 }
 
+/**
+ * Scroll events we cause ourselves must not be read as "the reader left the bottom" — after a
+ * correction near the end of a thread that would silently turn following off. The position we
+ * left the list at is the only reliable sign, so it is compared on the next event.
+ */
+let selfTop: number | null = null;
+
+function scrollBy(delta: number): void {
+  const element = scrollEl.value;
+  if (!element) return;
+  element.scrollTop += delta;
+  selfTop = element.scrollTop;
+}
+
 function onScroll(): void {
   const element = scrollEl.value;
   if (!element) return;
-  following.value = isAtBottom(element);
+  const ours = selfTop !== null && Math.abs(element.scrollTop - selfTop) <= 1;
+  if (!ours) {
+    following.value = isAtBottom(element);
+    selfTop = null;
+    // A correction is measured against the remembered line; recording the result of an
+    // integer-rounded scroll would let a pixel slip in on every resize and add up.
+    rememberAnchor();
+  }
 }
 
 const loadingOlder = ref(false);
@@ -139,11 +215,16 @@ watch(activeSessionId, () => {
 
 onMounted(() => {
   // Markdown, images and fonts change the height after the message was appended. As long as
-  // the reader is at the bottom, follow that growth too.
+  // the reader is at the bottom, follow that growth too. When they are not, hold their line:
+  // a wider or narrower column re-wraps everything above it.
   const target = (listEl.value?.$el as HTMLElement | undefined) ?? scrollEl.value;
   if (target && typeof ResizeObserver !== "undefined") {
     observer = new ResizeObserver(() => {
-      if (following.value) queueFollow();
+      if (following.value) {
+        queueFollow();
+        return;
+      }
+      restoreAnchor();
     });
     observer.observe(target);
   }

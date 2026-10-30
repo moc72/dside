@@ -3802,3 +3802,53 @@ eines echten Eltern-Repos):
 - Screenshots `/tmp/dside-t91/spec.png` (ganzer Schirm), `app.png`, `toolbar-zoom.png`.
 
 Offen: nichts aus dieser Runde. Kein Push, kein Tag, kein Build — der Nutzer meldet weiter.
+
+## 92. Beim Ziehen der Panelbreite blieb der Text nicht stehen (2026-10-30, einundsiebzigste Runde)
+
+Gemeldet: Beim Resizing springt der Text im Agent-Panel hin und her und bleibt je nach
+Breite des Agent-Panels an einer anderen Stelle im Verlauf stehen.
+
+### Reproduziert und gemessen
+Isolierte Daten, 24 Nachrichten, Fenster 1440 px, Verlauf mitten in der Liste (kein Ende).
+`scrollTop` blieb beim Ziehen **exakt konstant** (1400), während `scrollHeight` zwischen
+**3213 und 3762 px** wechselte: jede Zeile wird beim Verengen neu umbrochen, der Inhalt
+rutscht unter dem Leser weg. Zwei Beobachtungen daraus:
+
+- Von 30 % auf 45 % Arbeitsbereich: die oberste sichtbare Zeile wanderte von *Nachricht 10*
+  auf *Nachricht 8* (Offset −64 → −100 px), obwohl niemand gescrollt hat.
+- Zurück auf 30 % landete es wieder bei 10 — der Sprung ist also an die Breite gebunden,
+  genau wie beschrieben.
+
+Das Webview (WebKitGTK) kompensiert diesen Reflow nicht: es gibt hier keine Scroll-Anchoring-
+Korrektur, und der Code hatte auch keine. `ResizeObserver` folgte nur dann, wenn
+`following` an war (am Ende) — beim Lesen mitten im Verlauf war `following` aus, also
+geschah nichts.
+
+### Änderungen
+- **Echte Leseposition verankern.** `AgentPanel` merkt sich die oberste sichtbare Zeile
+  (`data-message-id`, neu an jeder `.row`) und ihren Abstand zur Oberkante. Ändert sich die
+  Größe, setzt `restoreAnchor` diese Zeile an dieselbe Stelle zurück (`scrollTop += delta`).
+  Am Ende der Liste folgt es weiterhin dem Neuesten (`queueFollow`), nur eben ohne die Zeile
+  des Lesers zu verlieren.
+- **Eigene Korrekturen zählen nicht als „Leser hat weggescrollt".** Ein Resize nahe am Ende
+  hätte sonst über das `scroll`-Event `following` stillschweigend ausgeschaltet. `selfTop`
+  merkt die eigene Zielposition und vergleicht sie beim nächsten Event.
+- **Anker wird nur bei echtem Scrollen neu aufgenommen**, nicht nach jeder eigenen Korrektur:
+  sonst summiert sich die Ganzzahl-Rundung von `scrollTop` (gemessen: 2 px pro Hin-und-Zurück).
+- **Binäre Suche** in `topRow`: läuft bei jedem Scroll-Event, ein Verlauf hat leicht tausend
+  Zeilen; die lineare Suche hätte jedes Mal den ganzen Baum gemessen.
+
+### Geprüft
+`pnpm build` grün (i18n 500 Schlüssel, sechs Kataloge), `cargo test --lib` 74 / 14 ignoriert.
+
+Live in isolierten Daten (`/tmp/dside-t92`, eigener Prozess gegen den Dev-Server):
+- 24 Nachrichten, mitten im Verlauf, Ziehen 30 → 45 → 30 → 20 → 30 %: oberste Zeile bleibt
+  **10** mit Offset −64,5 → −64 → −64,5 (vorher: Zeile 10 → 8, Offset −64 → −100).
+- 300 Nachrichten (80 geladen), Position 6000: Zeile 44 bleibt bei −117,5 → −116,7 → −116,8
+  → −117,5 px, `scrollTop` 6000 → 7018 → 5725 → 6000.
+- Nutzer scrollt nach oben: Jump-Knopf erscheint; Breite ändern hält die Zeile; Klick auf den
+  Knopf springt ans Ende, Knopf verschwindet.
+- Neue Nachricht im Store angehängt (Following am Ende): `atBottom` bleibt 0.
+- „Ältere Nachrichten laden": dieselbe Nachricht (m266) bleibt bei −148,8 px, 80 → 160 Zeilen.
+
+Offen: nichts aus dieser Runde. Kein Push, kein Tag, kein Build.
