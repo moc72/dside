@@ -1321,7 +1321,9 @@ impl Db {
         Ok(())
     }
 
-    /// Switching a one-shot off after it ran, so a reminder cannot become a loop.
+    /// Switching a one-shot off after it ran, so a reminder cannot become a loop. It is called
+    /// *before* the turn runs: a crash in between loses the reminder instead of duplicating it,
+    /// which is the trade-off a "check the CI" note wants.
     pub fn disable_schedule(&self, id: i64) -> Result<(), String> {
         let conn = self.lock()?;
         conn.execute("UPDATE schedules SET enabled = 0 WHERE id = ?1", params![id])

@@ -123,6 +123,12 @@ connection test.
 
 ## Features worth knowing
 
+- **Verifier with a command:** `verify` takes an optional `command`. The caller names it, the
+  engine runs it through `tools::run_shell_command` — the same function, allowlist and timeout as
+  `bash` — and the transcript becomes evidence the reader may judge. Permissions match `bash`:
+  refused in Plan mode, approved through the normal dialog in Ask mode (command first, claim
+  below), immediate in full access. Without approval nothing is checked and the model is told
+  not to report the claim as verified.
 - **Verifier:** `verify` hands a claim to a second reader with a read-only allowlist (read,
   glob, grep, logs, settings, recall, web_fetch, browser_read, browser_windows, preview, skill).
   It answers in `Check / Method / Evidence / Result` blocks and ends with `VERDICT: PASS` or

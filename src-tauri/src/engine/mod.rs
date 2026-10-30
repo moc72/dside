@@ -669,8 +669,10 @@ pub async fn run_due_schedules(app: &AppHandle) {
     };
 
     for schedule in due {
-        // A reminder is a promise to look once. Disable it before running, so a one-shot can
-        // never fire twice even if the turn it starts fails.
+        // At-most-once, on purpose. A one-shot is disabled *before* its turn runs, so a crash
+        // in between loses the reminder rather than firing it twice. For the job this exists
+        // for — "check whether the CI passed" — a missing reminder is the cheaper mistake than
+        // a duplicate one, and the timestamp keeps it visible that it was due.
         if schedule.one_shot {
             let _ = db.stamp_schedule_run(schedule.id);
             let _ = db.disable_schedule(schedule.id);
@@ -1050,6 +1052,16 @@ fn permission_summary(name: &str, args: &Value) -> String {
         "bash" => format!("bash: {}", text("command")),
         "screenshot" => "screenshot: capture the current screen".to_string(),
         "browser_click" => format!("browser_click: {}", text("selector")),
+        // A command behind a verification is the thing being approved, so it leads; the claim
+        // follows because it says what the output is meant to settle.
+        "verify" => {
+            let command = text("command");
+            if command.is_empty() {
+                format!("verify: {}", text("claim"))
+            } else {
+                format!("verify: {command}\n\nPrüft: {}", text("claim"))
+            }
+        }
         _ => format!("{name}: {}", args),
     };
     if summary.chars().count() > 2000 {
@@ -1452,13 +1464,15 @@ fn schedule_tool(app: &AppHandle, session_id: &str, args: &Value) -> tools::Tool
                 .filter(|value| !value.is_empty());
             let Some(prompt) = prompt else {
                 return tools::ToolOutcome::err(
-                    "schedule: 'prompt' is required — write it as an instruction to your future                      self, complete enough to act on without this conversation",
+                    "schedule: 'prompt' is required — write it as an instruction to your future self, \
+                     complete enough to act on without this conversation",
                 );
             };
             match db.companion_reminder_count(session_id) {
                 Ok(count) if count >= MAX_ACTIVE => {
                     return tools::ToolOutcome::err(format!(
-                        "schedule: {count} of your reminders are already active in this session.                          Cancel one you no longer need before adding another."
+                        "schedule: {count} of your own reminders are already active in this session. \
+                         Cancel one you no longer need before adding another."
                     ))
                 }
                 Ok(_) => {}
@@ -1480,13 +1494,19 @@ fn schedule_tool(app: &AppHandle, session_id: &str, args: &Value) -> tools::Tool
                     } else {
                         format!("{delay} s")
                     };
+                    // At-most-once on purpose: a one-shot disables itself *before* its turn runs,
+                    // so a crash in between loses the reminder instead of firing it twice. For a
+                    // "check the CI" note a missing reminder is the cheaper mistake.
                     tools::ToolOutcome::ok(match repeat {
                         Some(interval) => format!(
-                            "Reminder #{id} set: every {} min, first in {when}. The app must be                              running for it to fire.",
+                            "Reminder #{id} set: every {} min, first in {when}. It fires once per \
+                             interval and the app has to be running.",
                             interval / 60
                         ),
                         None => format!(
-                            "Reminder #{id} set for {when} from now, once. The app must be                              running for it to fire."
+                            "Reminder #{id} set for {when} from now, once. It fires once and the \
+                             app has to be running; if DS·IDE is closed at that moment, the \
+                             reminder is gone rather than fired late."
                         ),
                     })
                 }
@@ -1763,10 +1783,12 @@ fn record_file_snapshot(
 /// through the parent's UI), and a hard inner turn cap.
 #[cfg(test)]
 pub async fn task_tool(config: &EngineConfig, args: &Value) -> tools::ToolOutcome {
-    task_tool_with_snapshots(None, "", None, config, args, false).await
+    task_tool_with_snapshots(None, "", None, config, args, false, None).await
 }
 
 /// The implementation. `app` is `None` in tests, where there is no database to write to.
+/// `evidence` is a command transcript the caller had run for a verifier — see the `verify`
+/// branch of the dispatch.
 async fn task_tool_with_snapshots(
     app: Option<&AppHandle>,
     session_id: &str,
@@ -1774,6 +1796,7 @@ async fn task_tool_with_snapshots(
     config: &EngineConfig,
     args: &Value,
     verifier: bool,
+    evidence: Option<String>,
 ) -> tools::ToolOutcome {
     const MAX_INNER_TURNS: u32 = 8;
     const MAX_ANSWER_CHARS: usize = 20_000;
@@ -1853,7 +1876,21 @@ async fn task_tool_with_snapshots(
     let mut messages = vec![
         ChatMessage::system(sub_system),
         ChatMessage::user(if verifier {
-            format!("## What to verify\n\n{prompt}\n\nThe workspace is {workspace}. Check the claims above against it.")
+            // A command the caller named was already run and its transcript is attached. The
+            // reader did not run it and must not pretend it did — but it is real output, which
+            // is what "the tests are green" needs in order to be checkable at all.
+            let mut message = format!(
+                "## What to verify\n\n{prompt}\n\nThe workspace is {workspace}. Check the claims above against it."
+            );
+            if let Some(evidence) = evidence.as_deref() {
+                message.push_str(
+                    "\n\n## Command output, provided by the caller\n\
+                     You did not run this and must not say that you did. It is the output of the \
+                     command the caller named, and it counts as evidence:\n\n",
+                );
+                message.push_str(evidence);
+            }
+            message
         } else {
             prompt.to_string()
         }),
@@ -1962,6 +1999,22 @@ mod tests {
         assert!(rules.contains("Use pnpm 10."));
         assert!(rules.contains("AGENTS.md"));
         let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    /// The dialog a command approval shows. The command leads because it is the thing being
+    /// approved; the claim follows because it says what the output has to settle.
+    #[test]
+    fn a_verify_approval_shows_the_command_first() {
+        let with_command = permission_summary(
+            "verify",
+            &json!({ "claim": "die Tests laufen durch", "command": "cargo test --lib" }),
+        );
+        assert!(with_command.starts_with("verify: cargo test --lib"), "{with_command}");
+        assert!(with_command.contains("die Tests laufen durch"), "{with_command}");
+
+        // No command: the claim alone is the whole question.
+        let without = permission_summary("verify", &json!({ "claim": "die Datei existiert" }));
+        assert_eq!(without, "verify: die Datei existiert");
     }
 
     #[test]
@@ -2536,18 +2589,76 @@ async fn run_turn(
                     config,
                     &arguments,
                     false,
+                    None,
                 )
                 .await
             } else if call.function.name == "verify" {
-                task_tool_with_snapshots(
-                    Some(app),
-                    session_id,
-                    turn_id.as_deref(),
-                    config,
-                    &arguments,
-                    true,
-                )
-                .await
+                // A claim that can only be settled by running something: the caller names the
+                // command, the engine runs it under the same rules as bash, and the transcript
+                // goes to the reader as evidence. The verifier itself still runs nothing.
+                let command = arguments
+                    .get("command")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string);
+                let mut evidence: Option<String> = None;
+                let mut refusal: Option<String> = None;
+                if let Some(command) = command.as_deref() {
+                    let approved = if config.permission == "read" {
+                        false
+                    } else if config.permission == "ask"
+                        && !has_session_grant(app, session_id)
+                        && !has_tool_grant(app, "verify")
+                    {
+                        approve_tool(app, session_id, "verify", &arguments, &mut seq, true).await
+                    } else {
+                        true
+                    };
+                    if !approved {
+                        refusal = Some(if config.permission == "read" {
+                            "verify: permission denied in Plan mode — a command cannot run there. \
+                             Ask the user to switch to Ask before changes or Full access."
+                                .to_string()
+                        } else {
+                            "verify: the user did not allow the command, so nothing was checked. \
+                             Do not report the claim as verified."
+                                .to_string()
+                        });
+                    } else {
+                        let ctx = tools::ToolContext {
+                            workspace: PathBuf::from(&config.workspace),
+                            full_authorization: config.permission == "full",
+                            skills_root: crate::skills::skills_root(),
+                            command_policy: config.command_policy.clone(),
+                            allowed_commands: config.allowed_commands.clone(),
+                            workspace_only: config.workspace_only,
+                        };
+                        match tools::run_shell_command(command, &ctx, 300_000).await {
+                            Ok((transcript, _success)) => {
+                                evidence = Some(format!("$ {command}\n{transcript}"));
+                            }
+                            Err(error) => {
+                                refusal = Some(format!("verify: the command did not run: {error}"));
+                            }
+                        }
+                    }
+                }
+                match refusal {
+                    Some(error) => tools::ToolOutcome::err(error),
+                    None => {
+                        task_tool_with_snapshots(
+                            Some(app),
+                            session_id,
+                            turn_id.as_deref(),
+                            config,
+                            &arguments,
+                            true,
+                            evidence,
+                        )
+                        .await
+                    }
+                }
             } else if call.function.name == "browser_windows" {
                 match serde_json::to_string_pretty(&crate::browser::browser_windows(app.clone())) {
                     Ok(list) => tools::ToolOutcome::ok(list),

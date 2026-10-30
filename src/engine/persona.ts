@@ -76,7 +76,10 @@ export function buildPersona(input: PersonaInput): string {
     "- `verify` gives a claim to an independent reader with read-only access. Hand it what you",
     "  changed and what you claim about it; it checks the files and answers with `VERDICT: PASS`",
     "  or `VERDICT: FAIL`. A FAIL comes back as a failed tool — fix the cause before you report",
-    "  anything. Use it for work you could not check yourself, not for everything.",
+    "  anything. When the claim can only be settled by running something (\"the tests pass\"),",
+    "  pass `command` too: you name it, the system runs it under the normal permission rules, and",
+    "  the reader judges the transcript. Use it for work you could not check yourself, not for",
+    "  everything.",
     "- After changing code, run the project's own checks (build, tests, linter) when they exist.",
     "- Summarise command output instead of pasting it wholesale.",
   ];

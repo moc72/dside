@@ -304,11 +304,12 @@ pub fn definitions() -> Vec<Value> {
             "type": "function",
             "function": {
                 "name": "verify",
-                "description": "Have a claim checked by an independent reader. It gets the workspace read-only — no writing, no commands — looks for the evidence, probes one edge, and answers with a report that ends in VERDICT: PASS or VERDICT: FAIL. A FAIL comes back to you as a failed tool. Use it before you report work you could not check yourself, and for claims about the state of the project. Costs one model call.",
+                "description": "Have a claim checked by an independent reader. It gets the workspace read-only — it cannot write or run anything itself — looks for the evidence, probes one edge, and answers with a report that ends in VERDICT: PASS or VERDICT: FAIL. A FAIL comes back to you as a failed tool. Use it before you report work you could not check yourself, and for claims about the state of the project. Pass `command` when the claim can only be settled by running something (a build, a test suite): you name the command, the system runs it under the normal permission rules, and the transcript becomes evidence the reader may judge. Costs one model call.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "claim": { "type": "string", "description": "What should be checked, as a checkable statement or a short list: what you changed, what you claim about it, and where to look." },
+                        "command": { "type": "string", "description": "Optional. One command whose output settles the claim, e.g. 'cargo test --lib'. It runs in the workspace with the same policy and approval as bash; in Ask mode the user is asked first. The reader sees the transcript as evidence it did not produce." },
                         "description": { "type": "string", "description": "Short label shown to the user, three to five words." }
                     },
                     "required": ["claim"]
@@ -1092,22 +1093,23 @@ async fn code_review(args: &Value, ctx: &ToolContext) -> ToolOutcome {
     ToolOutcome::ok(truncate(body, MAX_OUTPUT_CHARS))
 }
 
-async fn bash(args: &Value, ctx: &ToolContext) -> ToolOutcome {
-    let Some(command) = arg(args, "command") else {
-        return ToolOutcome::err("bash: missing 'command'");
-    };
+/// Runs one shell command in the workspace and returns its transcript. Shared by `bash` and by
+/// `verify`, so a command the verifier is given follows exactly the same rules as one the
+/// companion runs itself — including the policy check at the call site.
+pub(crate) async fn run_shell_command(
+    command: &str,
+    ctx: &ToolContext,
+    timeout_ms: u64,
+) -> Result<(String, bool), String> {
     if ctx.command_policy.eq_ignore_ascii_case("allowlist")
         && !command_allowed(command, &ctx.allowed_commands)
     {
-        return ToolOutcome::err(
-            "bash: this command is not in the companion's allowlist (policies). Ask the user to add it or to switch the policy.",
+        return Err(
+            "this command is not in the companion's allowlist (policies). Ask the user to add it \
+             or to switch the policy."
+                .to_string(),
         );
     }
-    let timeout_ms = args
-        .get("timeout_ms")
-        .and_then(Value::as_u64)
-        .unwrap_or(120_000)
-        .min(600_000);
 
     let mut shell = Command::new("sh");
     shell
@@ -1119,17 +1121,13 @@ async fn bash(args: &Value, ctx: &ToolContext) -> ToolOutcome {
         .stderr(Stdio::piped())
         .kill_on_drop(true);
 
-    let child = match shell.spawn() {
-        Ok(child) => child,
-        Err(error) => return ToolOutcome::err(format!("bash: {error}")),
-    };
-
+    let child = shell.spawn().map_err(|error| error.to_string())?;
     let output = match tokio::time::timeout(Duration::from_millis(timeout_ms), child.wait_with_output())
         .await
     {
         Ok(Ok(output)) => output,
-        Ok(Err(error)) => return ToolOutcome::err(format!("bash: {error}")),
-        Err(_) => return ToolOutcome::err(format!("bash: timed out after {timeout_ms} ms")),
+        Ok(Err(error)) => return Err(error.to_string()),
+        Err(_) => return Err(format!("timed out after {timeout_ms} ms")),
     };
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -1155,8 +1153,23 @@ async fn bash(args: &Value, ctx: &ToolContext) -> ToolOutcome {
         result.push_str("(no output)\n");
     }
 
-    let is_error = !output.status.success();
-    let content = truncate(result, MAX_OUTPUT_CHARS);
+    Ok((truncate(result, MAX_OUTPUT_CHARS), output.status.success()))
+}
+
+async fn bash(args: &Value, ctx: &ToolContext) -> ToolOutcome {
+    let Some(command) = arg(args, "command") else {
+        return ToolOutcome::err("bash: missing 'command'");
+    };
+    let timeout_ms = args
+        .get("timeout_ms")
+        .and_then(Value::as_u64)
+        .unwrap_or(120_000)
+        .min(600_000);
+
+    let (content, is_error) = match run_shell_command(command, ctx, timeout_ms).await {
+        Ok(result) => result,
+        Err(error) => return ToolOutcome::err(format!("bash: {error}")),
+    };
     ToolOutcome {
         content,
         is_error,
@@ -1167,6 +1180,35 @@ async fn bash(args: &Value, ctx: &ToolContext) -> ToolOutcome {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A command given to `verify` goes through the same function as `bash`, so the policy
+    /// cannot be sidestepped by asking for a check instead of running the command directly.
+    #[tokio::test]
+    async fn a_verifier_command_obeys_the_same_allowlist() {
+        let ctx = ToolContext {
+            workspace: std::env::temp_dir(),
+            full_authorization: true,
+            skills_root: std::env::temp_dir(),
+            command_policy: "allowlist".to_string(),
+            allowed_commands: vec!["echo".to_string(), "false".to_string()],
+            workspace_only: true,
+        };
+        // Allowed: runs and returns a transcript with the exit code.
+        let (transcript, ok) = run_shell_command("echo hallo", &ctx, 10_000).await.unwrap();
+        assert!(ok, "{transcript}");
+        assert!(transcript.contains("hallo"), "{transcript}");
+
+        // Not allowed: refused before anything is spawned, with the policy named.
+        let error = run_shell_command("rm -rf /tmp/nope", &ctx, 10_000)
+            .await
+            .unwrap_err();
+        assert!(error.contains("allowlist"), "{error}");
+
+        // A failing command is still a transcript, not an error: the exit code is the evidence.
+        let (transcript, ok) = run_shell_command("false", &ctx, 10_000).await.unwrap();
+        assert!(!ok, "{transcript}");
+        assert!(transcript.contains("exit code: 1"), "{transcript}");
+    }
 
     #[test]
     fn the_command_allowlist_rejects_chains_and_redirection() {

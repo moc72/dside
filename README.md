@@ -49,7 +49,7 @@ work area shows a preview, not an editor.*
 - **Archive:** search and filter archived tasks by project, restore them, or delete one or all — with a confirmation.
 - **Tray:** closing the window keeps DS·IDE in the tray so reminders and schedules still fire; the tray menu opens it again or quits. Settings → General turns it off.
 - **Daily memory check:** once a day a deterministic pass counts duplicate and never-used notes and says so in the memory panel — no model call, nothing changed.
-- **Verify:** the partner can hand a claim to a second, read-only reader that checks it against the files and answers `VERDICT: PASS` or `VERDICT: FAIL` — a failed check reaches it as a failed tool, so a confident report cannot pass for one.
+- **Verify:** the partner can hand a claim to a second, read-only reader that checks it against the files and answers `VERDICT: PASS` or `VERDICT: FAIL` — a failed check reaches it as a failed tool, so a confident report cannot pass for one. When a claim needs a build or a test run, the partner names the command, the app runs it under the normal permission rules, and the reader judges the real transcript.
 - **Reminders:** after handing work off (a push whose CI has to be watched), it can set itself a one-shot reminder that starts a new turn later.
 - **Trust:** the companion chooses its name early, but you learn it only after 100 points earned over days — a day of use, finished tasks, its own notes, your corrections. The partner page shows the progress; nothing is awarded for a single click.
 - **First start** asks for mode, workspace and API key; **Settings → Diagnostics** checks the keyring, provider, database and detected editors.

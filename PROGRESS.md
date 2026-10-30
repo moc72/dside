@@ -3633,3 +3633,64 @@ Live in dieser Sitzung:
 Nebenbei gelernt: In dieser Umgebung erbt ImageMagick `ARGV0` vom AppImage-Elternteil,
 deshalb scheiterte `magick <op>` mit dem Namen der AppImage-Datei. `/usr/bin/convert`
 und `env -u ARGV0` funktionieren.
+
+## 89. Ein Prüfer, der echte Ausgaben sehen darf (2026-10-30, achtundsechzigste Runde)
+
+Rückmeldung des Bruders nach dem Test von 0.5.3: Vier Punkte, davon einer ein echter
+Bug in meinem Text und einer der stärkste Vorschlag der ganzen Runde.
+
+### Der Vorschlag: `verify` mit einem Kommando
+Die Lücke war richtig erkannt: Ein read-only-Verifier prüft **Dokumentation gegen
+Dateien**, nicht Realität. „Die Tests sind grün" war für ihn nicht prüfbar — genau die
+Kategorie, in der er sich zuvor vertan hatte.
+
+Neu: `verify` hat ein optionales Feld `command`. Der **Aufrufer** nennt es, die Engine
+führt es aus, das Transcript geht an den Prüfer. Damit bleibt der Verifier passiv (er
+urteilt, führt nichts aus) und die Evidenz ist echt. Umsetzung:
+- `tools::run_shell_command` aus `bash` herausgezogen und geteilt — dieselbe Funktion,
+  dieselbe Allowlist, derselbe Timeout. Zwei Tests:
+  `a_verifier_command_obeys_the_same_allowlist` (erlaubt → Transcript; gesperrt →
+  Fehler mit Hinweis auf die Policy; fehlgeschlagen → Transcript mit Exit-Code, kein
+  Fehler).
+- Rechte wie bei `bash`: im Planmodus verweigert, im Ask-Modus über den normalen
+  Freigabedialog (der Befehl steht darin oben, die Behauptung darunter), im
+  Vollzugriff sofort. Ohne Freigabe wird **nichts** geprüft und das dem Aufrufer
+  gesagt: „Do not report the claim as verified."
+- Im Verifier-Prompt steht, dass das Transcript vom Aufrufer kommt, als Evidenz zählt,
+  aber nicht zu mehr Beweisen gemacht werden darf, als es zeigt.
+
+Live geprüft, zweimal, mit einem kleinen Rust-Projekt (`tallygrip`, 2 Tests) im
+Workspace:
+- Behauptung „3 Tests, alle grün" + `cargo test --lib -- --list` → Freigabedialog mit
+  sauberem Text, **FAIL**: das Transcript zeigte 2 Tests.
+- Behauptung „2 Tests, beide laufen durch" + derselbe Befehl → **FAIL** mit der
+  Begründung: „‚2 Tests' stimmt, aber ‚laufen durch' ist mit `-- --list` nicht
+  belegt — der Befehl listet nur, führt nicht aus; kein `test result: ok`."
+  Der Prüfer hat also nicht nur die Zahl geprüft, sondern die *Reichweite* des
+  Kommandos gegen die Behauptung gehalten. Besser als verlangt.
+
+### Der Bug: kaputte Zeilenumbrüche in vier Meldungen
+`mod.rs` hatte vier Strings mit eingesogenen Einrückungen (`"…your future
+self, complete enough"`), zwei davon die, die der Bruder gefunden hatte, zwei weitere
+bei den Reminder-Bestätigungen. Ursache: Ich hatte Rust-Code durch ein
+Python-Heredoc geschrieben, und Python hat die `\`-Zeilenfortsetzungen geschluckt —
+die Einrückung landete als Leerzeichen im Literal. Alle vier repariert, die
+Meldungen sind jetzt zusätzlich inhaltlich besser (siehe unten).
+Lehre für mich: mehrzeilige Rust-Strings nicht durch ein Python-Skript schreiben;
+`Edit` mit sichtbarem Kontext oder `concat!`.
+
+### Die zwei kleinen Punkte
+- **At-most-once ist jetzt erklärt**, dort wo man es liest: ein One-Shot wird
+  *vor* seinem Turn abgeschaltet, ein Absturz dazwischen verliert die Erinnerung
+  statt sie zu verdoppeln — und für „prüfe die CI" ist das der billigere Fehler.
+  Kommentar im Runner, in `disable_schedule` und in der Antwort an das Modell.
+- **Die Kappung sagt jetzt „your own reminders"** statt „your reminders". Die
+  Verwechslung mit den Erinnerungen des Nutzers war berechtigt.
+- Die Freigabezeile für `verify` zeigt nicht mehr das rohe JSON, sondern
+  `verify: <befehl>` und darunter `Prüft: <behauptung>`
+  (Test `a_verify_approval_shows_the_command_first`).
+
+### Geprüft
+`cargo test --lib` **72 passed / 13 ignored** (zwei neue), `pnpm build` grün
+(497 Schlüssel). Zwei echte Verifier-Läufe mit Kommando, beide FAIL, beide aus
+nachvollziehbaren Gründen; die Dialoganzeige im laufenden Fenster kontrolliert.
