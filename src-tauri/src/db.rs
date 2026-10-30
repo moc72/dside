@@ -886,7 +886,9 @@ impl Db {
             .map_err(|error| error.to_string())
     }
 
-    /// The whole conversation. Only used for small things (tests, exports); the UI reads pages.
+    /// The whole conversation, for tests that compare a thread end to end. The UI reads pages
+    /// through `load_history_page`, so this would otherwise be dead weight in a release build.
+    #[cfg(test)]
     pub fn load_history(&self, session_id: &str) -> Result<Vec<HistoryMessage>, String> {
         self.load_history_page(session_id, None, 0)
     }
