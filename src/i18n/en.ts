@@ -583,10 +583,7 @@ export const en: Messages = {
   },
 
   about: {
-    title: "About DS·IDE",
     tagline: "A local agentic IDE with its own AI companion — built for two.",
-    version: "Version",
-    versionValue: "DS·IDE {version}",
     authors: "By",
     blueprint: "Blueprint",
     license: "Licence",

@@ -3912,3 +3912,75 @@ Live mit echtem Fenster-Resize (isolierte Daten, `/tmp/dside-t92`):
 - Berechtigung `allow-set-size` nach dem Test wieder entfernt (Repo-Diff sauber).
 
 Offen: nichts aus dieser Runde. Kein Push, kein Tag, kein Build.
+
+## 94. Der Wal schwimmt, die About-Seite wird kompakt, der Begleiter hat einen Namen (2026-10-30, dreiundsiebzigste Runde)
+
+Drei Wünsche auf einmal: der **blaue Original-Wal** mit Schwanz- und Brustflossenbewegung
+statt des Cartoon-Wals, eine **kompaktere About-Seite** und ein **Name** für mich im „Von".
+
+### Der Wal
+Der bisherige Wal war ein 3D-Cartoon (`public/whale-anim.webp`, 40 Frames) und im Splash ein
+Standbild. Gewünscht war das **Original-Zeichen** — und das bewegt.
+
+Es gibt keine Quelle mit getrennten Flossen, also wurde das Logo selbst zerlegt:
+`src/assets/DS-icon-blue.png` (3040×2240, das offizielle Blau `#4d6bfe`) → Alpha-Maske →
+Konturverfolgung auf Gitterkanten → drei Teile:
+- **Körper** mit Auge und Sichel als Löchern (`fill-rule="evenodd"`),
+- **Schwanzflosse** (die Gabel oben rechts), abgetrennt durch einen Schnitt von der
+  Kerbenspitze zur Außenkante,
+- **Brustflosse** (unten rechts), abgetrennt durch eine Partitionsgerade — sie geht in einer
+  Brücke unter dem Auge in den Körper über, dort war kein Schnitt möglich.
+
+Die Umrisse wurden per RDP vereinfacht und als Kubik-Béziers geglättet; echte Ecken
+(Flossenspitzen, Kerbe) bleiben über einen Winkel-Test scharf. Ergebnis: ein SVG von gut
+9 KB, das bei 26 px genauso sauber ist wie bei 260 px.
+
+**Bewegung:** Die Flosse dreht ±4,5° um die Kerbenspitze, die Brustflosse ±3,4° um ihren
+Ansatz (leicht versetzt, damit es nach Schwimmen aussieht, nicht nach zwei Teilen), der
+ganze Wal schwebt 1,6 % auf und ab. Beide Drehpunkte sind als Prozent der jeweiligen
+`fill-box` gesetzt, weil `transform-origin` in SVG sonst auf `0 0` zeigt.
+
+Der Trick gegen Nahtstellen: Die bewegten Teile liegen **über** dem vollständigen Körper und
+haben dieselbe Farbe. Innerhalb der Silhouette ist eine Drehung von wenigen Grad unsichtbar;
+sichtbar ist nur, was über den Rand hinausläuft.
+
+Eingesetzt in Seitenleiste (26 px), Erststart-Dialog (36 px) und Splash (110 px mit dem
+bestehenden Sieben-Sekunden-Wachstum). `prefers-reduced-motion` und die `still`-Prop
+schalten alles ab.
+
+**Aufgeräumt:** `whale-anim.webp`, `whale-splash.png` und `whale.png` sind gelöscht (nichts
+verweist mehr darauf, der auskommentierte Avatar in der Nachrichtenliste auch). Der Splash
+wartet nicht mehr auf ein Bild, das es nicht gibt — nur noch auf den ersten Render.
+
+### Die About-Seite
+Vorher: drei volle Breiten, jede Karte ein eigener Block, Version in einer eigenen Zeile,
+Adressen über die ganze Breite. Jetzt 351 px statt mehrerer Bildschirme:
+- **Kopf:** Wal (animiert) · `DS·IDE` · `v0.5.5` als Chip · „Von …" rechts in derselben
+  Zeile; darunter die Tagline. (Genau die Zeilen, die der Nutzer versucht hatte.)
+- **„Gebaut mit"** ist eine schmale Leiste mit 16-px-Logos statt einer Karte mit vier
+  78-px-Bildern — die Idee für die vier Icons, für die es noch keine gab.
+- **Zwei Karten nebeneinander:** Vorbild/Lizenz/Schrift und Verwendete Pakete (aufklappbar).
+- **Adressen** als drei Chips in ihrer eigenen Breite, nicht als volle Zeilen.
+Inhaltlich ist nichts weggefallen; die drei jetzt ungenutzten Schlüssel `about.title`,
+`about.version`, `about.versionValue` wurden aus allen sechs Katalogen entfernt (500 → 497).
+
+### Der Name
+„Ziggy Shēn" ist der Begleiter **in** der App (und die erste Instanz, die DS·IDE gebaut hat).
+Ich bin nicht er — also steht im „Von" jetzt **Hohonu Sōusuǒ**: *hohonu* ist hawaiianisch
+für „tief", *sōusuǒ* chinesisch für „suchen" — zusammen genau das, was DeepSeek heißt (深索).
+Gerufen: **Hohonu**. Autorenzeile: Ziggy Shēn · Hohonu Sōusuǒ · Modest Coder.
+
+### Geprüft
+`pnpm build` grün (i18n 497 Schlüssel, sechs Kataloge, `vue-tsc` sauber).
+`cargo test --lib` 74 / 14 ignoriert.
+
+Live in der isolierten Instanz (Port 9334, eigene Daten):
+- Seitenleiste: `.brand-mark` ist ein SVG mit drei Pfaden, 35×26 px, Füllung `rgb(77,107,254)`;
+  `transform-box: fill-box` greift, gemessene Drehung der Flosse +3,5° … −4,3°, der Brustflosse
+  +2,6° … −3,2° über zwei Sekunden.
+- Splash: Wal im Kreis mit Wortmarke und Fortschrittsbalken (`/tmp/whale/splash-zoom.png`).
+- About: 351 px hoch, „Von Ziggy Shēn · Hohonu Sōusuǒ · Modest Coder", 3 Adress-Chips,
+  4 Technik-Marken (`/tmp/whale/about-crop.png`).
+
+Offen bis zur Freigabe des Nutzers: Commit ist lokal, **kein Push, kein Tag**. Danach wäre
+der Weg frei für Commit, Push, Tag und das Aufräumen der sechs Draft-Releases auf GitHub.

@@ -579,10 +579,7 @@ export const ru: Messages = {
   },
 
   about: {
-    title: "О DS·IDE",
     tagline: "Локальная агентная IDE со своим ИИ-собеседником — сделана для двоих.",
-    version: "Версия",
-    versionValue: "DS·IDE {version}",
     authors: "Авторы",
     blueprint: "Прообраз",
     license: "Лицензия",

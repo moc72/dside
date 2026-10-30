@@ -578,10 +578,7 @@ export const zhHans: Messages = {
   },
 
   about: {
-    title: "关于 DS·IDE",
     tagline: "一个本地智能开发环境，拥有自己的 AI 伴侣——为两个人而做。",
-    version: "版本",
-    versionValue: "DS·IDE {version}",
     authors: "作者",
     blueprint: "蓝本",
     license: "许可证",

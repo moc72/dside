@@ -580,10 +580,7 @@ export const es: Messages = {
   },
 
   about: {
-    title: "Acerca de DS·IDE",
     tagline: "Una IDE agéntica local con su propio compañero de IA: hecha para dos.",
-    version: "Versión",
-    versionValue: "DS·IDE {version}",
     authors: "Por",
     blueprint: "Modelo",
     license: "Licencia",

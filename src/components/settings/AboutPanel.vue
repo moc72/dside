@@ -3,6 +3,7 @@ import { onMounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import Icon from "../Icon.vue";
+import DeepSeekWhale from "../DeepSeekWhale.vue";
 import { t } from "../../i18n";
 import { links } from "../../engine/links";
 
@@ -24,7 +25,15 @@ interface AboutInfo {
 const info = ref<AboutInfo | null>(null);
 const openPanel = ref<"frontend" | "backend" | null>(null);
 
-const authors = ["Ziggy Shēn", "Modest Coder"];
+const authors = ["Ziggy Shēn", "Hohonu Sōusuǒ", "Modest Coder"];
+
+/** Built-with marks, in the order they carry the app: shell, core, view, bundler. */
+const stack = [
+  { name: "Tauri", logo: "/logos/tauri.svg" },
+  { name: "Rust", logo: "/logos/rust.webp" },
+  { name: "Vue 3", logo: "/logos/vue3.webp" },
+  { name: "Vite", logo: "/logos/vite.svg" },
+];
 
 async function openLink(url: string) {
   try {
@@ -46,219 +55,275 @@ onMounted(async () => {
 
 <template>
   <div class="aboutpage">
+    <!-- One line for what the app is: name, version, who made it. The tagline gets the next. -->
+    <header class="hero">
+      <DeepSeekWhale class="hero-whale" :height="46" />
+      <div class="hero-body">
+        <div class="hero-line">
+          <h1 class="name">{{ t("app.name") }}</h1>
+          <span class="version">v{{ info?.version ?? "—" }}</span>
+          <span class="by">
+            <span class="by-label">{{ t("about.authors") }}</span>
+            {{ authors.join(" · ") }}
+          </span>
+        </div>
+        <p class="tagline">{{ t("about.tagline") }}</p>
+      </div>
+    </header>
 
-    <h1 class="title">{{ t("about.title") }}</h1>
-    <p class="hint">{{ t("about.tagline") }}</p>
-    
-    <h2 class="section">{{ t("about.version") }}</h2>
-
-    <div class="row">
-      <div class="col">
-        <div class="card">
-          <div class="row">
-            <div class="text">
-              <div class="label">DS·IDE</div>
-              <div class="desc larger">{{ info?.version ?? "—" }}</div>
-            </div>
-          </div>
-          <hr />
-          <div class="row">
-            <div class="text">
-              <div class="label">{{ t("about.authors") }}</div>
-              <div class="desc larger">{{ authors.join(" · ") }}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="col">
-        <div class="card">
-          <div class="row">
-            <div class="text">
-              <div class="label">{{ t("about.blueprint") }}</div>
-              <div class="desc larger">{{ t("about.blueprintValue") }}</div>
-            </div>
-          </div>
-          <hr />
-          <div class="row">
-            <div class="text">
-              <div class="label">{{ t("about.license") }}</div>
-              <div class="desc larger">{{ t("about.licenseValue") }}</div>
-            </div>
-          </div>
-          <hr />
-          <div class="row">
-            <div class="text">
-              <div class="label">{{ t("about.fonts") }}</div>
-              <div class="desc larger">{{ t("about.fontsValue") }}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <div class="row">
-      <div class="col">
-        <h2 class="section">{{ t("about.links") }}</h2>
-        <div class="card">
-          <button class="row link" type="button" @click="openLink(links.home)">
-            <div class="text">
-              <div class="label">{{ t("about.homepage") }}</div>
-              <div class="desc larger">{{ links.home }}</div>
-            </div>
-            <Icon name="external-link" :size="14" />
-          </button>
-          <button class="row link" type="button" @click="openLink(links.github)">
-            <div class="text">
-              <div class="label">{{ t("about.source") }}</div>
-              <div class="desc larger">{{ links.github }}</div>
-            </div>
-            <Icon name="external-link" :size="14" />
-          </button>
-          <button class="row link" type="button" @click="openLink(links.mail)">
-            <div class="text">
-              <div class="label">{{ t("about.contact") }}</div>
-              <div class="desc larger">{{ links.mail.replace("mailto:", "") }}</div>
-            </div>
-            <Icon name="external-link" :size="14" />
-          </button>
-        </div>
-      </div>
+    <!-- "Built with" as one quiet strip instead of a card of four big logos. -->
+    <div class="strip">
+      <span class="strip-label">{{ t("about.builtWith") }}</span>
+      <span v-for="tool in stack" :key="tool.name" class="tool">
+        <img :src="tool.logo" :alt="tool.name" />
+        <span>{{ tool.name }}</span>
+      </span>
     </div>
 
-    <div class="row">
-      <div class="col">
+    <div class="grid">
+      <section class="card facts">
+        <div class="fact">
+          <span class="label">{{ t("about.blueprint") }}</span>
+          <span class="value">{{ t("about.blueprintValue") }}</span>
+        </div>
+        <div class="fact">
+          <span class="label">{{ t("about.license") }}</span>
+          <span class="value">{{ t("about.licenseValue") }}</span>
+        </div>
+        <div class="fact">
+          <span class="label">{{ t("about.fonts") }}</span>
+          <span class="value">{{ t("about.fontsValue") }}</span>
+        </div>
+      </section>
+
+      <section class="card">
         <h2 class="section">{{ t("about.packages") }}</h2>
-        <div class="card">
-          <button class="row link" type="button" @click="openPanel = openPanel === 'frontend' ? null : 'frontend'">
-            <div class="text">
-              <div class="label">{{ t("about.packagesFrontend") }}</div>
-              <div class="desc">{{ t("about.packagesCount", { count: info?.frontend.length ?? 0 }) }}</div>
-            </div>
-            <Icon :name="openPanel === 'frontend' ? 'chevron-down' : 'chevron-right'" :size="14" />
-          </button>
-          <ul v-if="openPanel === 'frontend'" class="packages">
-            <li v-for="entry in info?.frontend ?? []" :key="entry.name">
-              <span class="name">{{ entry.name }}</span>
-              <span class="version">{{ entry.version }}</span>
-            </li>
-          </ul>
-          
-          <button class="row link" type="button" @click="openPanel = openPanel === 'backend' ? null : 'backend'">
-            <div class="text">
-              <div class="label">{{ t("about.packagesBackend") }}</div>
-              <div class="desc">{{ t("about.packagesCount", { count: info?.backend.length ?? 0 }) }}</div>
-            </div>
-            <Icon :name="openPanel === 'backend' ? 'chevron-down' : 'chevron-right'" :size="14" />
-          </button>
-          <ul v-if="openPanel === 'backend'" class="packages">
-            <li v-for="entry in info?.backend ?? []" :key="entry.name">
-              <span class="name">{{ entry.name }}</span>
-              <span class="version">{{ entry.version }}</span>
-            </li>
-          </ul>
-        </div>
-      </div>
-      <div class="col">
-        <h2 class="section">{{ t("about.builtWith") }}</h2>
-        <div class="card">
-          <div class="buildgrid">
-            <figure class="build">
-              <img class="logo" src="/logos/tauri.svg" alt="Tauri" />
-              <figcaption>Tauri</figcaption>
-            </figure>
-            <figure class="build">
-              <img class="logo" src="/logos/rust.webp" alt="Rust" />
-              <figcaption>Rust</figcaption>
-            </figure>
-            <figure class="build">
-              <img class="logo" src="/logos/vue3.webp" alt="Vue 3" />
-              <figcaption>Vue 3</figcaption>
-            </figure>
-            <figure class="build">
-              <img class="logo" src="/logos/vite.svg" alt="Vite" />
-              <figcaption>Vite</figcaption>
-            </figure>
-          </div>
-        </div>
+        <button
+          class="row link"
+          type="button"
+          @click="openPanel = openPanel === 'frontend' ? null : 'frontend'"
+        >
+          <span class="row-text">
+            <span class="label">{{ t("about.packagesFrontend") }}</span>
+            <span class="desc">{{ t("about.packagesCount", { count: info?.frontend.length ?? 0 }) }}</span>
+          </span>
+          <Icon :name="openPanel === 'frontend' ? 'chevron-down' : 'chevron-right'" :size="14" />
+        </button>
+        <ul v-if="openPanel === 'frontend'" class="packages">
+          <li v-for="entry in info?.frontend ?? []" :key="entry.name">
+            <span class="pkg">{{ entry.name }}</span>
+            <span class="pkg-version">{{ entry.version }}</span>
+          </li>
+        </ul>
 
-      </div>
+        <button
+          class="row link"
+          type="button"
+          @click="openPanel = openPanel === 'backend' ? null : 'backend'"
+        >
+          <span class="row-text">
+            <span class="label">{{ t("about.packagesBackend") }}</span>
+            <span class="desc">{{ t("about.packagesCount", { count: info?.backend.length ?? 0 }) }}</span>
+          </span>
+          <Icon :name="openPanel === 'backend' ? 'chevron-down' : 'chevron-right'" :size="14" />
+        </button>
+        <ul v-if="openPanel === 'backend'" class="packages">
+          <li v-for="entry in info?.backend ?? []" :key="entry.name">
+            <span class="pkg">{{ entry.name }}</span>
+            <span class="pkg-version">{{ entry.version }}</span>
+          </li>
+        </ul>
+      </section>
     </div>
-    <p class="hint">{{ t("about.licenses") }}</p>
+
+    <section class="addresses">
+      <h2 class="section">{{ t("about.links") }}</h2>
+      <div class="chips">
+        <button class="chip" type="button" @click="openLink(links.home)">
+          <span class="chip-label">{{ t("about.homepage") }}</span>
+          <span class="chip-value">{{ links.home.replace(/^https?:\/\//, "") }}</span>
+          <Icon name="external-link" :size="13" />
+        </button>
+        <button class="chip" type="button" @click="openLink(links.github)">
+          <span class="chip-label">{{ t("about.source") }}</span>
+          <span class="chip-value">{{ links.github.replace(/^https?:\/\//, "") }}</span>
+          <Icon name="external-link" :size="13" />
+        </button>
+        <button class="chip" type="button" @click="openLink(links.mail)">
+          <span class="chip-label">{{ t("about.contact") }}</span>
+          <span class="chip-value">{{ links.mail.replace("mailto:", "") }}</span>
+          <Icon name="external-link" :size="13" />
+        </button>
+      </div>
+    </section>
+
+    <p class="note">{{ t("about.licenses") }}</p>
   </div>
-  </template>
+</template>
 
 <style scoped>
-
 /* The scroll container is the settings content, not this page: an element with auto height
    cannot scroll. No max-width either — capping it left a wide empty strip on the right. */
 .aboutpage {
-  max-width: none;
   container-type: inline-size;
+  padding-bottom: 8px;
 }
 
-.col {
+.hero {
   display: flex;
-  flex-direction: column;
-  flex: 1 1 380px;
-  min-width: 300px;
-  box-sizing: border-box;
-  padding: 0 8px;
-}
-
-/* One card per column, stretched to the row's height: every container in a row ends on the
-   same line, which is what makes the page read as a grid instead of a stack. */
-.col > .card {
-  flex: 1 1 auto;
-}
-
-.desc.larger{
-   font-size: larger;
-}
-
-hr {
-  margin: 14px 0;
-  border: none;
-  border-top: 1px solid var(--border);
-}
-
-.logo {
-  width: 78px;
-  height: 78px;
-  object-fit: contain;
-}
-
-.buildgrid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 18px;
-  padding: 10px 0 6px;
-}
-
-.build {
-  display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 6px;
-  margin: 0;
+  gap: 16px;
+  padding: 4px 2px 14px;
 }
 
-.build figcaption {
+.hero-whale {
+  margin-top: -4px;
+}
+
+.hero-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.hero-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px 14px;
+}
+
+.name {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.version {
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-panel);
   color: var(--text-muted);
+  font-family: var(--mono);
   font-size: 11px;
 }
 
-.row {
+.by {
+  margin-left: auto;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.by-label {
+  color: var(--text-muted);
+}
+
+.tagline {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* Built-with: one line, small marks, the names carry the meaning. */
+.strip {
   display: flex;
-  flex-direction: row;
   flex-wrap: wrap;
-  align-items: stretch;
-  gap: 10px;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 9px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+}
+
+.strip-label {
+  margin-right: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.tool img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+  align-items: start;
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  overflow: hidden;
+}
+
+.facts {
+  display: flex;
+  flex-direction: column;
+}
+
+.fact {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 11px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.fact:first-child {
+  border-top: none;
+}
+
+.label {
+  flex: none;
+  width: 84px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.value {
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.section {
+  margin: 0;
+  padding: 12px 16px 10px;
+  color: var(--text-strong);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.card > .section {
+  border-bottom: 1px solid var(--border);
 }
 
 .row.link {
+  display: flex;
   align-items: center;
+  gap: 12px;
   width: 100%;
-  padding: 11px 0;
+  padding: 11px 16px;
   border: none;
   border-top: 1px solid var(--border);
   background: transparent;
@@ -267,32 +332,40 @@ hr {
   cursor: pointer;
 }
 
-.card {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  width: 100%;
-  margin: 10px 0;
-  padding: 16px 22px;
-  border-radius: var(--radius);
-}
-
-.card > .row.link:first-child {
-  border-top: none;
-}
-
 .row.link:hover {
   background: var(--bg-hover);
 }
 
+.row-text {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.row-text .label {
+  width: auto;
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.desc {
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
 .packages {
-  list-style: none;
-  margin: 0;
-  padding: 4px 16px 12px;
-  border-top: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   gap: 3px;
+  margin: 0;
+  padding: 6px 16px 12px;
+  border-top: 1px solid var(--border);
+  list-style: none;
+  max-height: 260px;
+  overflow-y: auto;
 }
 
 .packages li {
@@ -304,7 +377,58 @@ hr {
   font-size: 11px;
 }
 
-.packages .version {
+.pkg-version {
   flex: none;
+}
+
+.addresses {
+  margin-top: 14px;
+}
+
+.addresses .section {
+  padding: 0 2px 8px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  max-width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.chip:hover {
+  border-color: var(--accent);
+}
+
+.chip-label {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.chip-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.note {
+  margin: 16px 2px 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
 }
 </style>

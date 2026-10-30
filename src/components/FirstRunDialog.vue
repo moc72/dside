@@ -2,6 +2,7 @@
 import { onMounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import Icon from "./Icon.vue";
+import DeepSeekWhale from "./DeepSeekWhale.vue";
 import WorkspacePicker from "./WorkspacePicker.vue";
 import { deepSeekMark } from "./deepseek-mark";
 import { t } from "../i18n";
@@ -74,7 +75,7 @@ function later(): void {
   <div class="backdrop">
     <div class="dialog" role="dialog" aria-modal="true">
       <div class="brand">
-        <img class="whale" src="/whale-anim.webp" alt="" />
+        <DeepSeekWhale class="whale" :height="36" />
         <span class="mark" v-html="deepSeekMark"></span>
       </div>
 

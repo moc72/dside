@@ -171,8 +171,6 @@ onBeforeUnmount(() => {
       :class="message.role"
       :data-message-id="message.id"
     >
-      <!-- <img v-if="message.role === 'assistant'" class="avatar" src="/whale.png" alt="" />
-      <span v-else class="avatar spacer"></span> -->
       <div class="bubble">
         <!-- The answer as a timeline: what was said and what was run, in that order. -->
         <template v-for="(part, index) in message.parts ?? []" :key="index">
@@ -406,14 +404,6 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
-.avatar {
-  width: 22px;
-  height: 22px;
-  flex: none;
-  margin-top: 2px;
-  object-fit: contain;
-}
-
 .row.user {
   justify-content: flex-end;
 }
@@ -428,12 +418,6 @@ onBeforeUnmount(() => {
 
 .row.user .bubble {
   max-width: 70%;
-}
-
-
-/* Empty seat for the whale: user messages line up with the partner's. */
-.avatar.spacer {
-  background: none;
 }
 
 .pending {

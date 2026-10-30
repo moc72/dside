@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import Icon from "./Icon.vue";
+import DeepSeekWhale from "./DeepSeekWhale.vue";
 import { t } from "../i18n";
 import { deepSeekMark } from "./deepseek-mark";
 import { everydayMode } from "../engine/mode";
@@ -230,7 +231,7 @@ function accountSettings() {
 
     <div class="rail-foot">
       <button class="account" type="button" @click.stop="accountOpen = !accountOpen">
-        <img class="brand-mark" src="/whale-anim.webp" :alt="t('app.name')" :title="t('app.name')" />
+        <DeepSeekWhale class="brand-mark" :height="26" :label="t('app.name')" />
         <span class="ds-mark" v-html="deepSeekMark"></span>
         <Icon name="chevron-down" :size="14" class="account-chevron" />
       </button>

@@ -582,10 +582,7 @@ export const fr: Messages = {
   },
 
   about: {
-    title: "À propos de DS·IDE",
     tagline: "Un EDI agentique local avec son propre compagnon IA — conçu pour deux.",
-    version: "Version",
-    versionValue: "DS·IDE {version}",
     authors: "Par",
     blueprint: "Modèle",
     license: "Licence",

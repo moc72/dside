@@ -584,10 +584,7 @@ export const de = {
   },
 
   about: {
-    title: "Über DS·IDE",
     tagline: "Eine lokale agentische IDE mit einem eigenen KI-Begleiter — gebaut für zwei.",
-    version: "Version",
-    versionValue: "DS·IDE {version}",
     authors: "Von",
     blueprint: "Vorbild",
     license: "Lizenz",

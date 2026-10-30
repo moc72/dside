@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -12,6 +12,7 @@ import AgentPanel from "./components/agent/AgentPanel.vue";
 import WorkArea from "./components/workarea/WorkArea.vue";
 import SettingsPage from "./components/settings/SettingsPage.vue";
 import FirstRunDialog from "./components/FirstRunDialog.vue";
+import DeepSeekWhale from "./components/DeepSeekWhale.vue";
 import { deepSeekMark } from "./components/deepseek-mark";
 import { firstRun } from "./stores/settings";
 import { partnerDisplayName, partnerReveal, refreshPartnerName } from "./stores/partner";
@@ -75,13 +76,9 @@ async function finishSplash() {
     void invoke("log_message", { text }).catch(() => undefined);
   };
 
+  // The mark is inline SVG now, so there is no image to wait for — only the first render.
   say("splash: waiting for artwork");
-  await new Promise<void>((resolve) => {
-    const image = new Image();
-    image.onload = () => resolve();
-    image.onerror = () => resolve();
-    image.src = "/whale-splash.png";
-  });
+  await nextTick();
   say("splash: artwork ready");
 
   await invoke("splash_visible").catch(() => undefined);
@@ -198,7 +195,7 @@ function startDrag(which: "rail" | "work", event: PointerEvent) {
 <template>
   <div v-if="isSplash" class="splash-window">
     <div class="splash-disc" :class="{ animate: splashShown }">
-      <img src="/whale-splash.png" class="splash-whale" alt="" />
+      <DeepSeekWhale class="splash-whale" :height="110" />
       <span class="splash-mark" v-html="deepSeekMark"></span>
       <div class="splash-bar"><span></span></div>
     </div>
@@ -405,8 +402,6 @@ body.is-resizing .center-panel {
 }
 
 .splash-disc .splash-whale {
-  width: 150px;
-  height: auto;
   position: relative;
   z-index: 0;
   top: 40px;

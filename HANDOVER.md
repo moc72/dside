@@ -141,6 +141,21 @@ connection test.
 
 ## Features worth knowing
 
+## The whale and the About page
+
+- `src/components/DeepSeekWhale.vue` draws the mark as three paths from
+  `src/components/deepseek-whale.ts`: body, fluke, pectoral fin. They were traced from
+  `src/assets/DS-icon-blue.png`, the official blue mark — do not redraw them by hand; retrace
+  if the source changes. The fluke turns around the notch, the fin around its root.
+- The moving pieces sit **on top of** the full silhouette in the same colour. That is what
+  keeps a few degrees of rotation invisible inside the body; only what leaves the outline
+  moves visibly. Their pivots are percentages of each path's `fill-box`.
+- `still` (prop) and `prefers-reduced-motion` stop all movement. Used in the sidebar (26 px),
+  the first-run dialog (36 px) and the splash (110 px).
+- The About page is a hero line (mark, name, version, authors), a one-line "built with" strip,
+  two cards (facts / packages) and the addresses as chips. If a section grows, keep the
+  two-column grid — the page is meant to fit one screen.
+
 - **Verifier with a command:** `verify` takes an optional `command`. The caller names it, the
   engine runs it through `tools::run_shell_command` — the same function, allowlist and timeout as
   `bash` — and the transcript becomes evidence the reader may judge. Permissions match `bash`:
