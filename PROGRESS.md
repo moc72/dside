@@ -4046,3 +4046,37 @@ Commits seit v0.4.13.
 ### Geprüft
 `pnpm build` grün, `cargo test --lib` 74 / 14 ignoriert. Manifeste und Tag stimmen überein
 (`node scripts/set-version.mjs` ohne Argument: 0.5.6 in allen drei).
+
+## 97. Der Composer startete 195 px hoch (2026-10-30, sechsundsiebzigste Runde)
+
+Der Nutzer fragte, wann und warum sich die Höhe des Composers geändert hat — und hatte recht:
+seit §95 startete das **leere** Feld 195 px hoch (Maximalhöhe) statt 42 px und blieb so, bis
+man das erste Zeichen tippte.
+
+### Ursache
+§95 rief `autoGrow()` beim Mount auf, damit ein wiederhergestellter mehrzeiliger Entwurf
+sofort vollständig sichtbar ist. `autoGrow` setzt `height: auto` und liest `scrollHeight`.
+Beim Mount ist das Feld aber noch nicht vermessen (Fenster noch hinter dem Splash) — dann
+meldet `scrollHeight` die Maximalhöhe, und `Math.min(…, 195)` schrieb genau 195 px fest.
+Gemessen: `inline: "195px"`, `rendered: 195`, CSS allein: 42.
+
+### Änderungen
+- `autoGrow` misst nur, wenn das Feld wirklich einen Kasten hat
+  (`getBoundingClientRect().width === 0` → return).
+- Bei leerem Text wird die Inline-Höhe **entfernt** statt berechnet: das Stylesheet kennt die
+  richtige Höhe für eine leere Zeile (42 px). Das deckt auch den Fall ab, dass ein längerer
+  Entwurf das Feld einmal hoch gemacht hat.
+- `focusComposerIfIdle` (läuft, wenn das Fenster sichtbar wird) ruft `autoGrow` noch einmal auf —
+  dort gibt es einen Kasten, und ein mehrzeiliger Entwurf wächst sauber nach.
+
+### Geprüft
+`pnpm build` grün. Live (isolierte Instanz, Port 9334):
+- Start leer: 42 px, kein Inline-Wert (vorher 195).
+- Eine Zeile: 42 px; vier Zeilen: 82 px; fünfzeiliger Entwurf nach Reload: 102 px.
+- 14 Zeilen: gekappt auf 195 px und scrollt.
+- Feld geleert: 42 px, Entwurf entfernt.
+
+### Folge für das Release
+Der Workflow hatte den Tag `v0.5.6` bereits gebaut (Draft, 7 Assets) — dieser Stand enthält
+den Fehler. Da nichts veröffentlicht war, wurde der Draft samt Tag gelöscht und derselbe Tag
+auf den Fix-Commit gesetzt; der Lauf startet neu. Kein Release ging mit dem Fehler hinaus.

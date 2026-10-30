@@ -90,7 +90,10 @@ function composerFocusIsSafe(): boolean {
 }
 
 function focusComposerIfIdle(): void {
-  if (composerFocusIsSafe()) box.value?.focus();
+  if (!composerFocusIsSafe()) return;
+  box.value?.focus();
+  // A draft restored at start was measured while the window was hidden; now there is a box.
+  autoGrow();
 }
 
 onMounted(() => {
@@ -287,6 +290,16 @@ const box = ref<HTMLTextAreaElement | null>(null);
 function autoGrow(): void {
   const element = box.value;
   if (!element) return;
+  // Before the first layout — and while the main window is still hidden behind the splash —
+  // the field has no box to measure. `scrollHeight` then reports the maximum, and the empty
+  // composer would start 195 px tall instead of 42 and stay there until the first keystroke.
+  if (element.getBoundingClientRect().width === 0) return;
+  // Nothing typed: the stylesheet's own height is right, and it is the one place that knows
+  // how tall an empty line is. An inline height left from a longer draft must go.
+  if (!element.value.trim()) {
+    element.style.height = "";
+    return;
+  }
   element.style.height = "auto";
   element.style.height = `${Math.min(element.scrollHeight, MAX_ROWS * LINE_HEIGHT)}px`;
 }
